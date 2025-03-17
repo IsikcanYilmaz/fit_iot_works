@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-RIOTBASE="/Users/jon/KODMOD/CCNL_RIOT/"
+RIOTBASE="$HOME/KODMOD/CCNL_RIOT/"
 BOARD="seeedstudio-xiao-nrf52840"
 APPLICATION="ccn-lite-relay"
 
@@ -18,13 +18,18 @@ fi
 # If port info supplied
 if [ "$PORT" ]; then
   # set our device to boot mode
-  stty -f $PORT raw ispeed 1200 ospeed 1200 cs8 -cstopb ignpar eol 255 eof 255
+  stty -F $PORT raw ispeed 1200 ospeed 1200 cs8 -cstopb ignpar eol 255 eof 255
 
   echo "WAITING FOR VOLUME TO COME UP"
   sleep 3
   
   # copy our uf2 file into the volume
-  cp bin/"$BOARD"/"$APPLICATION".uf2 /Volumes/XIAO-SENSE/
+  uname -a | grep -i linux
+  if [ $? == 0 ]; then # If linux
+    cp bin/"$BOARD"/"$APPLICATION".uf2 /media/"$(whoami)"/XIAO-SENSE/
+  else # If macos
+    cp bin/"$BOARD"/"$APPLICATION".uf2 /Volumes/XIAO-SENSE/
+  fi
 
   echo "PROGRAMMED $PORT"
 fi

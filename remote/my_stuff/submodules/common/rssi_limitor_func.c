@@ -1,5 +1,6 @@
 #include "shell.h"
 #include <stdbool.h>
+#include <stdlib.h>
 
 #include "rssi_limitor_func.h"
 

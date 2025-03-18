@@ -38,6 +38,12 @@ USEMODULE += auto_init_gnrc_netif
 USEMODULE += gnrc_pktdump
 USEMODULE += prng_xorshift
 
+
+EXTERNAL_MODULE_DIRS += $(CURDIR)/../submodules/
+USEMODULE += common
+
+CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/common/
+
 USEPKG += ccn-lite
 
 include $(RIOTBASE)/Makefile.include

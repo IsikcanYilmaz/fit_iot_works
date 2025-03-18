@@ -23,6 +23,8 @@ CFLAGS += -DNEEDS_PREFIX_MATCHING
 CFLAGS += -DNEEDS_PACKET_CRAFTING
 # CFLAGS += -DUSE_LOGGING
 
+CFLAGS += -DJON_RSSI_LIMITING=60
+
 # Change this to 0 show compiler invocation lines by default:
 QUIET ?= 1
 

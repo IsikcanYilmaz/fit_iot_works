@@ -109,6 +109,7 @@ static int startProgram(int argc, char **argv)
 	return 0;
 }
 
+
 SHELL_COMMAND(gettime, "Get time in usec", getTime);
 SHELL_COMMAND(setname, "Set name", setName);
 SHELL_COMMAND(getname, "Get name", getName);
@@ -117,37 +118,33 @@ SHELL_COMMAND(gethosts, "Get set hosts", getHosts);
 SHELL_COMMAND(setupcs, "Set up content store", setupContentStore);
 SHELL_COMMAND(startprogram, "Start our program", startProgram);
 
+#ifdef JON_RSSI_LIMITING
+extern int rssiLimitor;
+static int setRssiLimitor(int argc, char **argv)
+{
+  if (argc != 2)
+  {
+    printf("Usage: setrssi <int>\n");
+    return 1;
+  }
+  rssiLimitor = atoi(argv[1]);
+  printf("Rssi limitor set to %d\n", rssiLimitor);
+  return 0;
+}
+
+static int getRssiLimitor(int argc, char **argv)
+{
+  printf("%d\n", rssiLimitor);
+  return 0;
+}
+
+SHELL_COMMAND(setrssi, "Set RSSI Limitor", setRssiLimitor);
+SHELL_COMMAND(getrssi, "Get RSSI Limitor", getRssiLimitor);
+#endif
 /*
  * ~ PROGRAM ~
  */
 char experiment_threadStack[THREAD_STACKSIZE_DEFAULT];
-
-typedef struct Content_s
-{
-	
-} Content_t;
-
-void printRelay(struct ccnl_relay_s *relay)
-{
-
-}
-
-void printFace(struct ccnl_face_s *from)
-{
-
-}
-
-void printCcnPkt(struct ccnl_pkt_s *pkt)
-{
-
-}
-
-int producer_func(struct ccnl_relay_s *relay, struct ccnl_face_s *from,
-                   struct ccnl_pkt_s *pkt){
-	(void)from;
-	printf("%s\n", __FUNCTION__);
-	return 0;
-}
 
 void *experiment_threadHandler(void *arg)
 {
@@ -194,7 +191,7 @@ int main(void)
 	gnrc_netreg_entry_t dump = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, gnrc_pktdump_pid);
 	gnrc_netreg_register(GNRC_NETTYPE_CCN_CHUNK, &dump);
 
-	ccnl_set_local_producer(producer_func);
+	/*ccnl_set_local_producer(producer_func);*/
 
 	kernel_pid_t experiment_threadId = thread_create(
 		experiment_threadStack,

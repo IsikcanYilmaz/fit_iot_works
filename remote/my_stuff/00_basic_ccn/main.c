@@ -20,6 +20,7 @@
 
 #include "node_settings.h"
 #include "rssi_limitor_func.h"
+#include "ccn_nc_demo.h"
 
 /* main thread's message queue */
 #define MAIN_QUEUE_SIZE (8)
@@ -52,25 +53,32 @@ void *experiment_threadHandler(void *arg)
   while(true)
   {
     #ifdef LED0_PIN
-    LED1_TOGGLE;
+    LED0_TOGGLE;
     #endif
     ztimer_sleep(ZTIMER_MSEC, 1000);
   }
 }
 
 static const shell_command_t commands[] = {
-#ifdef JON_RSSI_LIMITING
-  {"setrssi", "set rssi limitor", setRssiLimitor},
-  {"getrssi", "get rssi limitor", getRssiLimitor},
-  {"rssiprint", "toggle rssi print messages", setRssiPrint},
-#endif
+
+  // GENERAL
   {"gettime", "Get Time", Cmd_GetTime},
   {"getname", "Get Name", Cmd_GetName},
   {"sethosts", "Set Hosts", Cmd_SetHosts},
   {"gethosts", "Get Hosts", Cmd_GetHosts},
   {"startprogram", "Start Program", Cmd_StartProgram},
 
-  
+  // RSSI LIMITING
+#ifdef JON_RSSI_LIMITING;
+  {"setrssi", "set rssi limitor", setRssiLimitor},
+  {"getrssi", "get rssi limitor", getRssiLimitor},
+  {"rssiprint", "toggle rssi print messages", setRssiPrint},
+#endif
+ 
+  // CCN/NC
+  {"prod", "CCN NC Demo Produce", cmd_ccnl_nc_produce},
+  {"int", "CCN NC Demo Interest", cmd_ccnl_nc_interest},
+  {"cs", "CCN NC Demo Print CS", cmd_ccnl_nc_show_cs},
 
   {NULL, NULL, NULL}
 };
@@ -82,7 +90,7 @@ int main(void)
 {
 	msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);
 
-	puts("Basic CCN-Lite example");
+	puts("ASDQWE");
 
 	ccnl_core_init();
 	ccnl_start();
@@ -113,6 +121,6 @@ int main(void)
 	);
 
 	char line_buf[SHELL_DEFAULT_BUFSIZE];
-	shell_run(NULL, line_buf, SHELL_DEFAULT_BUFSIZE);
+	shell_run(commands, line_buf, SHELL_DEFAULT_BUFSIZE);
 	return 0;
 }

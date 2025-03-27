@@ -79,7 +79,7 @@ static const shell_command_t commands[] = {
   {"prod", "CCN NC Demo Produce", cmd_ccnl_nc_produce},
   {"int", "CCN NC Demo Interest", cmd_ccnl_nc_interest},
   {"cs", "CCN NC Demo Print CS", cmd_ccnl_nc_show_cs},
-
+  {"rm", "CCN NC Demo Remove from CS", cmd_ccnl_nc_rm_cs},
   {NULL, NULL, NULL}
 };
 

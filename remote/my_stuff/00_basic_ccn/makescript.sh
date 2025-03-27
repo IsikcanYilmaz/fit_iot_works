@@ -4,8 +4,20 @@ RIOTBASE="$HOME/KODMOD/CCNL_RIOT/"
 BOARD="seeedstudio-xiao-nrf52840"
 APPLICATION="ccn-lite-relay"
 
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
 # make the project
 make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 
+ret="$?"
+
+if [ "$ret" != 0 ]; then
+  echo -e "${RED}Make failed!${NC}"
+  exit $ret
+else
+  echo -e "${GREEN}Make success${NC}"
+fi
 
 # convert to uf2
 $RIOTBASE/dist/tools/uf2/uf2conv.py -f 0xADA52840 bin/"$BOARD"/"$APPLICATION".hex --base 0x1000 -o bin/"$BOARD"/"$APPLICATION".uf2 -c

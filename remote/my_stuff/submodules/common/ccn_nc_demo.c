@@ -5,26 +5,94 @@
 #include "ccnl-pkt-ndntlv.h"
 #include "net/gnrc/netif.h"
 
-#define RED_CONTENT "RED"
-#define GRN_CONTENT "GRN"
-#define BLU_CONTENT "BLU"
+#include "ztimer.h"
 
 #define BUF_SIZE (64)
 #define MAX_ADDR_LEN (GNRC_NETIF_L2ADDR_MAXLEN)
 static unsigned char _int_buf[BUF_SIZE];
 static unsigned char _out[CCNL_MAX_PACKET_SIZE];
 
+///////////////////////////////////////////////
+
+
+static bool cs_remove(char *prefixStr)
+{
+  int ret = ccnl_cs_remove(&ccnl_relay, prefixStr);
+  if (ret == -1)
+  {
+    printf("%s ccnl or prefix ptr not provided!\n");
+  }
+  else if (ret == -2 || ret == -3)
+  { 
+    printf("%s prefix str not found or something wrong with it\n");
+  }
+  return ret;
+}
+
+static bool prefix_exists(char *prefixStr)
+{
+  struct ccnl_content_s *content = ccnl_cs_lookup(&ccnl_relay, prefixStr);
+  printf("Prefix lookup of %s : %s\n", prefixStr, (content != NULL) ? "EXISTS" : "DOESNT");
+  return (content != NULL);
+}
+
+///////////////////////////////////////////////
+///////////////////////////////////////////////
+///////////////////////////////////////////////
+
 void CCN_NC_ShowCS(void)
 {
   ccnl_cs_dump(&ccnl_relay);
 }
 
-void CCN_NC_Produce(void)
+void CCN_NC_Produce(ContentTypes_e t, bool overwrite)
 {
+  struct ccnl_prefix_s *prefix;
+  char *prefixStr;
   char buf[BUF_SIZE+1];
-  strcpy(buf, "redredred\0");
-  printf("%s\n", buf);
-  struct ccnl_prefix_s *prefix = ccnl_URItoPrefix("/red", CCNL_SUITE_NDNTLV, NULL);
+  memset(buf, 0x00, sizeof(buf));
+  switch(t)
+  {
+    default:
+      {
+        printf("%s:%d Wrong type %d\n", __FUNCTION__, __LINE__, t);
+        // Fall thru
+      }
+    case RED_CONTENT:
+      {
+        sprintf(buf, "red:%d", ztimer_now(ZTIMER_MSEC));
+        prefixStr = "/red";
+        break;
+      }
+    case BLU_CONTENT:
+      {
+        sprintf(buf, "blu:%d", ztimer_now(ZTIMER_MSEC));
+        prefixStr = "/blu";
+        break;
+      }
+    case GRN_CONTENT:
+      {
+        sprintf(buf, "grn:%d", ztimer_now(ZTIMER_MSEC));
+        prefixStr = "/grn";
+        break;
+      }
+  }
+  prefix = ccnl_URItoPrefix(prefixStr, CCNL_SUITE_NDNTLV, NULL);
+  bool prefixExists = prefix_exists(prefixStr);
+  printf("%s : %s\n", buf, (prefixExists) ? "exists" : "doesnt exist");
+  if (prefixExists)
+  {
+    if (overwrite)
+    {
+      cs_remove(prefixStr);
+    }
+    else
+    {
+      printf("CS Entry already exists. Exiting\n");
+      return;
+    }
+  }
+
   size_t offs = CCNL_MAX_PACKET_SIZE;
   size_t reslen = 0;
   int arg_len = strlen(buf);
@@ -52,29 +120,53 @@ void CCN_NC_Produce(void)
   }
 }
 
-void CCN_NC_Interest(void)
+void CCN_NC_Interest(char *prefixStr)
 {
-
+  //
 }
 
-
-// SHELL COMMANDS
+///////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////
+// SHELL COMMANDS /////////////////////////////////////////////////
 int cmd_ccnl_nc_produce(int argc, char **argv)
 {
-  /*if (argc < 2) {*/
-  /*  ccnl_cs_dump(&ccnl_relay);*/
-  /*  return 0;*/
-  /*}*/
-  /*if (argc == 2) {*/
-  /*  _content_usage(argv[0]);*/
-  /*  return -1;*/
-  /*}*/
-  CCN_NC_Produce();
+  ContentTypes_e contentType = RED_CONTENT;
+  if (argc < 2)
+  {
+    CCN_NC_Produce(contentType, true);
+    return 0;
+  }
+  
+  switch (argv[1][0])
+  {
+    case 'r':
+      {
+        contentType = RED_CONTENT;
+        break;
+      }
+    case 'g':
+      {
+        contentType = GRN_CONTENT;
+        break;
+      }
+    case 'b':
+      {
+        contentType = BLU_CONTENT;
+        break;
+      }
+    default:
+      {
+        // fall thru
+      }
+  }
+
+  CCN_NC_Produce(contentType, true);
   return 0;
 }
 
 int cmd_ccnl_nc_interest(int argc, char **argv)
 {
+  CCN_NC_Interest(argv[1]);
   return 0;
 }
 
@@ -82,4 +174,14 @@ int cmd_ccnl_nc_show_cs(int argc, char **argv)
 {
   CCN_NC_ShowCS();
   return 0;
+}
+
+int cmd_ccnl_nc_rm_cs(int argc, char **argv)
+{
+  if (argc < 2)
+  {
+    printf("argc == %d\n", argc);
+    return 1;
+  }
+  return cs_remove(argv[1]);
 }

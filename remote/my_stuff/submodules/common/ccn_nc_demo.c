@@ -1,19 +1,99 @@
 #include "ccn_nc_demo.h"
 #include <string.h>
+#include <stdbool.h>
 
 #include "ccn-lite-riot.h"
 #include "ccnl-pkt-ndntlv.h"
 #include "net/gnrc/netif.h"
 
+#include "thread.h"
 #include "ztimer.h"
+#include "board.h"
+
+// For onboard leds
+#include "led.h"
 
 #define BUF_SIZE (64)
 #define MAX_ADDR_LEN (GNRC_NETIF_L2ADDR_MAXLEN)
 static unsigned char _int_buf[BUF_SIZE];
 static unsigned char _out[CCNL_MAX_PACKET_SIZE];
 
+static bool onBoardLedDemo = false;
+
+#define LED_THREAD_SLEEP_MS 500
+
+typedef enum { // TODO mv to header
+  ONBOARD_RED,
+  ONBOARD_GREEN,
+  ONBOARD_BLUE,
+  NUM_ONBOARD_LEDS
+} OnboardLedID_e;
+
+typedef enum {
+  OFF,
+  SOLID,
+  BLINKING,
+  NUM_LED_STATES
+} LedState_e;
+
+typedef struct OnboardLed_s
+{
+  LedState_e state;
+} OnboardLed_t;
+
+OnboardLed_t onboardLeds[NUM_ONBOARD_LEDS];
+
+kernel_pid_t mainThreadId, ledThreadId;
+
 ///////////////////////////////////////////////
 
+char ccn_nc_onboard_led_thread_stack[THREAD_STACKSIZE_DEFAULT];
+static void *ccn_nc_onboard_led_thread_handler(void *arg)
+{
+  while(true)
+  {
+    // Handle animations
+    for (int i = 0; i < NUM_ONBOARD_LEDS; i++)
+    {
+      switch(onboardLeds[i].state)
+      {
+        case OFF:
+          {
+            led_off(i);
+            break;
+          }
+        case SOLID:
+          {
+            led_on(i);
+            break;
+          }
+        case BLINKING:
+          {
+            led_toggle(i);
+            break;
+          }
+        default:
+          {
+
+          }
+      }
+    }
+
+    ztimer_sleep(ZTIMER_MSEC, LED_THREAD_SLEEP_MS);
+  }
+
+}
+
+char ccn_nc_thread_stack[THREAD_STACKSIZE_DEFAULT];
+static void *ccn_nc_thread_handler(void *arg)
+{
+  (void) arg;
+  while(true)
+  {
+    
+    ztimer_sleep(ZTIMER_MSEC, 1000);
+  }
+}
 
 static bool cs_remove(char *prefixStr)
 {
@@ -39,6 +119,36 @@ static bool prefix_exists(char *prefixStr)
 ///////////////////////////////////////////////
 ///////////////////////////////////////////////
 ///////////////////////////////////////////////
+
+void CCN_NC_Init(void)
+{
+  memset(&onboardLeds, 0x00, sizeof(OnboardLed_t) * NUM_ONBOARD_LEDS);
+  for (int i = 0; i < NUM_ONBOARD_LEDS; i++)
+  {
+    onboardLeds[i] = (OnboardLed_t){.state = OFF};
+  }
+
+  // Kick off threads
+  mainThreadId = thread_create(
+    ccn_nc_thread_stack,
+    sizeof(ccn_nc_thread_stack),
+    THREAD_PRIORITY_MAIN - 1,
+    THREAD_CREATE_STACKTEST,
+    ccn_nc_thread_handler,
+    NULL,
+    "ccn_nc_thread"
+	);
+
+  ledThreadId = thread_create(
+    ccn_nc_onboard_led_thread_stack,
+    sizeof(ccn_nc_onboard_led_thread_stack),
+    THREAD_PRIORITY_MAIN - 1,
+    THREAD_CREATE_STACKTEST,
+    ccn_nc_onboard_led_thread_handler,
+    NULL,
+    "ccn_nc_onboard_led_thread"
+	);
+}
 
 void CCN_NC_ShowCS(void)
 {

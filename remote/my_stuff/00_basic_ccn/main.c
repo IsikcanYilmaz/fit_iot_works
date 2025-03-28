@@ -52,9 +52,9 @@ void *experiment_threadHandler(void *arg)
 	(void) arg;
   while(true)
   {
-    #ifdef LED0_PIN
-    LED0_TOGGLE;
-    #endif
+    /*#ifdef LED0_PIN*/
+    /*LED0_TOGGLE;*/
+    /*#endif*/
     ztimer_sleep(ZTIMER_MSEC, 1000);
   }
 }
@@ -80,6 +80,8 @@ static const shell_command_t commands[] = {
   {"int", "CCN NC Demo Interest", cmd_ccnl_nc_interest},
   {"cs", "CCN NC Demo Print CS", cmd_ccnl_nc_show_cs},
   {"rm", "CCN NC Demo Remove from CS", cmd_ccnl_nc_rm_cs},
+
+  //
   {NULL, NULL, NULL}
 };
 
@@ -110,15 +112,17 @@ int main(void)
 
 	ccnl_set_local_producer(producer_func);
 
-	kernel_pid_t experiment_threadId = thread_create(
-		experiment_threadStack,
-		sizeof(experiment_threadStack),
-		THREAD_PRIORITY_MAIN - 1,
-		THREAD_CREATE_STACKTEST,
-		experiment_threadHandler,
-		NULL,
-		"experiment_thread"
-	);
+	/*kernel_pid_t experiment_threadId = thread_create(*/
+	/*	experiment_threadStack,*/
+	/*	sizeof(experiment_threadStack),*/
+	/*	THREAD_PRIORITY_MAIN - 1,*/
+	/*	THREAD_CREATE_STACKTEST,*/
+	/*	experiment_threadHandler,*/
+	/*	NULL,*/
+	/*	"experiment_thread"*/
+	/*);*/
+
+  CCN_NC_Init();
 
 	char line_buf[SHELL_DEFAULT_BUFSIZE];
 	shell_run(commands, line_buf, SHELL_DEFAULT_BUFSIZE);

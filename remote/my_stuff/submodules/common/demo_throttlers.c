@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "rssi_limitor_func.h"
+#include "demo_throttlers.h"
 
 #ifdef JON_RSSI_LIMITING
 extern int rssiLimitor;

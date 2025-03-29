@@ -19,7 +19,7 @@
 #include <stdbool.h>
 
 #include "node_settings.h"
-#include "rssi_limitor_func.h"
+#include "demo_throttlers.h"
 #include "ccn_nc_demo.h"
 
 /* main thread's message queue */

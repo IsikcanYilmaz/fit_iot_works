@@ -20,7 +20,11 @@ static unsigned char _out[CCNL_MAX_PACKET_SIZE];
 
 static bool onBoardLedDemo = false;
 
-#define LED_THREAD_SLEEP_MS 500
+#define LED_THREAD_SLEEP_MS 100
+#define MAIN_THREAD_SLEEP_MS 100
+
+char *contentNames[NUM_CONTENT_TYPES] = {"/red", "/grn", "/blu"}; // TODO CLEAN
+
 
 typedef enum { // TODO mv to header
   ONBOARD_RED,
@@ -46,6 +50,43 @@ OnboardLed_t onboardLeds[NUM_ONBOARD_LEDS];
 kernel_pid_t mainThreadId, ledThreadId;
 
 ///////////////////////////////////////////////
+
+static struct ccnl_interest_s * pit_lookup(char *prefixStr)
+{
+
+  char s[CCNL_MAX_PREFIX_SIZE];
+  struct ccnl_interest_s *pendingInterest = ccnl_relay.pit;
+  for (int i = 0; i < ccnl_relay.pitcnt; i++)
+  {
+    if (strncmp(prefixStr, ccnl_prefix_to_str(pendingInterest->pkt->pfx, s, CCNL_MAX_PREFIX_SIZE), CCNL_MAX_PREFIX_SIZE) == 0)
+    {
+      return pendingInterest;
+    }
+    pendingInterest = pendingInterest->next;
+  }
+  return NULL;
+}
+
+static bool cs_remove(char *prefixStr)
+{
+  int ret = ccnl_cs_remove(&ccnl_relay, prefixStr);
+  if (ret == -1)
+  {
+    printf("%s ccnl or prefix ptr not provided!\n");
+  }
+  else if (ret == -2 || ret == -3)
+  { 
+    printf("%s prefix str not found or something wrong with it\n");
+  }
+  return ret;
+}
+
+static bool prefix_exists(char *prefixStr)
+{
+  struct ccnl_content_s *content = ccnl_cs_lookup(&ccnl_relay, prefixStr);
+  /*printf("Prefix lookup of %s : %s\n", prefixStr, (content != NULL) ? "EXISTS" : "DOESNT");*/
+  return (content != NULL);
+}
 
 char ccn_nc_onboard_led_thread_stack[THREAD_STACKSIZE_DEFAULT];
 static void *ccn_nc_onboard_led_thread_handler(void *arg)
@@ -84,36 +125,31 @@ static void *ccn_nc_onboard_led_thread_handler(void *arg)
 
 }
 
-char ccn_nc_thread_stack[THREAD_STACKSIZE_DEFAULT];
-static void *ccn_nc_thread_handler(void *arg)
+char ccn_nc_main_thread_stack[THREAD_STACKSIZE_DEFAULT];
+static void *ccn_nc_main_thread_handler(void *arg)
 {
   (void) arg;
   while(true)
   {
-    
-    ztimer_sleep(ZTIMER_MSEC, 1000);
-  }
-}
+    // Check CS and PIT
+    for (int i = 0; i < NUM_CONTENT_TYPES; i++)
+    {
+      if (ccnl_cs_lookup(&ccnl_relay, contentNames[i]))
+      {
+        onboardLeds[i].state = SOLID;
+      }
+      else if (pit_lookup(contentNames[i]))
+      {
+        onboardLeds[i].state = BLINKING;
+      }
+      else
+      {
+        onboardLeds[i].state = OFF;
+      }
+    }
 
-static bool cs_remove(char *prefixStr)
-{
-  int ret = ccnl_cs_remove(&ccnl_relay, prefixStr);
-  if (ret == -1)
-  {
-    printf("%s ccnl or prefix ptr not provided!\n");
+    ztimer_sleep(ZTIMER_MSEC, MAIN_THREAD_SLEEP_MS);
   }
-  else if (ret == -2 || ret == -3)
-  { 
-    printf("%s prefix str not found or something wrong with it\n");
-  }
-  return ret;
-}
-
-static bool prefix_exists(char *prefixStr)
-{
-  struct ccnl_content_s *content = ccnl_cs_lookup(&ccnl_relay, prefixStr);
-  printf("Prefix lookup of %s : %s\n", prefixStr, (content != NULL) ? "EXISTS" : "DOESNT");
-  return (content != NULL);
 }
 
 ///////////////////////////////////////////////
@@ -130,11 +166,11 @@ void CCN_NC_Init(void)
 
   // Kick off threads
   mainThreadId = thread_create(
-    ccn_nc_thread_stack,
-    sizeof(ccn_nc_thread_stack),
+    ccn_nc_main_thread_stack,
+    sizeof(ccn_nc_main_thread_stack),
     THREAD_PRIORITY_MAIN - 1,
     THREAD_CREATE_STACKTEST,
-    ccn_nc_thread_handler,
+    ccn_nc_main_thread_handler,
     NULL,
     "ccn_nc_thread"
 	);
@@ -187,6 +223,7 @@ void CCN_NC_Produce(ContentTypes_e t, bool overwrite)
         break;
       }
   }
+  onboardLeds[t].state = SOLID;
   prefix = ccnl_URItoPrefix(prefixStr, CCNL_SUITE_NDNTLV, NULL);
   bool prefixExists = prefix_exists(prefixStr);
   printf("%s : %s\n", buf, (prefixExists) ? "exists" : "doesnt exist");
@@ -232,7 +269,7 @@ void CCN_NC_Produce(ContentTypes_e t, bool overwrite)
 
 void CCN_NC_Interest(char *prefixStr)
 {
-  //
+  // TODO // for now ccnl_cs is fine
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -269,7 +306,7 @@ int cmd_ccnl_nc_produce(int argc, char **argv)
         // fall thru
       }
   }
-
+  
   CCN_NC_Produce(contentType, true);
   return 0;
 }
@@ -286,6 +323,15 @@ int cmd_ccnl_nc_show_cs(int argc, char **argv)
   return 0;
 }
 
+int cmd_ccnl_nc_rm_cs_all(int argc, char **argv)
+{
+  struct ccnl_content_s *c;
+  for (c = ccnl_relay.contents; c; c=c->next)
+  {
+    ccnl_content_remove(&ccnl_relay, c);
+  }
+}
+
 int cmd_ccnl_nc_rm_cs(int argc, char **argv)
 {
   if (argc < 2)
@@ -294,4 +340,18 @@ int cmd_ccnl_nc_rm_cs(int argc, char **argv)
     return 1;
   }
   return cs_remove(argv[1]);
+}
+
+int cmd_ccnl_nc_show_pit(int argc, char **argv)
+{
+  (void) argv;
+  char s[CCNL_MAX_PREFIX_SIZE];
+  struct ccnl_interest_s *pendingInterest = ccnl_relay.pit;
+  for (int i = 0; i < ccnl_relay.pitcnt; i++)
+  {
+    struct ccnl_pkt_s *pkt = pendingInterest->pkt; 
+    struct ccnl_prefix_s *prefix = pkt->pfx;
+    printf("%d: %s \n", i, ccnl_prefix_to_str(prefix, s, CCNL_MAX_PREFIX_SIZE));
+    pendingInterest = pendingInterest->next;
+  }
 }

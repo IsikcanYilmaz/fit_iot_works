@@ -74,12 +74,17 @@ static const shell_command_t commands[] = {
   {"getrssi", "get rssi limitor", getRssiLimitor},
   {"rssiprint", "toggle rssi print messages", setRssiPrint},
 #endif
+
+  // CCNL-RIOT FAKE LATENCY
+  // TODO
  
-  // CCN/NC
+  // CCN
   {"prod", "CCN NC Demo Produce", cmd_ccnl_nc_produce},
   {"int", "CCN NC Demo Interest", cmd_ccnl_nc_interest},
   {"cs", "CCN NC Demo Print CS", cmd_ccnl_nc_show_cs},
+  {"pit", "CCN NC Demo Print PIT", cmd_ccnl_nc_show_pit},
   {"rm", "CCN NC Demo Remove from CS", cmd_ccnl_nc_rm_cs},
+  {"rmall", "CCN NC Demo Clear CS", cmd_ccnl_nc_rm_cs_all},
 
   //
   {NULL, NULL, NULL}

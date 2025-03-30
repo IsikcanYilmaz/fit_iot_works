@@ -75,6 +75,10 @@ static const shell_command_t commands[] = {
   {"rssiprint", "toggle rssi print messages", setRssiPrint},
 #endif
 
+  // FAKE LATENCY
+  {"setfakelat", "set fake latency", setFakeLatency},
+  {"getfakelat", "get fake latency", getFakeLatency},
+
   // CCNL-RIOT FAKE LATENCY
   // TODO
  

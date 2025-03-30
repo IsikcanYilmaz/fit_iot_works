@@ -34,3 +34,24 @@ int setRssiPrint(int argc, char **argv)
 }
 
 #endif
+
+// TODO JON add ifdef like above
+extern int FAKE_LATENCY_MS;
+int setFakeLatency(int argc, char **argv)
+{
+  if (argc != 2)
+  {
+    printf("Usage: setfakelat <int>\n");
+    return 1;
+  }
+  FAKE_LATENCY_MS = atoi(argv[1]);
+  printf("Fake latency set to %d\n", FAKE_LATENCY_MS);
+  return 0;
+}
+
+int getFakeLatency(int argc, char **argv)
+{
+  printf("%d\n", FAKE_LATENCY_MS);
+  return 0;
+}
+

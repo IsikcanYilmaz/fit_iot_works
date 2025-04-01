@@ -12,6 +12,7 @@
 
 // For onboard leds
 #include "led.h"
+#include <periph/gpio.h>
 
 #define BUF_SIZE (64)
 #define MAX_ADDR_LEN (GNRC_NETIF_L2ADDR_MAXLEN)
@@ -20,8 +21,8 @@ static unsigned char _out[CCNL_MAX_PACKET_SIZE];
 
 static bool onBoardLedDemo = false;
 
-#define LED_THREAD_SLEEP_MS 100
-#define MAIN_THREAD_SLEEP_MS 100
+#define LED_THREAD_SLEEP_MS 50
+#define MAIN_THREAD_SLEEP_MS 10
 
 char *contentNames[NUM_CONTENT_TYPES] = {"/red", "/grn", "/blu"}; // TODO CLEAN
 
@@ -34,18 +35,28 @@ typedef enum { // TODO mv to header
 } OnboardLedID_e;
 
 typedef enum {
+  HW_ONBOARD_LEDS,
+  HW_BREADBOARD_LEDS,
+  HW_NEOPIXELS,
+  NUM_HARDWARE_TYPES
+} HardwareType_e;
+
+typedef enum {
   OFF,
   SOLID,
   BLINKING,
   NUM_LED_STATES
 } LedState_e;
 
-typedef struct OnboardLed_s
-{
-  LedState_e state;
-} OnboardLed_t;
+HardwareType_e currentHardware = HW_BREADBOARD_LEDS; //HW_ONBOARD_LEDS;
 
-OnboardLed_t onboardLeds[NUM_ONBOARD_LEDS];
+LedState_e ledStates[NUM_ONBOARD_LEDS];
+
+gpio_t breadboardLedGpios[NUM_ONBOARD_LEDS] = {
+  [ONBOARD_RED] = GPIO_PIN(0,28),
+  [ONBOARD_GREEN] = GPIO_PIN(0, 3),
+  [ONBOARD_BLUE] = GPIO_PIN(0, 2),
+};
 
 kernel_pid_t mainThreadId, ledThreadId;
 
@@ -88,6 +99,81 @@ static bool prefix_exists(char *prefixStr)
   return (content != NULL);
 }
 
+static void init_hardware(HardwareType_e type)
+{
+  switch(type)
+  {
+    case HW_ONBOARD_LEDS:
+      {
+        break;
+      }
+    case HW_BREADBOARD_LEDS:
+      {
+        for (int i = 0; i < NUM_ONBOARD_LEDS; i++)
+        {
+          gpio_init(breadboardLedGpios[i], GPIO_OUT);
+        }
+        break;
+      }
+    case HW_NEOPIXELS:
+      {
+        break;
+      }
+    default:
+      {}
+  }
+}
+
+// TODO Consolidate and generalize
+static void onboard_led_on(OnboardLedID_e led)
+{
+  if (led > NUM_ONBOARD_LEDS)
+  {
+    return;
+  }
+  if (currentHardware == HW_ONBOARD_LEDS)
+  {
+    led_on(led);
+  } 
+  else if (currentHardware == HW_BREADBOARD_LEDS)
+  {
+    gpio_set(breadboardLedGpios[led]);
+  }
+}
+
+static void onboard_led_off(OnboardLedID_e led)
+{
+  if (led > NUM_ONBOARD_LEDS)
+  {
+    return;
+  }
+  if (currentHardware == HW_ONBOARD_LEDS)
+  {
+    led_off(led);
+  } 
+  else if (currentHardware == HW_BREADBOARD_LEDS)
+  {
+    gpio_clear(breadboardLedGpios[led]);
+  }
+}
+
+static void onboard_led_toggle(OnboardLedID_e led)
+{
+  if (led > NUM_ONBOARD_LEDS)
+  {
+    return;
+  }
+  if (currentHardware == HW_ONBOARD_LEDS)
+  {
+    led_toggle(led);
+  } 
+  else if (currentHardware == HW_BREADBOARD_LEDS)
+  {
+    gpio_toggle(breadboardLedGpios[led]);
+  }
+}
+
+// THREAD HANDLERS //////////////////////
 char ccn_nc_onboard_led_thread_stack[THREAD_STACKSIZE_DEFAULT];
 static void *ccn_nc_onboard_led_thread_handler(void *arg)
 {
@@ -96,21 +182,21 @@ static void *ccn_nc_onboard_led_thread_handler(void *arg)
     // Handle animations
     for (int i = 0; i < NUM_ONBOARD_LEDS; i++)
     {
-      switch(onboardLeds[i].state)
+      switch(ledStates[i])
       {
         case OFF:
           {
-            led_off(i);
+            onboard_led_off(i);
             break;
           }
         case SOLID:
           {
-            led_on(i);
+            onboard_led_on(i);
             break;
           }
         case BLINKING:
           {
-            led_toggle(i);
+            onboard_led_toggle(i);
             break;
           }
         default:
@@ -122,7 +208,6 @@ static void *ccn_nc_onboard_led_thread_handler(void *arg)
 
     ztimer_sleep(ZTIMER_MSEC, LED_THREAD_SLEEP_MS);
   }
-
 }
 
 char ccn_nc_main_thread_stack[THREAD_STACKSIZE_DEFAULT];
@@ -136,15 +221,15 @@ static void *ccn_nc_main_thread_handler(void *arg)
     {
       if (ccnl_cs_lookup(&ccnl_relay, contentNames[i]))
       {
-        onboardLeds[i].state = SOLID;
+        ledStates[i] = SOLID;
       }
       else if (pit_lookup(contentNames[i]))
       {
-        onboardLeds[i].state = BLINKING;
+        ledStates[i] = BLINKING;
       }
       else
       {
-        onboardLeds[i].state = OFF;
+        ledStates[i] = OFF;
       }
     }
 
@@ -158,11 +243,12 @@ static void *ccn_nc_main_thread_handler(void *arg)
 
 void CCN_NC_Init(void)
 {
-  memset(&onboardLeds, 0x00, sizeof(OnboardLed_t) * NUM_ONBOARD_LEDS);
   for (int i = 0; i < NUM_ONBOARD_LEDS; i++)
   {
-    onboardLeds[i] = (OnboardLed_t){.state = OFF};
+    ledStates[i] = OFF;
   }
+
+  init_hardware(currentHardware);
 
   // Kick off threads
   mainThreadId = thread_create(
@@ -223,7 +309,7 @@ void CCN_NC_Produce(ContentTypes_e t, bool overwrite)
         break;
       }
   }
-  onboardLeds[t].state = SOLID;
+  ledStates[t] = SOLID;
   prefix = ccnl_URItoPrefix(prefixStr, CCNL_SUITE_NDNTLV, NULL);
   bool prefixExists = prefix_exists(prefixStr);
   printf("%s : %s\n", buf, (prefixExists) ? "exists" : "doesnt exist");
@@ -354,4 +440,27 @@ int cmd_ccnl_nc_show_pit(int argc, char **argv)
     printf("%d: %s \n", i, ccnl_prefix_to_str(prefix, s, CCNL_MAX_PREFIX_SIZE));
     pendingInterest = pendingInterest->next;
   }
+}
+
+int cmd_ccnl_nc_set_hw(int argc, char **argv)
+{
+  if (argc != 2)
+  {
+    currentHardware = HW_ONBOARD_LEDS;
+  }
+  else 
+  {
+    int tmp = atoi(argv[1]);
+    if (tmp > NUM_HARDWARE_TYPES)
+    {
+      currentHardware = HW_ONBOARD_LEDS;
+    }
+    else 
+    {
+      currentHardware = tmp;
+    }
+  }
+  init_hardware(currentHardware);
+  printf("Set current hardware to %d\n", currentHardware);
+  return 0;
 }

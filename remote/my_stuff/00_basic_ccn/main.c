@@ -89,6 +89,7 @@ static const shell_command_t commands[] = {
   {"pit", "CCN NC Demo Print PIT", cmd_ccnl_nc_show_pit},
   {"rm", "CCN NC Demo Remove from CS", cmd_ccnl_nc_rm_cs},
   {"rmall", "CCN NC Demo Clear CS", cmd_ccnl_nc_rm_cs_all},
+  {"sethw", "CCN NC Demo Set Hardware Type", cmd_ccnl_nc_set_hw},
 
   //
   {NULL, NULL, NULL}

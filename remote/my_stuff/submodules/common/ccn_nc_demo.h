@@ -25,5 +25,5 @@ int cmd_ccnl_nc_show_cs(int argc, char **argv);
 int cmd_ccnl_nc_show_pit(int argc, char **argv);
 int cmd_ccnl_nc_rm_cs(int argc, char **argv);
 int cmd_ccnl_nc_rm_cs_all(int argc, char **argv);
-
+int cmd_ccnl_nc_set_hw(int argc, char **argv);
 

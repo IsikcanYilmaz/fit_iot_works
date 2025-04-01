@@ -14,6 +14,8 @@
 #include "led.h"
 #include <periph/gpio.h>
 
+#include "demo_button.h"
+
 #define BUF_SIZE (64)
 #define MAX_ADDR_LEN (GNRC_NETIF_L2ADDR_MAXLEN)
 static unsigned char _int_buf[BUF_SIZE];
@@ -113,6 +115,7 @@ static void init_hardware(HardwareType_e type)
         {
           gpio_init(breadboardLedGpios[i], GPIO_OUT);
         }
+        Button_Init();
         break;
       }
     case HW_NEOPIXELS:

@@ -52,9 +52,9 @@ void *experiment_threadHandler(void *arg)
 	(void) arg;
   while(true)
   {
-    /*#ifdef LED0_PIN*/
-    /*LED0_TOGGLE;*/
-    /*#endif*/
+    #ifdef LED0_PIN
+    LED0_TOGGLE;
+    #endif
     ztimer_sleep(ZTIMER_MSEC, 1000);
   }
 }
@@ -122,15 +122,15 @@ int main(void)
 
 	ccnl_set_local_producer(producer_func);
 
-	/*kernel_pid_t experiment_threadId = thread_create(*/
-	/*	experiment_threadStack,*/
-	/*	sizeof(experiment_threadStack),*/
-	/*	THREAD_PRIORITY_MAIN - 1,*/
-	/*	THREAD_CREATE_STACKTEST,*/
-	/*	experiment_threadHandler,*/
-	/*	NULL,*/
-	/*	"experiment_thread"*/
-	/*);*/
+	kernel_pid_t experiment_threadId = thread_create(
+		experiment_threadStack,
+		sizeof(experiment_threadStack),
+		THREAD_PRIORITY_MAIN - 1,
+		THREAD_CREATE_STACKTEST,
+		experiment_threadHandler,
+		NULL,
+		"experiment_thread"
+	);
 
   CCN_NC_Init();
 

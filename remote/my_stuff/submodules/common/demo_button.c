@@ -68,57 +68,9 @@ static void Button_GestureTimerCallback(void *arg)
   msg_t m;
   memcpy(&m.content.value, &buttonMsg, sizeof(ButtonThreadMessage_s));
   msg_send(&m, buttonThreadId);
-
-
-  /*ButtonContext_s *ctx = &(buttonContexts[idx]);*/
-  /*DemoButton_e buttonId = idx;*/
-  /*ButtonGesture_e g = GESTURE_NONE;*/
-  /*uint32_t now = ztimer_now(ZTIMER_MSEC);*/
-
-  /*if (buttonId >= NUM_BUTTONS)*/
-  /*{*/
-  /*  printf("Button callback wrong button id %d\n", buttonId);*/
-  /*  return;*/
-  /*}*/
-
-  /*gpio_irq_disable(buttonGpios[idx]);*/
-
-  /*printf("%s %d %d\n", buttonNameStrs[buttonId], buttonContexts[idx].currentTapTimestamp, now);*/
-
-  // Process the gesture
-  /*if (buttonContexts[idx].currentState == BUTTON_STATE_RELEASED)*/
-  /*{*/
-  /*  int a = 0;*/
-  /*  for (int i = 0; i < 2; i++)*/
-  /*  {*/
-  /*    a++;*/
-  /*    printf("%d\n", a);*/
-  /*  }*/
-  /*  printf("ASDF%d\n", a);*/
-  /*  printf("now %d currTapTs %d\n", now, buttonContexts[idx].currentTapTimestamp);*/
-  /*  uint32_t elapsedMs = now - buttonContexts[idx].currentTapTimestamp;*/
-  /*  uint32_t numElapsedLongPress = elapsedMs / BUTTON_LONG_PRESS_TIME_MS;*/
-  /*  printf("ElapsedMs %d\n", elapsedMs);*/
-  /*  if (buttonContexts[idx].currentNumTaps > 1) // MULTI TAP GESTURE*/
-  /*  {*/
-  /**/
-  /*  }*/
-  /*  else // SINGLE TAP GESTURE*/
-  /*  {*/
-  /*    if (numElapsedLongPress == GESTURE_SINGLE_TAP_SEC)*/
-  /*    {*/
-  /*      printf("%s SINGLE TAP\n", buttonNameStrs[buttonId]);*/
-  /*      g = GESTURE_SINGLE_TAP;*/
-  /*      buttonContexts[idx].currentNumTaps = 0;*/
-  /*    }*/
-  /*  }*/
-  /*}*/
-
-  // Decide if we should rerun the timer:
-
-  /*gpio_irq_enable(buttonGpios[idx]);*/
 }
 
+// arg is button id
 static void Button_IrqHandler(void *arg) // lean and mean
 {
   LED1_TOGGLE;
@@ -127,7 +79,6 @@ static void Button_IrqHandler(void *arg) // lean and mean
   {
     return;
   }
-
   ButtonThreadMessage_s buttonMsg = {.type = BUTTON_IRQ_HAPPENED, .idx = buttonIdx};
   msg_t m;
   memcpy(&m.content.value, &buttonMsg, sizeof(ButtonThreadMessage_s));
@@ -135,42 +86,51 @@ static void Button_IrqHandler(void *arg) // lean and mean
 }
 
 // Will update the context struct. 
-static uint16_t Button_HandleAll(void) // JON TODO could make this "HandleOne" and pass button id
+static void Button_HandleChange(DemoButton_e idx) 
 {
-  uint16_t buttonBits = 0;
-  for (int i = 0; i < NUM_BUTTONS; i++)
+  ButtonContext_s *ctx = &buttonContexts[idx];
+  bool rawState = gpio_read(buttonGpios[idx]);
+  ctx->currentState = (rawState == BUTTON_ACTIVE) ? BUTTON_STATE_PRESSED : BUTTON_STATE_RELEASED;
+
+  if (ctx->currentState == ctx->prevState)
   {
-    ButtonContext_s *ctx = &buttonContexts[i];
-    bool rawState = gpio_read(buttonGpios[i]);
-    ctx->currentState = (rawState == BUTTON_ACTIVE) ? BUTTON_STATE_PRESSED : BUTTON_STATE_RELEASED;
-
-    if (ctx->currentState == ctx->prevState)
-    {
-      continue;
-    }
-
-    printf("%s State changed from %d to %d\n", buttonNameStrs[i], ctx->prevState, ctx->currentState, ctx);
-
-    // If there's a state change handle it
-    if (ctx->currentState == BUTTON_STATE_PRESSED) // BUTTON PRESS
-    {
-      ctx->currentTapTimestamp = ztimer_now(ZTIMER_MSEC);
-      ctx->currentNumTaps++;
-      Button_StopTimer(i);
-      Button_StartTimer(i); // TODO IMPLEMENT GESTURE HANDLING
-    }
-    else if (ctx->currentState == BUTTON_STATE_RELEASED) // BUTTON RELEASE
-    {
-      Button_StopTimer(i);
-      Button_StartTimer(i);
-    }
-
-    ctx->prevState = ctx->currentState;
+    return;
   }
-  return buttonBits;
+
+  printf("%s State changed from %d to %d\n", buttonNameStrs[idx], ctx->prevState, ctx->currentState);
+
+  // If there's a state change handle it
+  if (ctx->currentState == BUTTON_STATE_PRESSED) // BUTTON PRESS
+  {
+    ctx->currentTapTimestamp = ztimer_now(ZTIMER_MSEC);
+    ctx->currentNumTaps++;
+    Button_StopTimer(idx);
+    Button_StartTimer(idx); // TODO IMPLEMENT GESTURE HANDLING
+  }
+  else if (ctx->currentState == BUTTON_STATE_RELEASED) // BUTTON RELEASE
+  {
+    Button_StopTimer(idx);
+    Button_StartTimer(idx);
+  }
+
+  ctx->prevState = ctx->currentState;
 }
 
+static void Button_HandleTimer(DemoButton_e idx)
+{
+  ButtonContext_s *ctx = &buttonContexts[idx];
+  uint32_t now = ztimer_now(ZTIMER_MSEC);
+  printf("%s Gesture timeout. CurrState %d NumTaps %d phTime %d\n", buttonNameStrs[idx], ctx->currentState, ctx->currentNumTaps, now - ctx->currentTapTimestamp);
 
+  if (ctx->currentState == BUTTON_STATE_RELEASED) // Gesture ended
+  {
+    ctx->currentNumTaps = 0;
+  }
+  else // Press hold going
+  {
+    Button_StartTimer(idx);
+  }
+}
 
 // TODO decide if we need to do debouncing. with the new switches it seems not
 
@@ -189,17 +149,17 @@ static void *Button_ThreadHandler(void *arg)
     {
       case BUTTON_IRQ_HAPPENED:
         {
-          Button_HandleAll();
+          Button_HandleChange(buttonMsg->idx);
           break;
         }
       case BUTTON_GESTURE_TIMER_TIMEOUT:
         {
-
+          Button_HandleTimer(buttonMsg->idx);
           break;
         }
       default:
         {
-          printf("Bad Button Event\n");
+          printf("Bad Button Event type %d\n", buttonMsg->type);
           break;
         }
     }
@@ -220,7 +180,7 @@ void Button_Init(void)
     buttonContexts[i] = (ButtonContext_s) {.id = i,
       .prevState = BUTTON_STATE_RELEASED, 
       .currentState = BUTTON_STATE_RELEASED,
-      .gestureTimer = (ztimer_t) {.callback = Button_GestureTimerCallback, .arg = (void *) i /* (void *) &buttonContexts[i] */ },
+      .gestureTimer = (ztimer_t) {.callback = Button_GestureTimerCallback, .arg = (void *) i /* (void *) &buttonContexts[i] */ }, // TODO this arg can be the message itself. that way the isr can be almost empty
       .currentNumTaps = 0,
       .currentGesture = GESTURE_NONE,
       .currentTapTimestamp = 0};

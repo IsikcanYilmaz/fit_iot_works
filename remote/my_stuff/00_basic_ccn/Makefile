@@ -26,7 +26,7 @@ CFLAGS += -DUSE_DEBUG
 
 # DEMO FLAGS
 CFLAGS += -DJON_RSSI_LIMITING=-60
-CFLAGS += -DMODULE_PERIPH_GPIO_IRQ # buttons and such
+# CFLAGS += -DMODULE_PERIPH_GPIO_IRQ # buttons and such
 
 
 # Change this to 0 show compiler invocation lines by default:
@@ -41,6 +41,8 @@ USEMODULE += auto_init_gnrc_netif
 # This application dumps received packets to STDIO using the pktdump module
 USEMODULE += gnrc_pktdump
 USEMODULE += prng_xorshift
+
+USEMODULE += periph_gpio_irq
 
 
 EXTERNAL_MODULE_DIRS += $(CURDIR)/../submodules/

@@ -43,6 +43,19 @@ typedef enum LongPressLengthMs_e_
 	GESTURE_VVVLONG_PRESS_SEC = 7000
 } LongPressLengthMs_e;
 
+// For IPC between our main thread, IRQ handler, and gesture timers
+typedef enum ButtonThreadMessageType_e_
+{
+  BUTTON_IRQ_HAPPENED,
+  BUTTON_GESTURE_TIMER_TIMEOUT,
+} ButtonThreadMessageType_e;
+
+typedef struct ButtonThreadMessage_s_
+{
+  ButtonThreadMessageType_e type; 
+  DemoButton_e idx;
+} __attribute__((packed)) ButtonThreadMessage_s;
+
 typedef struct ButtonContext_s_{
   DemoButton_e id; // TODO bit unelegant 
 
@@ -52,7 +65,7 @@ typedef struct ButtonContext_s_{
   /*ztimer_t debounceTimer; // TODO decide on this */
 
   ztimer_t gestureTimer;
-  uint8_t currentNumTaps;
+  uint16_t currentNumTaps;
   ButtonGesture_e currentGesture;
   uint32_t currentTapTimestamp;
 

@@ -102,8 +102,6 @@ int main(void)
 {
 	msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);
 
-	puts("ASDQWE");
-
 	ccnl_core_init();
 	ccnl_start();
 

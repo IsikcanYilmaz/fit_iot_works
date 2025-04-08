@@ -1,7 +1,9 @@
 #include "ztimer.h"
+#include <stdbool.h>
 
 #define BUTTON_THREAD_SLEEP_MS (10)
 #define BUTTON_POLL_PERIOD_MS (150)
+#define BUTTON_DEBOUNCE_PERIOD_MS (5)
 #define BUTTON_LONG_PRESS_TIME_MS (1000)
 
 #define BUTTON_ACTIVE (1) // Active high
@@ -32,15 +34,22 @@ typedef enum ButtonGesture_e_
 	GESTURE_VVLONG_PRESS,
 	GESTURE_VVVLONG_PRESS,
 	GESTURE_NONE,
-} ButtonGesture_e;
+  NUM_GESTURES 
+} ButtonGesture_e; // TODO better naming
+
+typedef struct ButtonGestureState_s_ // TODO better naming
+{
+  bool shift:1;
+  ButtonGesture_e gesture:7;
+} ButtonGestureState_s;
 
 typedef enum LongPressLengthMs_e_
 {
-	GESTURE_SINGLE_TAP_SEC = 0,
-	GESTURE_LONG_PRESS_SEC = 1000,
-	GESTURE_VLONG_PRESS_SEC = 2000,
-	GESTURE_VVLONG_PRESS_SEC = 3000,
-	GESTURE_VVVLONG_PRESS_SEC = 7000
+	GESTURE_SINGLE_TAP_MS = 0,
+	GESTURE_LONG_PRESS_MS = 1000,
+	GESTURE_VLONG_PRESS_MS = 2000,
+	GESTURE_VVLONG_PRESS_MS = 3000,
+	GESTURE_VVVLONG_PRESS_MS = 7000
 } LongPressLengthMs_e;
 
 // For IPC between our main thread, IRQ handler, and gesture timers
@@ -48,6 +57,7 @@ typedef enum ButtonThreadMessageType_e_
 {
   BUTTON_IRQ_HAPPENED,
   BUTTON_GESTURE_TIMER_TIMEOUT,
+  BUTTON_DEBOUNCE_TIMER_TIMEOUT,
 } ButtonThreadMessageType_e;
 
 typedef struct ButtonThreadMessage_s_
@@ -57,14 +67,12 @@ typedef struct ButtonThreadMessage_s_
 } __attribute__((packed)) ButtonThreadMessage_s;
 
 typedef struct ButtonContext_s_{
-  DemoButton_e id; // TODO bit unelegant 
-
   ButtonState_e prevState;
   ButtonState_e currentState;
 
-  /*ztimer_t debounceTimer; // TODO decide on this */
-
+  /*ztimer_t debounceTimer;*/ // TODO Decide if this is needed
   ztimer_t gestureTimer;
+
   uint16_t currentNumTaps;
   ButtonGesture_e currentGesture;
   uint32_t currentTapTimestamp;

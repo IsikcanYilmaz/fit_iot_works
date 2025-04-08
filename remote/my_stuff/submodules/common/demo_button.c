@@ -21,6 +21,17 @@ char *buttonNameStrs[NUM_BUTTONS] = {
   [BUTTON_SHIFT] = "BUTTON_SHIFT",
 };
 
+char *gestureStrs[NUM_GESTURES] = {
+  [GESTURE_SINGLE_TAP] = "GESTURE_SINGLE_TAP",
+  [GESTURE_DOUBLE_TAP] = "GESTURE_DOUBLE_TAP",
+  [GESTURE_TRIPLE_TAP] = "GESTURE_TRIPLE_TAP",
+  [GESTURE_LONG_PRESS] = "GESTURE_LONG_PRESS",
+  [GESTURE_VLONG_PRESS] = "GESTURE_VLONG_PRESS",
+  [GESTURE_VVLONG_PRESS] = "GESTURE_VVLONG_PRESS",
+  [GESTURE_VVVLONG_PRESS] = "GESTURE_VVVLONG_PRESS",
+  [GESTURE_NONE] = "GESTURE_NONE",
+};
+
 // uint32_t t0 = ztimer_now(ZTIMER_USEC);
 
 ButtonContext_s buttonContexts[NUM_BUTTONS];
@@ -56,6 +67,7 @@ static inline void Button_StartTimer(DemoButton_e i)
   ztimer_set(ZTIMER_MSEC, &buttonContexts[i].gestureTimer, BUTTON_POLL_PERIOD_MS);
 }
 
+// TODO Consolidate irq and timer callbacks
 // arg is button id
 static void Button_GestureTimerCallback(void *arg)
 {
@@ -70,10 +82,22 @@ static void Button_GestureTimerCallback(void *arg)
   msg_send(&m, buttonThreadId);
 }
 
+static void Button_DebounceTimerCallback(void *arg) // TODO currently unused
+{
+  DemoButton_e buttonIdx = (DemoButton_e) arg;
+  if (buttonIdx >= NUM_BUTTONS)
+  {
+    return;
+  }
+  ButtonThreadMessage_s buttonMsg = {.type = BUTTON_DEBOUNCE_TIMER_TIMEOUT, .idx = buttonIdx};
+  msg_t m;
+  memcpy(&m.content.value, &buttonMsg, sizeof(ButtonThreadMessage_s));
+  msg_send(&m, buttonThreadId);
+}
+
 // arg is button id
 static void Button_IrqHandler(void *arg) // lean and mean
 {
-  LED1_TOGGLE;
   DemoButton_e buttonIdx = (DemoButton_e) arg;
   if (buttonIdx >= NUM_BUTTONS)
   {
@@ -97,7 +121,9 @@ static void Button_HandleChange(DemoButton_e idx)
     return;
   }
 
-  printf("%s State changed from %d to %d\n", buttonNameStrs[idx], ctx->prevState, ctx->currentState);
+  /*printf("%s State changed from %d to %d\n", buttonNameStrs[idx], ctx->prevState, ctx->currentState);*/
+ 
+  LED1_TOGGLE;
 
   // If there's a state change handle it
   if (ctx->currentState == BUTTON_STATE_PRESSED) // BUTTON PRESS
@@ -116,14 +142,75 @@ static void Button_HandleChange(DemoButton_e idx)
   ctx->prevState = ctx->currentState;
 }
 
+static ButtonGesture_e Button_ComputeGesture(DemoButton_e idx)
+{
+  ButtonGesture_e gesture = GESTURE_NONE;
+  bool shiftHeld = (gpio_read(buttonGpios[BUTTON_SHIFT]) == BUTTON_ACTIVE);
+  ButtonGestureState_s gestureState = {.shift = shiftHeld, .gesture = gesture};
+  ButtonContext_s *ctx = &buttonContexts[idx];
+  uint32_t now = ztimer_now(ZTIMER_MSEC);
+  
+  uint32_t pressHoldLen = now - ctx->currentTapTimestamp;
+
+  // Can be a single tap
+  switch(ctx->currentNumTaps)
+  {
+    case 1:
+      {
+        // Either single tap or long press
+        if (pressHoldLen < GESTURE_LONG_PRESS_MS) // 0 - 1000ms single tap
+        {
+          gesture = GESTURE_SINGLE_TAP;
+        }
+        else if (pressHoldLen < GESTURE_VLONG_PRESS_MS) // 1000 - 2000ms long press
+        {
+          gesture = GESTURE_LONG_PRESS;
+        }
+        else if (pressHoldLen < GESTURE_VVLONG_PRESS_MS) // 2000 - 3000ms very long press
+        {
+          gesture = GESTURE_VLONG_PRESS;
+        }
+        else if (pressHoldLen < GESTURE_VVVLONG_PRESS_MS) // 3000 - 70000ms very very long press
+        {
+          gesture = GESTURE_VVLONG_PRESS;
+        }
+        else {
+          gesture = GESTURE_VVVLONG_PRESS;
+        }
+        break;
+      }
+    case 2:
+      {
+        gesture = GESTURE_DOUBLE_TAP;
+        break;
+      }
+    case 3:
+      {
+        gesture = GESTURE_TRIPLE_TAP;
+        break;
+      }
+    default:
+      {
+        printf("%s %d taps, dunno what to do\n", __FUNCTION__, ctx->currentNumTaps);
+      }
+  }
+  
+  gestureState.gesture = gesture;
+  printf("GESTURE STATE %d %d\n", gestureState.shift, gestureState.gesture);
+  return gesture;
+}
+
 static void Button_HandleTimer(DemoButton_e idx)
 {
   ButtonContext_s *ctx = &buttonContexts[idx];
   uint32_t now = ztimer_now(ZTIMER_MSEC);
-  printf("%s Gesture timeout. CurrState %d NumTaps %d phTime %d\n", buttonNameStrs[idx], ctx->currentState, ctx->currentNumTaps, now - ctx->currentTapTimestamp);
 
   if (ctx->currentState == BUTTON_STATE_RELEASED) // Gesture ended
   {
+    // Compute what kind of gesture just happened:
+    ButtonGesture_e gesture = Button_ComputeGesture(idx);
+    /*printf("%s %s CurrState %d NumTaps %d phTime %d\n", buttonNameStrs[idx], gestureStrs[gesture], ctx->currentState, ctx->currentNumTaps, now - ctx->currentTapTimestamp);*/
+    printf("%s %s \n", buttonNameStrs[idx], gestureStrs[gesture], ctx->currentState, ctx->currentNumTaps, now - ctx->currentTapTimestamp);
     ctx->currentNumTaps = 0;
   }
   else // Press hold going
@@ -143,7 +230,7 @@ static void *Button_ThreadHandler(void *arg)
     msg_t m;
     msg_receive(&m);
     ButtonThreadMessage_s *buttonMsg = (ButtonThreadMessage_s *) &m.content.value;
-    printf("MSG RECEIVED TYPE %d IDX %d\n", buttonMsg->type, buttonMsg->idx);
+    /*printf("MSG RECEIVED TYPE %d IDX %d\n", buttonMsg->type, buttonMsg->idx);*/
 
     switch (buttonMsg->type)
     {
@@ -177,13 +264,15 @@ void Button_Init(void)
     gpio_irq_enable(buttonGpios[i]);
 
     // Init our button's context
-    buttonContexts[i] = (ButtonContext_s) {.id = i,
+    buttonContexts[i] = (ButtonContext_s) {
       .prevState = BUTTON_STATE_RELEASED, 
       .currentState = BUTTON_STATE_RELEASED,
-      .gestureTimer = (ztimer_t) {.callback = Button_GestureTimerCallback, .arg = (void *) i /* (void *) &buttonContexts[i] */ }, // TODO this arg can be the message itself. that way the isr can be almost empty
+      .gestureTimer = (ztimer_t) {.callback = Button_GestureTimerCallback, .arg = (void *) i }, // TODO this arg can be the message itself. that way the isr can be almost empty
+      /*.debounceTimer = (ztimer_t) {.callback = Button_DebounceTimerCallback, .arg = (void *) i }, // TODO this arg can be the message itself. that way the isr can be almost empty*/
       .currentNumTaps = 0,
       .currentGesture = GESTURE_NONE,
-      .currentTapTimestamp = 0};
+      .currentTapTimestamp = 0
+    };
   }
 
   // Run button handler thread

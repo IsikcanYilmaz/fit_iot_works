@@ -26,11 +26,33 @@ CFLAGS += -DUSE_DEBUG
 
 # DEMO FLAGS
 CFLAGS += -DJON_RSSI_LIMITING=-60
-# CFLAGS += -DMODULE_PERIPH_GPIO_IRQ # buttons and such
 
+# WS281X CONFIG
+PIN ?= GPIO_PIN(0, 29)
+N ?= 16
+TIMER ?= 2
+FREQ ?= 16000000
+
+ifneq (, $(PIN))
+  CFLAGS += '-DWS281X_PARAM_PIN=$(PIN)'
+endif
+ifneq (, $(N))
+  CFLAGS += '-DWS281X_PARAM_NUMOF=$(N)'
+endif
+ifneq (, $(TIMER))
+  CFLAGS += '-DWS281X_TIMER_DEV=TIMER_DEV($(TIMER))' '-DWS281X_TIMER_MAX_VALUE=TIMER_$(TIMER)_MAX_VALUE'
+endif
+ifneq (, $(FREQ))
+  CFLAGS += '-DWS281X_TIMER_FREQ=$(FREQ)'
+endif
+
+###########
 
 # Change this to 0 show compiler invocation lines by default:
 QUIET ?= 1
+
+#neopixels
+USEMODULE += ws281x
 
 USEMODULE += ps
 USEMODULE += shell_cmds_default

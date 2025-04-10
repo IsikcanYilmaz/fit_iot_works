@@ -78,9 +78,6 @@ static const shell_command_t commands[] = {
   // FAKE LATENCY
   {"setfakelat", "set fake latency", setFakeLatency},
   {"getfakelat", "get fake latency", getFakeLatency},
-
-  // CCNL-RIOT FAKE LATENCY
-  // TODO
  
   // CCN
   {"prod", "CCN NC Demo Produce", cmd_ccnl_nc_produce},

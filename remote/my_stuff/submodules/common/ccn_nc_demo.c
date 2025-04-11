@@ -14,6 +14,9 @@
 #include "led.h"
 #include <periph/gpio.h>
 
+// for neopixels 
+#include "demo_neopixels.h"
+
 #include "demo_button.h"
 
 #define BUF_SIZE (64)
@@ -50,7 +53,7 @@ typedef enum {
   NUM_LED_STATES
 } LedState_e;
 
-HardwareType_e currentHardware = HW_BREADBOARD_LEDS; //HW_ONBOARD_LEDS;
+HardwareType_e currentHardware = HW_NEOPIXELS; //HW_BREADBOARD_LEDS; //HW_ONBOARD_LEDS;
 
 LedState_e ledStates[NUM_ONBOARD_LEDS];
 
@@ -120,6 +123,8 @@ static void init_hardware(HardwareType_e type)
       }
     case HW_NEOPIXELS:
       {
+        Neopixel_Init();
+        Button_Init();
         break;
       }
     default:
@@ -177,38 +182,44 @@ static void onboard_led_toggle(OnboardLedID_e led)
 }
 
 // THREAD HANDLERS //////////////////////
-char ccn_nc_onboard_led_thread_stack[THREAD_STACKSIZE_DEFAULT];
-static void *ccn_nc_onboard_led_thread_handler(void *arg)
+char ccn_nc_led_thread_stack[THREAD_STACKSIZE_DEFAULT];
+static void *ccn_nc_led_thread_handler(void *arg)
 {
   while(true)
   {
-    // Handle animations
-    for (int i = 0; i < NUM_ONBOARD_LEDS; i++)
+    if (currentHardware == HW_ONBOARD_LEDS || currentHardware == HW_BREADBOARD_LEDS)
     {
-      switch(ledStates[i])
+      // Handle animations
+      for (int i = 0; i < NUM_ONBOARD_LEDS; i++)
       {
-        case OFF:
-          {
-            onboard_led_off(i);
-            break;
-          }
-        case SOLID:
-          {
-            onboard_led_on(i);
-            break;
-          }
-        case BLINKING:
-          {
-            onboard_led_toggle(i);
-            break;
-          }
-        default:
-          {
+        switch(ledStates[i])
+        {
+          case OFF:
+            {
+              onboard_led_off(i);
+              break;
+            }
+          case SOLID:
+            {
+              onboard_led_on(i);
+              break;
+            }
+          case BLINKING:
+            {
+              onboard_led_toggle(i);
+              break;
+            }
+          default:
+            {
 
-          }
+            }
+        }
       }
     }
-
+    else if (currentHardware == HW_NEOPIXELS)
+    {
+      // TODO
+    }
     ztimer_sleep(ZTIMER_MSEC, LED_THREAD_SLEEP_MS);
   }
 }
@@ -265,11 +276,11 @@ void CCN_NC_Init(void)
 	);
 
   ledThreadId = thread_create(
-    ccn_nc_onboard_led_thread_stack,
-    sizeof(ccn_nc_onboard_led_thread_stack),
+    ccn_nc_led_thread_stack,
+    sizeof(ccn_nc_led_thread_stack),
     THREAD_PRIORITY_MAIN - 1,
     THREAD_CREATE_STACKTEST,
-    ccn_nc_onboard_led_thread_handler,
+    ccn_nc_led_thread_handler,
     NULL,
     "ccn_nc_onboard_led_thread"
 	);

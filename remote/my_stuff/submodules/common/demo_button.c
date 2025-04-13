@@ -61,10 +61,37 @@ static inline void Button_StartTimer(DemoButton_e i)
   }
   if (ztimer_is_set(ZTIMER_MSEC, &buttonContexts[i].gestureTimer))
   {
-    printf("TIMER IS ALREADY SET!\n");
+    /*printf("TIMER IS ALREADY SET!\n");*/
     Button_StopTimer(i);
   }
   ztimer_set(ZTIMER_MSEC, &buttonContexts[i].gestureTimer, BUTTON_POLL_PERIOD_MS);
+}
+
+// TODO find a more elegant solution / consolidate these timer calls?
+static inline void Button_StopDebounceTimer(DemoButton_e i)
+{
+  if (i >= NUM_BUTTONS)
+  {
+    return;
+  }
+  if (ztimer_is_set(ZTIMER_MSEC, &buttonContexts[i].debounceTimer))
+  {
+    ztimer_remove(ZTIMER_MSEC, &buttonContexts[i].debounceTimer);
+  }
+}
+
+static inline void Button_StartDebounceTimer(DemoButton_e i)
+{
+  if (i >= NUM_BUTTONS)
+  {
+    return;
+  }
+  if (ztimer_is_set(ZTIMER_MSEC, &buttonContexts[i].debounceTimer))
+  {
+    /*printf("DEBOUNCE TIMER IS ALREADY SET!\n");*/
+    return;
+  }
+  ztimer_set(ZTIMER_MSEC, &buttonContexts[i].debounceTimer, BUTTON_DEBOUNCE_PERIOD_MS);
 }
 
 // TODO Consolidate irq and timer callbacks
@@ -142,7 +169,7 @@ static void Button_HandleChange(DemoButton_e idx)
   ctx->prevState = ctx->currentState;
 }
 
-static ButtonGesture_e Button_ComputeGesture(DemoButton_e idx)
+static ButtonGestureState_s Button_ComputeGesture(DemoButton_e idx)
 {
   ButtonGesture_e gesture = GESTURE_NONE;
   bool shiftHeld = (gpio_read(buttonGpios[BUTTON_SHIFT]) == BUTTON_ACTIVE);
@@ -196,8 +223,8 @@ static ButtonGesture_e Button_ComputeGesture(DemoButton_e idx)
   }
   
   gestureState.gesture = gesture;
-  printf("GESTURE STATE %d %d\n", gestureState.shift, gestureState.gesture);
-  return gesture;
+  printf("GESTURE STATE %s %d\n", (gestureState.shift) ? "SHIFT" : "", gestureState.gesture);
+  return gestureState;
 }
 
 static void Button_HandleTimer(DemoButton_e idx)
@@ -208,7 +235,8 @@ static void Button_HandleTimer(DemoButton_e idx)
   if (ctx->currentState == BUTTON_STATE_RELEASED) // Gesture ended
   {
     // Compute what kind of gesture just happened:
-    ButtonGesture_e gesture = Button_ComputeGesture(idx);
+    ButtonGestureState_s gestureState = Button_ComputeGesture(idx);
+    ButtonGesture_e gesture = gestureState.gesture;
     /*printf("%s %s CurrState %d NumTaps %d phTime %d\n", buttonNameStrs[idx], gestureStrs[gesture], ctx->currentState, ctx->currentNumTaps, now - ctx->currentTapTimestamp);*/
     printf("%s %s \n", buttonNameStrs[idx], gestureStrs[gesture], ctx->currentState, ctx->currentNumTaps, now - ctx->currentTapTimestamp);
     ctx->currentNumTaps = 0;
@@ -228,18 +256,23 @@ static void *Button_ThreadHandler(void *arg)
   while(true)
   {
     msg_t m;
-    msg_receive(&m);
+    msg_receive(&m); // block until thread receives message
     ButtonThreadMessage_s *buttonMsg = (ButtonThreadMessage_s *) &m.content.value;
     /*printf("MSG RECEIVED TYPE %d IDX %d\n", buttonMsg->type, buttonMsg->idx);*/
 
     switch (buttonMsg->type)
     {
-      case BUTTON_IRQ_HAPPENED:
+      case BUTTON_IRQ_HAPPENED: // First IRQ happens and we start the debounce timer
+        {
+          Button_StartDebounceTimer(buttonMsg->idx);
+          break;
+        }
+      case BUTTON_DEBOUNCE_TIMER_TIMEOUT: // Then debounce timer times out, now we take this as a tap and we can start the gesture timer based on need
         {
           Button_HandleChange(buttonMsg->idx);
           break;
         }
-      case BUTTON_GESTURE_TIMER_TIMEOUT:
+      case BUTTON_GESTURE_TIMER_TIMEOUT: // Gesture timer times out, now decide what button gesture just happened
         {
           Button_HandleTimer(buttonMsg->idx);
           break;
@@ -268,7 +301,7 @@ void Button_Init(void)
       .prevState = BUTTON_STATE_RELEASED, 
       .currentState = BUTTON_STATE_RELEASED,
       .gestureTimer = (ztimer_t) {.callback = Button_GestureTimerCallback, .arg = (void *) i }, // TODO this arg can be the message itself. that way the isr can be almost empty
-      /*.debounceTimer = (ztimer_t) {.callback = Button_DebounceTimerCallback, .arg = (void *) i }, // TODO this arg can be the message itself. that way the isr can be almost empty*/
+      .debounceTimer = (ztimer_t) {.callback = Button_DebounceTimerCallback, .arg = (void *) i }, // TODO this arg can be the message itself. that way the isr can be almost empty
       .currentNumTaps = 0,
       .currentGesture = GESTURE_NONE,
       .currentTapTimestamp = 0

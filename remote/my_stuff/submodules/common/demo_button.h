@@ -70,7 +70,7 @@ typedef struct ButtonContext_s_{
   ButtonState_e prevState;
   ButtonState_e currentState;
 
-  /*ztimer_t debounceTimer;*/ // TODO Decide if this is needed
+  ztimer_t debounceTimer; // TODO Decide if this is needed
   ztimer_t gestureTimer;
 
   uint16_t currentNumTaps;

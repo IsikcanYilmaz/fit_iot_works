@@ -41,6 +41,7 @@ kernel_pid_t buttonThreadId; // TODO decide if you want this to be here or in ma
 
 /////////////////////////////////////////
 
+// TODO find a more elegant solution / consolidate these timer functions?
 static inline void Button_StopTimer(DemoButton_e i)
 {
   if (i >= NUM_BUTTONS)
@@ -67,7 +68,6 @@ static inline void Button_StartTimer(DemoButton_e i)
   ztimer_set(ZTIMER_MSEC, &buttonContexts[i].gestureTimer, BUTTON_POLL_PERIOD_MS);
 }
 
-// TODO find a more elegant solution / consolidate these timer calls?
 static inline void Button_StopDebounceTimer(DemoButton_e i)
 {
   if (i >= NUM_BUTTONS)
@@ -227,7 +227,7 @@ static ButtonGestureState_s Button_ComputeGesture(DemoButton_e idx)
   return gestureState;
 }
 
-static void Button_HandleTimer(DemoButton_e idx)
+static void Button_HandleGestureTimer(DemoButton_e idx)
 {
   ButtonContext_s *ctx = &buttonContexts[idx];
   uint32_t now = ztimer_now(ZTIMER_MSEC);
@@ -272,9 +272,9 @@ static void *Button_ThreadHandler(void *arg)
           Button_HandleChange(buttonMsg->idx);
           break;
         }
-      case BUTTON_GESTURE_TIMER_TIMEOUT: // Gesture timer times out, now decide what button gesture just happened
+      case BUTTON_GESTURE_TIMER_TIMEOUT: // Gesture timer times out, now decide what button gesture just happened, or keep the timer on
         {
-          Button_HandleTimer(buttonMsg->idx);
+          Button_HandleGestureTimer(buttonMsg->idx);
           break;
         }
       default:

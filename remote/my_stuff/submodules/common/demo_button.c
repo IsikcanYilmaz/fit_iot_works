@@ -1,5 +1,4 @@
 #include "demo_button.h"
-#include "thread.h"
 #include "board.h"
 #include <periph/gpio.h>
 #include <stdbool.h>
@@ -7,21 +6,21 @@
 #include <stdio.h>
 #include <string.h>
 
-gpio_t buttonGpios[NUM_BUTTONS] = { // TODO maybe move these into the context struct?
+static gpio_t buttonGpios[NUM_BUTTONS] = { // TODO maybe move these into the context struct?
   [BUTTON_RED] = GPIO_PIN(1,12),
   [BUTTON_GREEN] = GPIO_PIN(1,13),
   [BUTTON_BLUE] = GPIO_PIN(1,14),
   [BUTTON_SHIFT] = GPIO_PIN(1,15)
 };
 
-char *buttonNameStrs[NUM_BUTTONS] = {
+static char *buttonNameStrs[NUM_BUTTONS] = {
   [BUTTON_RED] = "BUTTON_RED",
   [BUTTON_GREEN] = "BUTTON_GREEN",
   [BUTTON_BLUE] = "BUTTON_BLUE",
   [BUTTON_SHIFT] = "BUTTON_SHIFT",
 };
 
-char *gestureStrs[NUM_GESTURES] = {
+static char *gestureStrs[NUM_GESTURES] = {
   [GESTURE_SINGLE_TAP] = "GESTURE_SINGLE_TAP",
   [GESTURE_DOUBLE_TAP] = "GESTURE_DOUBLE_TAP",
   [GESTURE_TRIPLE_TAP] = "GESTURE_TRIPLE_TAP",
@@ -34,9 +33,10 @@ char *gestureStrs[NUM_GESTURES] = {
 
 // uint32_t t0 = ztimer_now(ZTIMER_USEC);
 
-ButtonContext_s buttonContexts[NUM_BUTTONS];
+static ButtonContext_s buttonContexts[NUM_BUTTONS];
 
-char buttonThreadStack[THREAD_STACKSIZE_DEFAULT];
+static char buttonThreadStack[THREAD_STACKSIZE_DEFAULT];
+static kernel_pid_t mainThreadId; // TODO decide if you want this to be here or in main or smt?
 kernel_pid_t buttonThreadId; // TODO decide if you want this to be here or in main or smt?
 
 /////////////////////////////////////////
@@ -169,11 +169,11 @@ static void Button_HandleChange(DemoButton_e idx)
   ctx->prevState = ctx->currentState;
 }
 
-static ButtonGestureState_s Button_ComputeGesture(DemoButton_e idx)
+static ButtonGestureMessage_s Button_ComputeGesture(DemoButton_e idx)
 {
   ButtonGesture_e gesture = GESTURE_NONE;
   bool shiftHeld = (gpio_read(buttonGpios[BUTTON_SHIFT]) == BUTTON_ACTIVE);
-  ButtonGestureState_s gestureState = {.shift = shiftHeld, .gesture = gesture};
+  ButtonGestureMessage_s gestureMessage = {.shift = shiftHeld, .button = idx, .gesture = gesture};
   ButtonContext_s *ctx = &buttonContexts[idx];
   uint32_t now = ztimer_now(ZTIMER_MSEC);
   
@@ -222,9 +222,9 @@ static ButtonGestureState_s Button_ComputeGesture(DemoButton_e idx)
       }
   }
   
-  gestureState.gesture = gesture;
-  printf("GESTURE STATE %s %d\n", (gestureState.shift) ? "SHIFT" : "", gestureState.gesture);
-  return gestureState;
+  gestureMessage.gesture = gesture;
+  printf("GESTURE STATE %s %d\n", (gestureMessage.shift) ? "SHIFT" : "", gestureMessage.gesture);
+  return gestureMessage;
 }
 
 static void Button_HandleGestureTimer(DemoButton_e idx)
@@ -235,11 +235,19 @@ static void Button_HandleGestureTimer(DemoButton_e idx)
   if (ctx->currentState == BUTTON_STATE_RELEASED) // Gesture ended
   {
     // Compute what kind of gesture just happened:
-    ButtonGestureState_s gestureState = Button_ComputeGesture(idx);
-    ButtonGesture_e gesture = gestureState.gesture;
+    ButtonGestureMessage_s gestureMessage = Button_ComputeGesture(idx);
+    ButtonGesture_e gesture = gestureMessage.gesture;
     /*printf("%s %s CurrState %d NumTaps %d phTime %d\n", buttonNameStrs[idx], gestureStrs[gesture], ctx->currentState, ctx->currentNumTaps, now - ctx->currentTapTimestamp);*/
-    printf("%s %s \n", buttonNameStrs[idx], gestureStrs[gesture], ctx->currentState, ctx->currentNumTaps, now - ctx->currentTapTimestamp);
+    printf("%s %s %s \n", buttonNameStrs[gestureMessage.button], (gestureMessage.shift) ? "SHIFT" : "", gestureStrs[gesture]);
     ctx->currentNumTaps = 0;
+
+    // We got a gesture. Tell our main thread
+    if (mainThreadId != NULL && gesture != GESTURE_NONE)
+    {
+      msg_t m = (msg_t) {.content.value = * (long unsigned int *) &gestureMessage};
+      printf("Sending message %d to pid %d\n", m.content.value, mainThreadId);
+      msg_send(&m, mainThreadId);
+    }
   }
   else // Press hold going
   {
@@ -288,7 +296,7 @@ static void *Button_ThreadHandler(void *arg)
 
 /////////////////////////////////////////
 
-void Button_Init(void)
+void Button_Init(kernel_pid_t i)
 {
   // Initialize buttons and enable irqs
   for (uint8_t i = 0; i < NUM_BUTTONS; i++)
@@ -318,6 +326,10 @@ void Button_Init(void)
     NULL,
     "button_thread"
   );
+
+  // Pass button events and such to this thread id
+  // can be null
+  mainThreadId = i;
 }
 
 void Button_Deinit(void)

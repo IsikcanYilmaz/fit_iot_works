@@ -52,6 +52,7 @@ endif
 QUIET ?= 1
 
 #neopixels
+USEMODULE += color
 USEMODULE += ws281x
 
 USEMODULE += ps

@@ -1,4 +1,5 @@
 #include "ztimer.h"
+#include "thread.h"
 #include <stdbool.h>
 
 #define BUTTON_THREAD_SLEEP_MS (10)
@@ -37,11 +38,13 @@ typedef enum ButtonGesture_e_
   NUM_GESTURES 
 } ButtonGesture_e; // TODO better naming
 
-typedef struct ButtonGestureState_s_ // TODO better naming
+// This struct defines the message that this module produces and sends out
+typedef struct ButtonGestureMessage_s_ // TODO better naming // and maybe it can be bigger than 1 byte?
 {
   bool shift:1;
-  ButtonGesture_e gesture:7;
-} ButtonGestureState_s;
+  DemoButton_e button:4;
+  ButtonGesture_e gesture:3;
+} ButtonGestureMessage_s;
 
 typedef enum LongPressLengthMs_e_
 {
@@ -79,5 +82,5 @@ typedef struct ButtonContext_s_{
 
 } ButtonContext_s;
 
-void Button_Init(void);
+void Button_Init(kernel_pid_t i);
 void Button_Deinit(void);

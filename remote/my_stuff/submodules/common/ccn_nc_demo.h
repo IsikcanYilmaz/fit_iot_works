@@ -16,7 +16,7 @@ typedef enum
 void CCN_NC_Init(void);
 void CCN_NC_ShowCS(void);
 void CCN_NC_Produce(ContentTypes_e t, bool overwrite);
-void CCN_NC_Interest(char *prefixStr);
+int CCN_NC_Interest(char *prefixStr);
 
 // Shell cmds
 int cmd_ccnl_nc_produce(int argc, char **argv);

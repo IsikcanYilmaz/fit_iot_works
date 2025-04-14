@@ -26,11 +26,10 @@ static unsigned char _out[CCNL_MAX_PACKET_SIZE];
 
 static bool onBoardLedDemo = false;
 
-#define LED_THREAD_SLEEP_MS 50
+#define LED_THREAD_SLEEP_MS 500
 #define MAIN_THREAD_SLEEP_MS 10
 
-char *contentNames[NUM_CONTENT_TYPES] = {"/red", "/grn", "/blu"}; // TODO CLEAN
-
+static char *contentNames[NUM_CONTENT_TYPES] = {"/red", "/grn", "/blu"}; // TODO CLEAN
 
 typedef enum { // TODO mv to header
   ONBOARD_RED,
@@ -53,23 +52,23 @@ typedef enum {
   NUM_LED_STATES
 } LedState_e;
 
-HardwareType_e currentHardware = HW_NEOPIXELS; //HW_BREADBOARD_LEDS; //HW_ONBOARD_LEDS;
+static HardwareType_e currentHardware = HW_NEOPIXELS; //HW_BREADBOARD_LEDS; //HW_ONBOARD_LEDS;
 
-LedState_e ledStates[NUM_ONBOARD_LEDS];
+static LedState_e ledStates[NUM_ONBOARD_LEDS];
 
-gpio_t breadboardLedGpios[NUM_ONBOARD_LEDS] = {
+static gpio_t breadboardLedGpios[NUM_ONBOARD_LEDS] = {
   [ONBOARD_RED] = GPIO_PIN(0,28),
   [ONBOARD_GREEN] = GPIO_PIN(0, 3),
   [ONBOARD_BLUE] = GPIO_PIN(0, 2),
 };
 
-kernel_pid_t mainThreadId, ledThreadId;
+static kernel_pid_t mainThreadId, ledThreadId;
+extern kernel_pid_t buttonThreadId;
 
 ///////////////////////////////////////////////
 
 static struct ccnl_interest_s * pit_lookup(char *prefixStr)
 {
-
   char s[CCNL_MAX_PREFIX_SIZE];
   struct ccnl_interest_s *pendingInterest = ccnl_relay.pit;
   for (int i = 0; i < ccnl_relay.pitcnt; i++)
@@ -100,7 +99,7 @@ static bool cs_remove(char *prefixStr)
 static bool prefix_exists(char *prefixStr)
 {
   struct ccnl_content_s *content = ccnl_cs_lookup(&ccnl_relay, prefixStr);
-  /*printf("Prefix lookup of %s : %s\n", prefixStr, (content != NULL) ? "EXISTS" : "DOESNT");*/
+  printf("Prefix lookup of %s : %s %x\n", prefixStr, (content != NULL) ? "EXISTS" : "DOESNT", content);
   return (content != NULL);
 }
 
@@ -118,13 +117,13 @@ static void init_hardware(HardwareType_e type)
         {
           gpio_init(breadboardLedGpios[i], GPIO_OUT);
         }
-        Button_Init();
+        Button_Init(mainThreadId);
         break;
       }
     case HW_NEOPIXELS:
       {
         Neopixel_Init();
-        Button_Init();
+        Button_Init(mainThreadId);
         break;
       }
     default:
@@ -182,13 +181,32 @@ static void onboard_led_toggle(OnboardLedID_e led)
 }
 
 // THREAD HANDLERS //////////////////////
+
+// TODO maybe move this elsewhere?
 char ccn_nc_led_thread_stack[THREAD_STACKSIZE_DEFAULT];
-static void *ccn_nc_led_thread_handler(void *arg)
+static void *ccn_nc_led_thread_handler(void *arg) // TODO Move this to the neopixel file
 {
   while(true)
   {
     if (currentHardware == HW_ONBOARD_LEDS || currentHardware == HW_BREADBOARD_LEDS)
     {
+      // Check CS and PIT
+      for (int i = 0; i < NUM_CONTENT_TYPES; i++)
+      {
+        if (ccnl_cs_lookup(&ccnl_relay, contentNames[i]))
+        {
+          ledStates[i] = SOLID;
+        }
+        else if (pit_lookup(contentNames[i]))
+        {
+          ledStates[i] = BLINKING;
+        }
+        else
+        {
+          ledStates[i] = OFF;
+        }
+      }
+
       // Handle animations
       for (int i = 0; i < NUM_ONBOARD_LEDS; i++)
       {
@@ -218,7 +236,11 @@ static void *ccn_nc_led_thread_handler(void *arg)
     }
     else if (currentHardware == HW_NEOPIXELS)
     {
-      // TODO
+      /*if (Neopixel_ShouldRedraw())*/
+      /*{*/
+      /*  printf("NEOPIXEL SHOULD REDRAW\n");*/
+      /*  Neopixel_DisplayStrip();*/
+      /*}*/
     }
     ztimer_sleep(ZTIMER_MSEC, LED_THREAD_SLEEP_MS);
   }
@@ -230,24 +252,56 @@ static void *ccn_nc_main_thread_handler(void *arg)
   (void) arg;
   while(true)
   {
-    // Check CS and PIT
-    for (int i = 0; i < NUM_CONTENT_TYPES; i++)
+    msg_t m;
+    msg_receive(&m); // block until thread receives message
+    printf("Message received %d\n", m.content.value);
+
+    if (m.sender_pid == buttonThreadId) // Button Message received 
     {
-      if (ccnl_cs_lookup(&ccnl_relay, contentNames[i]))
+      ButtonGestureMessage_s *gestureMessage = (ButtonGestureMessage_s *) &m.content.value;
+      switch(gestureMessage->button)
       {
-        ledStates[i] = SOLID;
-      }
-      else if (pit_lookup(contentNames[i]))
-      {
-        ledStates[i] = BLINKING;
-      }
-      else
-      {
-        ledStates[i] = OFF;
+        case BUTTON_RED:
+          {
+            if (gestureMessage->shift)
+              CCN_NC_Produce(RED_CONTENT, false);
+            else
+              CCN_NC_Interest("/red");
+            break;
+          }
+        case BUTTON_GREEN:
+          {
+            if (gestureMessage->shift)
+              CCN_NC_Produce(GRN_CONTENT, false);
+            else
+              CCN_NC_Interest("/grn");
+            break;
+          }
+        case BUTTON_BLUE:
+          {
+            if (gestureMessage->shift)
+              CCN_NC_Produce(BLU_CONTENT, false);
+            else
+              CCN_NC_Interest("/blu");
+            break;
+          }
+        case BUTTON_SHIFT:
+          {
+
+            break;
+          }
+        default:
+          {
+
+          }
       }
     }
+    else
+    {
+      printf("Unknown sender %d\n", m.sender_pid);
+    }
 
-    ztimer_sleep(ZTIMER_MSEC, MAIN_THREAD_SLEEP_MS);
+    /*ztimer_sleep(ZTIMER_MSEC, MAIN_THREAD_SLEEP_MS);*/
   }
 }
 
@@ -262,8 +316,6 @@ void CCN_NC_Init(void)
     ledStates[i] = OFF;
   }
 
-  init_hardware(currentHardware);
-
   // Kick off threads
   mainThreadId = thread_create(
     ccn_nc_main_thread_stack,
@@ -275,15 +327,17 @@ void CCN_NC_Init(void)
     "ccn_nc_thread"
 	);
 
-  ledThreadId = thread_create(
-    ccn_nc_led_thread_stack,
-    sizeof(ccn_nc_led_thread_stack),
-    THREAD_PRIORITY_MAIN - 1,
-    THREAD_CREATE_STACKTEST,
-    ccn_nc_led_thread_handler,
-    NULL,
-    "ccn_nc_onboard_led_thread"
-	);
+	/* ledThreadId = thread_create(*/ // TODO? what to do with this?
+	/*   ccn_nc_led_thread_stack,*/
+	/*   sizeof(ccn_nc_led_thread_stack),*/
+	/*   THREAD_PRIORITY_MAIN - 1,*/
+	/*   THREAD_CREATE_STACKTEST,*/
+	/*   ccn_nc_led_thread_handler,*/
+	/*   NULL,*/
+	/*   "ccn_nc_onboard_led_thread"*/
+	/*);*/
+
+  init_hardware(currentHardware);
 }
 
 void CCN_NC_ShowCS(void)
@@ -367,9 +421,14 @@ void CCN_NC_Produce(ContentTypes_e t, bool overwrite)
   }
 }
 
-void CCN_NC_Interest(char *prefixStr)
+int CCN_NC_Interest(char *prefixStr)
 {
-  // TODO // for now ccnl_cs is fine
+  memset(_int_buf, '\0', BUF_SIZE);
+  printf("Sending interest for %s\n", prefixStr);
+  struct ccnl_prefix_s *prefix = ccnl_URItoPrefix(prefixStr, CCNL_SUITE_NDNTLV, NULL);
+  int res = ccnl_send_interest(prefix, _int_buf, BUF_SIZE, NULL);
+  ccnl_prefix_free(prefix);
+  return res;
 }
 
 ///////////////////////////////////////////////////////////////////

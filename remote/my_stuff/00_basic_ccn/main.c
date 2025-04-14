@@ -21,6 +21,7 @@
 #include "node_settings.h"
 #include "demo_throttlers.h"
 #include "ccn_nc_demo.h"
+#include "demo_neopixels.h"
 
 /* main thread's message queue */
 #define MAIN_QUEUE_SIZE (8)
@@ -87,6 +88,11 @@ static const shell_command_t commands[] = {
   {"rm", "CCN NC Demo Remove from CS", cmd_ccnl_nc_rm_cs},
   {"rmall", "CCN NC Demo Clear CS", cmd_ccnl_nc_rm_cs_all},
   {"sethw", "CCN NC Demo Set Hardware Type", cmd_ccnl_nc_set_hw},
+
+  // Neopixel
+  {"setpixel", "CCN NC Demo set neopixel", cmd_setpixel},
+  {"clearpixel", "CCN NC Demo set neopixel", cmd_clearpixel},
+
 
   //
   {NULL, NULL, NULL}

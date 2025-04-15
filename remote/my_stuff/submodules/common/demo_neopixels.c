@@ -47,7 +47,7 @@ static inline void kickDrawTimer(void)
   ztimer_set_msg(ZTIMER_MSEC, &drawTimer, NEOPIXEL_UPDATE_PERIOD_MS, &drawMessage, thread_getpid());
 }
 
-static void Neopixel_ThreadHandler(void *arg)
+static void * Neopixel_ThreadHandler(void *arg)
 {
   while (true)
   {
@@ -77,7 +77,7 @@ static void Neopixel_ThreadHandler(void *arg)
             animations[currentAnimationIdx].draw();
           if (shouldRedraw)
           {
-            printf("NEOPIXEL_DRAW_ANIMATION\n");
+            /*printf("NEOPIXEL_DRAW_ANIMATION\n");*/
             Neopixel_DisplayStrip();
           }
           break;
@@ -87,7 +87,7 @@ static void Neopixel_ThreadHandler(void *arg)
           break;
         }
     }
-    printf("NEOPIXEL THREAD HANDLER %d\n", m.type);
+    /*printf("NEOPIXEL THREAD HANDLER %d\n", m.type);*/
   }
 }
 
@@ -145,7 +145,6 @@ void Neopixel_DisplayStrip(void)
 void Neopixel_SetPixelRgb(Pixel_t *p, uint8_t r, uint8_t g, uint8_t b)
 {
   p->rgb = (color_rgb_t){.r = r, .g = g, .b = b};
-  printf("Setting %x (%d) to %d %d %d\n", p, p->stripIdx, r, g, b);
   color_rgb2hsv(&(p->rgb), &(p->hsv));
 	ws281x_set(&handle, p->stripIdx, p->rgb);
   shouldRedraw = true;

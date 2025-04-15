@@ -10,6 +10,8 @@
 #include "ztimer.h"
 #include "board.h"
 
+#include "periph/pm.h"
+
 // For onboard leds
 #include "led.h"
 #include <periph/gpio.h>
@@ -287,7 +289,10 @@ static void *ccn_nc_main_thread_handler(void *arg)
           }
         case BUTTON_SHIFT:
           {
-
+            if (gestureMessage->gesture == GESTURE_TRIPLE_TAP)
+            {
+              pm_reboot(); // TODO doesnt have to be this hard
+            }
             break;
           }
         default:

@@ -37,12 +37,18 @@ void AnimationCcnDisplay_Update(void)
   // Periodically check cs and pit
   char s[CCNL_MAX_PREFIX_SIZE];
 
+  // Reset our pixels TODO could be cleaner but who cares?
+  for (int i = 0; i < NEOPIXEL_NUM_LEDS; i++)
+  {
+    ccnlPixels[i].state = PIXEL_OFF;
+  }
+
   // cs
   struct ccnl_content_s *contentPtr = ccnl_relay.contents;
   for (int i = 0; i < ccnl_relay.contentcnt; i++)
   {
     char *str = ccnl_prefix_to_str(contentPtr->pkt->pfx, s, CCNL_MAX_PREFIX_SIZE);
-    printf("%s content %d) %s : %s\n", __FUNCTION__, i, str, contentPtr->pkt->content);
+    /*printf("%s content %d) %s : %s\n", __FUNCTION__, i, str, contentPtr->pkt->content);*/
 
     contentPtr = contentPtr->next;
     CcnlPixel_s *cpx = &ccnlPixels[i];
@@ -75,8 +81,33 @@ void AnimationCcnDisplay_Update(void)
   for (int i = 0; i < ccnl_relay.pitcnt; i++)
   {
     struct ccnl_prefix_s *prefix = pendingInterest->pkt->pfx;
-    printf("%s interest %d) %s \n", __FUNCTION__, i, ccnl_prefix_to_str(prefix, s, CCNL_MAX_PREFIX_SIZE));
+    char *str = ccnl_prefix_to_str(prefix, s, CCNL_MAX_PREFIX_SIZE);
+    /*printf("%s interest %d) %s \n", __FUNCTION__, i, str);*/
     pendingInterest = pendingInterest->next;
+
+    CcnlPixel_s *cpx = &ccnlPixels[NEOPIXEL_NUM_LEDS/2 + i];
+
+    if (strncmp(str, "/red", CCNL_MAX_PREFIX_SIZE) == 0) // TODO can clean up a bit
+    {
+      LED0_ON;
+      cpx->state = PIXEL_BLINKING; 
+      cpx->rgb = COLOR_RED;
+      continue;
+    }
+    else if (strncmp(str, "/grn", CCNL_MAX_PREFIX_SIZE) == 0)
+    {
+      LED1_ON;
+      cpx->state = PIXEL_BLINKING; 
+      cpx->rgb = COLOR_GREEN;
+      continue;
+    }
+    else if (strncmp(str, "/blu", CCNL_MAX_PREFIX_SIZE) == 0)
+    {
+      LED2_ON;
+      cpx->state = PIXEL_BLINKING;
+      cpx->rgb = COLOR_BLUE;
+      continue;
+    }
   }
 
 }
@@ -87,7 +118,13 @@ void AnimationCcnDisplay_Draw(void)
   for (int i = 0; i < NEOPIXEL_NUM_LEDS; i++)
   {
     CcnlPixel_s *cpx = &ccnlPixels[i];
-    Neopixel_SetPixelRgb(cpx->p, cpx->rgb.r, cpx->rgb.g, cpx->rgb.b);
-    printf("%s %d Setting pixel %d to %d %d %d\n", __FUNCTION__, i, cpx->p->stripIdx, cpx->rgb.r, cpx->rgb.g, cpx->rgb.b);
+    if (cpx->state == PIXEL_SOLID || (cpx->state == PIXEL_BLINKING && Neopixel_PixelIsBlank(cpx->p)))
+    {
+      Neopixel_SetPixelRgb(cpx->p, cpx->rgb.r, cpx->rgb.g, cpx->rgb.b);
+    }
+    else 
+    {
+      Neopixel_SetPixelRgb(cpx->p, 0, 0, 0);
+    }
   }
 }

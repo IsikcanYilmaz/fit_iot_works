@@ -149,8 +149,6 @@ static void Button_HandleChange(DemoButton_e idx)
   }
 
   /*printf("%s State changed from %d to %d\n", buttonNameStrs[idx], ctx->prevState, ctx->currentState);*/
- 
-  LED1_TOGGLE;
 
   // If there's a state change handle it
   if (ctx->currentState == BUTTON_STATE_PRESSED) // BUTTON PRESS

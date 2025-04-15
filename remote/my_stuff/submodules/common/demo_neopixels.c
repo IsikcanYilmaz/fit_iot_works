@@ -18,11 +18,13 @@ Animation_s animations[ANIMATION_MAX] =
   [ANIMATION_CCN_DISPLAY] = {
     .name = "ccn_display",
     .init = AnimationCcnDisplay_Init,
+    .update = AnimationCcnDisplay_Update,
     .draw = AnimationCcnDisplay_Draw,
   },
   [ANIMATION_LINE] = {
     .name = "line",
     .init = AnimationLine_Init,
+    .update = NULL,
     .draw = AnimationLine_Draw,
   }
 };
@@ -31,7 +33,7 @@ AnimationIdx_e currentAnimationIdx = ANIMATION_CCN_DISPLAY;
 
 ws281x_t handle;
 bool addrLedInitialized = false;
-bool shouldRedraw = false;
+volatile bool shouldRedraw = false;
 Pixel_t pixels[NEOPIXEL_NUM_LEDS];
 
 ztimer_t drawTimer;
@@ -45,7 +47,7 @@ static inline void kickDrawTimer(void)
   ztimer_set_msg(ZTIMER_MSEC, &drawTimer, NEOPIXEL_UPDATE_PERIOD_MS, &drawMessage, thread_getpid());
 }
 
-static void *Neopixel_ThreadHandler(void *arg)
+static void Neopixel_ThreadHandler(void *arg)
 {
   while (true)
   {
@@ -69,8 +71,13 @@ static void *Neopixel_ThreadHandler(void *arg)
         }
       case NEOPIXEL_DRAW_ANIMATION:
         {
+          if (animations[currentAnimationIdx].update)
+            animations[currentAnimationIdx].update();
+          if (animations[currentAnimationIdx].draw)
+            animations[currentAnimationIdx].draw();
           if (shouldRedraw)
           {
+            printf("NEOPIXEL_DRAW_ANIMATION\n");
             Neopixel_DisplayStrip();
           }
           break;
@@ -80,7 +87,7 @@ static void *Neopixel_ThreadHandler(void *arg)
           break;
         }
     }
-    printf("NEOPIXEL THREAD HANDLER\n");
+    printf("NEOPIXEL THREAD HANDLER %d\n", m.type);
   }
 }
 
@@ -118,6 +125,11 @@ bool Neopixel_Init(void)
     "neopixel_thread"
   );
 
+  for (int i = 0; i < ANIMATION_MAX; i++)
+  {
+    animations[i].init();
+  }
+
   printf("Neopixels initialized\n");
 
   addrLedInitialized = true;
@@ -133,6 +145,7 @@ void Neopixel_DisplayStrip(void)
 void Neopixel_SetPixelRgb(Pixel_t *p, uint8_t r, uint8_t g, uint8_t b)
 {
   p->rgb = (color_rgb_t){.r = r, .g = g, .b = b};
+  printf("Setting %x (%d) to %d %d %d\n", p, p->stripIdx, r, g, b);
   color_rgb2hsv(&(p->rgb), &(p->hsv));
 	ws281x_set(&handle, p->stripIdx, p->rgb);
   shouldRedraw = true;
@@ -183,6 +196,11 @@ void Neopixel_PrintPixel(Pixel_t *p)
 bool Neopixel_ShouldRedraw(void)
 {
   return shouldRedraw;
+}
+
+bool Neopixel_PixelIsBlank(Pixel_t *p)
+{
+  return (p->rgb.r == 0 && p->rgb.g == 0 && p->rgb.b == 0);
 }
 
 // SHELL COMMANDS

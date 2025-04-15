@@ -19,9 +19,12 @@
 #include <stdbool.h>
 
 #include "node_settings.h"
-#include "demo_throttlers.h"
 #include "ccn_nc_demo.h"
 #include "demo_neopixels.h"
+
+#ifdef JON_RSSI_LIMITING
+#include "demo_throttlers.h"
+#endif
 
 /* main thread's message queue */
 #define MAIN_QUEUE_SIZE (8)
@@ -48,13 +51,14 @@ int producer_func(struct ccnl_relay_s *relay, struct ccnl_face_s *from,
  */
 char experiment_threadStack[THREAD_STACKSIZE_DEFAULT];
 
-void *experiment_threadHandler(void *arg)
+void *experiment_threadHandler(void *arg) // TODO no need for this tbh
 {
 	(void) arg;
   while(true)
   {
     #ifdef LED0_PIN
-    LED0_TOGGLE;
+    /*LED0_TOGGLE;*/
+    /*LED2_TOGGLE;*/
     #endif
     ztimer_sleep(ZTIMER_MSEC, 1000);
   }
@@ -74,11 +78,11 @@ static const shell_command_t commands[] = {
   {"setrssi", "set rssi limitor", setRssiLimitor},
   {"getrssi", "get rssi limitor", getRssiLimitor},
   {"rssiprint", "toggle rssi print messages", setRssiPrint},
-#endif
 
   // FAKE LATENCY
   {"setfakelat", "set fake latency", setFakeLatency},
   {"getfakelat", "get fake latency", getFakeLatency},
+#endif
  
   // CCN
   {"prod", "CCN NC Demo Produce", cmd_ccnl_nc_produce},
@@ -105,7 +109,7 @@ int main(void)
 {
 	msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);
 
-	ccnl_core_init();
+	ccnl_core_init(); // TODO ccn stuff should go to its own file
 	ccnl_start();
 
 	/* get the default interface */

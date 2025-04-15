@@ -236,7 +236,7 @@ static void *ccn_nc_led_thread_handler(void *arg) // TODO Move this to the neopi
     }
     else if (currentHardware == HW_NEOPIXELS)
     {
-      /*if (Neopixel_ShouldRedraw())*/
+      /*if (Neopixel_ShouldRedraw())*/ 
       /*{*/
       /*  printf("NEOPIXEL SHOULD REDRAW\n");*/
       /*  Neopixel_DisplayStrip();*/
@@ -259,11 +259,11 @@ static void *ccn_nc_main_thread_handler(void *arg)
     if (m.sender_pid == buttonThreadId) // Button Message received 
     {
       ButtonGestureMessage_s *gestureMessage = (ButtonGestureMessage_s *) &m.content.value;
-      switch(gestureMessage->button)
+      switch(gestureMessage->button) // low prio TODO: put button functionality on a matrix type thing
       {
         case BUTTON_RED:
           {
-            if (gestureMessage->shift)
+            if (!gestureMessage->shift)
               CCN_NC_Produce(RED_CONTENT, false);
             else
               CCN_NC_Interest("/red");
@@ -271,7 +271,7 @@ static void *ccn_nc_main_thread_handler(void *arg)
           }
         case BUTTON_GREEN:
           {
-            if (gestureMessage->shift)
+            if (!gestureMessage->shift)
               CCN_NC_Produce(GRN_CONTENT, false);
             else
               CCN_NC_Interest("/grn");
@@ -279,7 +279,7 @@ static void *ccn_nc_main_thread_handler(void *arg)
           }
         case BUTTON_BLUE:
           {
-            if (gestureMessage->shift)
+            if (!gestureMessage->shift)
               CCN_NC_Produce(BLU_CONTENT, false);
             else
               CCN_NC_Interest("/blu");
@@ -300,8 +300,6 @@ static void *ccn_nc_main_thread_handler(void *arg)
     {
       printf("Unknown sender %d\n", m.sender_pid);
     }
-
-    /*ztimer_sleep(ZTIMER_MSEC, MAIN_THREAD_SLEEP_MS);*/
   }
 }
 

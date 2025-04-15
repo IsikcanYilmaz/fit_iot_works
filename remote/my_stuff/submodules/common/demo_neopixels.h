@@ -4,13 +4,14 @@
 #define NEOPIXEL_NUM_ROWS (2)
 #define NEOPIXEL_NUM_COLUMNS (8)
 #define NEOPIXEL_NUM_LEDS (NEOPIXEL_NUM_COLUMNS * NEOPIXEL_NUM_ROWS)
-#define NEOPIXEL_UPDATE_PERIOD_MS (1000)
+#define NEOPIXEL_UPDATE_PERIOD_MS (100)
 
-#define COLOR_RED     {.r = 100, .g = 0, .b = 0}
-#define COLOR_GREEN   {.r = 0, .g = 100, .b = 0} 
-#define COLOR_BLUE    {.r = 0, .g = 0, .b = 100}
-#define COLOR_YELLOW  {.r = 100, .g = 100, .b = 0}
-#define COLOR_MAGENTA {.r = 100, .g = 0, .b = 100}
+#define COLOR_BLANK   (color_rgb_t){.r = 0, .g = 0, .b = 0}
+#define COLOR_RED     (color_rgb_t){.r = 100, .g = 0, .b = 0}
+#define COLOR_GREEN   (color_rgb_t){.r = 0, .g = 100, .b = 0} 
+#define COLOR_BLUE    (color_rgb_t){.r = 0, .g = 0, .b = 100}
+#define COLOR_YELLOW  (color_rgb_t){.r = 100, .g = 100, .b = 0}
+#define COLOR_MAGENTA (color_rgb_t){.r = 100, .g = 0, .b = 100}
 
 typedef enum
 {
@@ -41,6 +42,7 @@ typedef struct
 {
   char *name;
   void (*init)(void);
+  void (*update)(void);
   void (*draw)(void);
 } Animation_s;
 
@@ -65,6 +67,7 @@ void Neopixel_Clear(void);
 Pixel_t * Neopixel_GetPixelByIdx(uint8_t idx);
 Pixel_t * Neopixel_GetPixelByCoord(uint8_t x, uint8_t y);
 void Neopixel_PrintPixel(Pixel_t *p);
+bool Neopixel_PixelIsBlank(Pixel_t *p);
 bool Neopixel_ShouldRedraw(void);
 
 // Shell commands

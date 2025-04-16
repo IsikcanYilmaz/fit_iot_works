@@ -12,6 +12,8 @@
 
 #include "periph/pm.h"
 
+#include "demo_throttlers.h"
+
 // For onboard leds
 #include "led.h"
 #include <periph/gpio.h>
@@ -183,7 +185,6 @@ static void onboard_led_toggle(OnboardLedID_e led)
 }
 
 // THREAD HANDLERS //////////////////////
-
 // TODO maybe move this elsewhere?
 char ccn_nc_led_thread_stack[THREAD_STACKSIZE_DEFAULT];
 static void *ccn_nc_led_thread_handler(void *arg) // TODO Move this to the neopixel file
@@ -340,6 +341,7 @@ void CCN_NC_Init(void)
 	/*   "ccn_nc_onboard_led_thread"*/
 	/*);*/
 
+  Throttler_Init();
   init_hardware(currentHardware);
 }
 
@@ -538,5 +540,17 @@ int cmd_ccnl_nc_set_hw(int argc, char **argv)
   }
   init_hardware(currentHardware);
   printf("Set current hardware to %d\n", currentHardware);
+  return 0;
+}
+
+int cmd_ccnl_nc_rm_limitors(int argc, char **argv)
+{
+
+  return 0;
+}
+
+int cmd_ccnl_nc_default_limitors(int argc, char **argv)
+{
+
   return 0;
 }

@@ -83,6 +83,8 @@ static const shell_command_t commands[] = {
   {"setfakelat", "set fake latency", setFakeLatency},
   {"getfakelat", "get fake latency", getFakeLatency},
 #endif
+
+  {"txpower", "set tx power", Throttler_CmdSetTxPower},
  
   // CCN
   {"prod", "CCN NC Demo Produce", cmd_ccnl_nc_produce},

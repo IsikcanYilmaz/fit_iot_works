@@ -7,10 +7,12 @@
 
 #include "demo_throttlers.h"
 
-#define DEFAULT_TX_POWER (-10)
+// TODO this and the settings .c file should merge
+
+#define DEFAULT_TX_POWER (-20)
 
 #ifdef JON_RSSI_LIMITING
-#define DEFAULT_RSSI_LIMITOR (JON_RSSI_LIMITING)
+#define DEFAULT_RSSI_LIMITOR (-100) //(JON_RSSI_LIMITING)
 
 extern int rssiLimitor;
 extern bool rssiPrint;
@@ -18,7 +20,7 @@ extern bool rssiPrint;
 #endif
 
 #ifdef JON_FAKE_LATENCY_MS
-#define DEFAULT_FAKE_LATENCY_MS (JON_FAKE_LATENCY_MS)
+#define DEFAULT_FAKE_LATENCY_MS (200) //(JON_FAKE_LATENCY_MS) // TODO maybe remove these settings from the makefile 
 extern uint32_t fakeLatencyMs;
 #endif
 

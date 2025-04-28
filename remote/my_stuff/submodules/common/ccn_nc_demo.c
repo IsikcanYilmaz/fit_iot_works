@@ -259,13 +259,20 @@ static void *ccn_nc_main_thread_handler(void *arg)
     msg_receive(&m); // block until thread receives message
     printf("Message received %d\n", m.content.value);
 
-    if (m.sender_pid == buttonThreadId) // Button Message received 
+    // Button Message received. Do appropriate action // TODO perhaps do a gesture to function matrix type thing? 
+    if (m.sender_pid == buttonThreadId)  
     {
       ButtonGestureMessage_s *gestureMessage = (ButtonGestureMessage_s *) &m.content.value;
       switch(gestureMessage->button) // low prio TODO: put button functionality on a matrix type thing
       {
         case BUTTON_RED:
           {
+            if (gestureMessage->gesture == GESTURE_TRIPLE_TAP)
+            {
+              Neopixel_NextAnimation();
+              break;
+            }
+
             if (!gestureMessage->shift)
               CCN_NC_Produce(RED_CONTENT, false);
             else
@@ -292,7 +299,8 @@ static void *ccn_nc_main_thread_handler(void *arg)
           {
             if (gestureMessage->gesture == GESTURE_TRIPLE_TAP)
             {
-              pm_reboot(); // TODO doesnt have to be this hard
+              /*pm_reboot(); // TODO doesnt have to be this hard*/
+              CCN_NC_RemoveAll();
             }
             break;
           }
@@ -348,6 +356,15 @@ void CCN_NC_Init(void)
 void CCN_NC_ShowCS(void)
 {
   ccnl_cs_dump(&ccnl_relay);
+}
+
+void CCN_NC_RemoveAll(void)
+{
+  struct ccnl_content_s *c;
+  for (c = ccnl_relay.contents; c; c=c->next)
+  {
+    ccnl_content_remove(&ccnl_relay, c);
+  }
 }
 
 void CCN_NC_Produce(ContentTypes_e t, bool overwrite)
@@ -489,11 +506,7 @@ int cmd_ccnl_nc_show_cs(int argc, char **argv)
 
 int cmd_ccnl_nc_rm_cs_all(int argc, char **argv)
 {
-  struct ccnl_content_s *c;
-  for (c = ccnl_relay.contents; c; c=c->next)
-  {
-    ccnl_content_remove(&ccnl_relay, c);
-  }
+  CCN_NC_RemoveAll(); 
 }
 
 int cmd_ccnl_nc_rm_cs(int argc, char **argv)

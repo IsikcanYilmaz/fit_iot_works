@@ -70,7 +70,11 @@ Pixel_t * Neopixel_GetPixelByCoord(uint8_t x, uint8_t y);
 void Neopixel_PrintPixel(Pixel_t *p);
 bool Neopixel_PixelIsBlank(Pixel_t *p);
 bool Neopixel_ShouldRedraw(void);
+void Neopixel_SetAnimation(uint8_t animIdx);
+void Neopixel_NextAnimation(void);
 
 // Shell commands
 int cmd_setpixel(int argc, char **argv);
 int cmd_clearpixel(int argc, char **argv);
+int cmd_nextanimation(int argc, char **argv);
+int cmd_setanimation(int argc, char **argv);

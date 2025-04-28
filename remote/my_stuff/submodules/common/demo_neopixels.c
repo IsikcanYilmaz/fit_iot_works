@@ -29,7 +29,7 @@ Animation_s animations[ANIMATION_MAX] =
   }
 };
 
-AnimationIdx_e currentAnimationIdx = ANIMATION_LINE; //ANIMATION_CCN_DISPLAY;
+AnimationIdx_e currentAnimationIdx = ANIMATION_CCN_DISPLAY;
 
 ws281x_t handle;
 bool addrLedInitialized = false;
@@ -223,6 +223,21 @@ bool Neopixel_PixelIsBlank(Pixel_t *p)
   return (p->rgb.r == 0 && p->rgb.g == 0 && p->rgb.b == 0);
 }
 
+void Neopixel_SetAnimation(uint8_t animIdx) // TODO Smooth transitions? prolly no need
+{
+  if (animIdx > ANIMATION_MAX)
+  {
+    printf("Bad animation idx %d\n", animIdx);
+    return;
+  }
+  currentAnimationIdx = animIdx;
+}
+
+void Neopixel_NextAnimation(void)
+{
+  Neopixel_SetAnimation((currentAnimationIdx + 1) % ANIMATION_MAX);
+}
+
 // SHELL COMMANDS
 
 int cmd_setpixel(int argc, char **argv)
@@ -253,5 +268,31 @@ int cmd_setpixel(int argc, char **argv)
 int cmd_clearpixel(int argc, char **argv)
 {
   Neopixel_Clear();
+  return 0;
+}
+
+// 
+int cmd_nextanimation(int argc, char **argv)
+{
+  Neopixel_NextAnimation();
+  return 0;
+}
+
+int cmd_setanimation(int argc, char **argv)
+{
+  if (argc != 2)
+  {
+    printf("Usage: setanimation <animation name>\n");
+    return 1;
+  }
+  for (int i = 0; i < ANIMATION_MAX; i++)
+  {
+    if (strncmp(animations[i].name, argv[1], 16) == 0)
+    {
+      Neopixel_SetAnimation(i);
+      return 0;
+    }
+  }
+  printf("Animation %s couldnt be found.\n", argv[1]);
   return 0;
 }

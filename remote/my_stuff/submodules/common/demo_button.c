@@ -177,47 +177,37 @@ static ButtonGestureMessage_s Button_ComputeGesture(DemoButton_e idx)
   
   uint32_t pressHoldLen = now - ctx->currentTapTimestamp;
 
-  // Can be a single tap
-  switch(ctx->currentNumTaps)
+  // Figure out what gesture this is
+  if (ctx->currentNumTaps == 1) // Can be a single tap / long press
   {
-    case 1:
-      {
-        // Either single tap or long press
-        if (pressHoldLen < GESTURE_LONG_PRESS_MS) // 0 - 1000ms single tap
-        {
-          gesture = GESTURE_SINGLE_TAP;
-        }
-        else if (pressHoldLen < GESTURE_VLONG_PRESS_MS) // 1000 - 2000ms long press
-        {
-          gesture = GESTURE_LONG_PRESS;
-        }
-        else if (pressHoldLen < GESTURE_VVLONG_PRESS_MS) // 2000 - 3000ms very long press
-        {
-          gesture = GESTURE_VLONG_PRESS;
-        }
-        else if (pressHoldLen < GESTURE_VVVLONG_PRESS_MS) // 3000 - 70000ms very very long press
-        {
-          gesture = GESTURE_VVLONG_PRESS;
-        }
-        else {
-          gesture = GESTURE_VVVLONG_PRESS;
-        }
-        break;
-      }
-    case 2:
-      {
-        gesture = GESTURE_DOUBLE_TAP;
-        break;
-      }
-    case 3:
-      {
-        gesture = GESTURE_TRIPLE_TAP;
-        break;
-      }
-    default:
-      {
-        printf("%s %d taps, dunno what to do\n", __FUNCTION__, ctx->currentNumTaps);
-      }
+    // Either single tap or long press
+    if (pressHoldLen < GESTURE_LONG_PRESS_MS) // 0 - 1000ms single tap
+    {
+      gesture = GESTURE_SINGLE_TAP;
+    }
+    else if (pressHoldLen < GESTURE_VLONG_PRESS_MS) // 1000 - 2000ms long press
+    {
+      gesture = GESTURE_LONG_PRESS;
+    }
+    else if (pressHoldLen < GESTURE_VVLONG_PRESS_MS) // 2000 - 3000ms very long press
+    {
+      gesture = GESTURE_VLONG_PRESS;
+    }
+    else if (pressHoldLen < GESTURE_VVVLONG_PRESS_MS) // 3000 - 70000ms very very long press
+    {
+      gesture = GESTURE_VVLONG_PRESS;
+    }
+    else {
+      gesture = GESTURE_VVVLONG_PRESS;
+    }
+  }
+  else if (ctx->currentNumTaps < 6) // Can be multiple taps. Long press + multi tap is not supported
+  {
+    gesture = (ButtonGesture_e) ctx->currentNumTaps - 1; // from 0to5 the enums index correspond to the gesture itself
+  }
+  else
+  {
+    printf("%s %d taps, dunno what to do\n", __FUNCTION__, ctx->currentNumTaps);
   }
   
   gestureMessage.gesture = gesture;

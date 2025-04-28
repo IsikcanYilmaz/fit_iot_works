@@ -87,18 +87,19 @@ static const shell_command_t commands[] = {
   {"txpower", "set tx power", Throttler_CmdSetTxPower},
  
   // CCN
-  {"prod", "CCN NC Demo Produce", cmd_ccnl_nc_produce},
-  {"int", "CCN NC Demo Interest", cmd_ccnl_nc_interest},
-  {"cs", "CCN NC Demo Print CS", cmd_ccnl_nc_show_cs},
-  {"pit", "CCN NC Demo Print PIT", cmd_ccnl_nc_show_pit},
-  {"rm", "CCN NC Demo Remove from CS", cmd_ccnl_nc_rm_cs},
-  {"rmall", "CCN NC Demo Clear CS", cmd_ccnl_nc_rm_cs_all},
-  {"sethw", "CCN NC Demo Set Hardware Type", cmd_ccnl_nc_set_hw},
+  {"prod", "Produce", cmd_ccnl_nc_produce},
+  {"int", "Interest", cmd_ccnl_nc_interest},
+  {"cs", "Print CS", cmd_ccnl_nc_show_cs},
+  {"pit", "Print PIT", cmd_ccnl_nc_show_pit},
+  {"rm", "Remove from CS", cmd_ccnl_nc_rm_cs},
+  {"rmall", "Clear CS", cmd_ccnl_nc_rm_cs_all},
+  {"sethw", "Set Hardware Type", cmd_ccnl_nc_set_hw},
 
   // Neopixel
-  {"setpixel", "CCN NC Demo set neopixel", cmd_setpixel},
-  {"clearpixel", "CCN NC Demo set neopixel", cmd_clearpixel},
-
+  {"setpixel", "set neopixel", cmd_setpixel},
+  {"clearpixel", "clear neopixels", cmd_clearpixel},
+  {"nextanimation", "next animation", cmd_nextanimation},
+  {"setanimation", "set animation", cmd_setanimation},
 
   //
   {NULL, NULL, NULL}

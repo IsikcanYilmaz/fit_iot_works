@@ -30,10 +30,11 @@ if [ "$1" ]; then
   echo "${PORT[@]} AS DEVICE(S) TO PROGRAM"
 fi
 
-# If port info supplied
+# If port info supplied flash each supplied port with the compiled product
 if [ "$PORT" ]; then
   for p in ${PORT[@]}; do
     echo "$p"
+
     # copy our uf2 file into the volume
     uname -a | grep -i linux
     if [ $? == 0 ]; then # If linux

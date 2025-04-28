@@ -50,13 +50,13 @@ typedef struct
 * This middleware is aimed at driving the neopixel strips I got from Paul Schwenteck. Thanks man.
 * These are panels with 2 rows and 8 columns of neopixels. Looks like the following:
 *
-*                       x,y=1,1 |
+*                       x,y=1,1 | idx = 8
 *                               v
 *       5V pin    o o o o o o o o  GND pin
 *       DIN pin   o o o o o o o o  GND pin
 *                 ^             ^ 
-*         x,y=0,0 |             | actual strip begins here
-* 
+*         x,y=0,0 |             | actual strip begins here. idx = 0
+*         idx = 7
 */
 
 bool Neopixel_Init(void);
@@ -65,6 +65,7 @@ void Neopixel_SetPixelRgb(Pixel_t *p, uint8_t r, uint8_t g, uint8_t b);
 void Neopixel_SetPixelHsv(Pixel_t *p, float h, float s, float v);
 void Neopixel_Clear(void);
 Pixel_t * Neopixel_GetPixelByIdx(uint8_t idx);
+Pixel_t * Neopixel_GetPixelByLineIdx(uint8_t idx);
 Pixel_t * Neopixel_GetPixelByCoord(uint8_t x, uint8_t y);
 void Neopixel_PrintPixel(Pixel_t *p);
 bool Neopixel_PixelIsBlank(Pixel_t *p);

@@ -24,12 +24,12 @@ Animation_s animations[ANIMATION_MAX] =
   [ANIMATION_LINE] = {
     .name = "line",
     .init = AnimationLine_Init,
-    .update = NULL,
+    .update = AnimationLine_Update,
     .draw = AnimationLine_Draw,
   }
 };
 
-AnimationIdx_e currentAnimationIdx = ANIMATION_CCN_DISPLAY;
+AnimationIdx_e currentAnimationIdx = ANIMATION_LINE; //ANIMATION_CCN_DISPLAY;
 
 ws281x_t handle;
 bool addrLedInitialized = false;
@@ -174,8 +174,29 @@ Pixel_t * Neopixel_GetPixelByIdx(uint8_t idx)
     printf("%s Bad pixel Idx %d\n", __FUNCTION__, idx);
     return NULL;
   }
+
   return &pixels[idx];
 }
+
+Pixel_t * Neopixel_GetPixelByLineIdx(uint8_t idx)
+{
+  if (idx >= NEOPIXEL_NUM_LEDS)
+  {
+    printf("%s Bad pixel Idx %d\n", __FUNCTION__, idx);
+    return NULL;
+  }
+
+  if (idx < 8)
+  {
+    return &pixels[idx];
+  }
+  else 
+  {
+    return Neopixel_GetPixelByIdx(NEOPIXEL_NUM_LEDS-(1+idx-NEOPIXEL_NUM_COLUMNS));
+  }
+
+}
+
 
 Pixel_t * Neopixel_GetPixelByCoord(uint8_t x, uint8_t y)
 {

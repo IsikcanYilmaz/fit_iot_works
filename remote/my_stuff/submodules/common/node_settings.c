@@ -11,6 +11,8 @@ static uint16_t knownHosts[MAX_HOSTS];
 static uint16_t numKnownHosts = 0;
 static bool initialized = false;
 
+// TODO get throttling here
+
 int Cmd_GetTime(int argc, char **argv)
 {
 	uint32_t t = ztimer_now(ZTIMER_USEC);

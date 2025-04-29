@@ -12,7 +12,7 @@
 #define DEFAULT_TX_POWER (-20)
 
 #ifdef JON_RSSI_LIMITING
-#define DEFAULT_RSSI_LIMITOR (-100) //(JON_RSSI_LIMITING)
+#define DEFAULT_RSSI_LIMITOR (-80) //(JON_RSSI_LIMITING)
 
 extern int rssiLimitor;
 extern bool rssiPrint;

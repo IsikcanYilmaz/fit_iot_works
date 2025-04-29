@@ -72,6 +72,7 @@ bool Neopixel_PixelIsBlank(Pixel_t *p);
 bool Neopixel_ShouldRedraw(void);
 void Neopixel_SetAnimation(uint8_t animIdx);
 void Neopixel_NextAnimation(void);
+void Neopixel_IncrementAllByHSV(float h, float s, float v);
 
 // Shell commands
 int cmd_setpixel(int argc, char **argv);

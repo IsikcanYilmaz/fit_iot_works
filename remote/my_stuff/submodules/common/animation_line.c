@@ -35,7 +35,8 @@ void AnimationLine_Draw(void)
   /*{*/
   /**/
   /*}*/
-  Neopixel_Clear();
-  Neopixel_SetPixelHsv(Neopixel_GetPixelByLineIdx(line.headIdx), line.hsv.h, line.hsv.s, line.hsv.s);
+  /*Neopixel_Clear();*/
+  Neopixel_SetPixelHsv(Neopixel_GetPixelByLineIdx(line.headIdx), line.hsv.h, line.hsv.s, line.hsv.v);
+  Neopixel_IncrementAllByHSV(-40.0, 0.0, -0.20);
   printf("%d\n", line.headIdx);
 }

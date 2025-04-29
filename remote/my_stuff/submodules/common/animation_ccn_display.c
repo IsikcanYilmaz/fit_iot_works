@@ -55,21 +55,18 @@ void AnimationCcnDisplay_Update(void)
 
     if (strncmp(str, "/red", CCNL_MAX_PREFIX_SIZE) == 0)
     {
-      LED0_ON;
       cpx->state = PIXEL_SOLID; 
       cpx->rgb = COLOR_RED;
       continue;
     }
     else if (strncmp(str, "/grn", CCNL_MAX_PREFIX_SIZE) == 0)
     {
-      LED1_ON;
       cpx->state = PIXEL_SOLID; 
       cpx->rgb = COLOR_GREEN;
       continue;
     }
     else if (strncmp(str, "/blu", CCNL_MAX_PREFIX_SIZE) == 0)
     {
-      LED2_ON;
       cpx->state = PIXEL_SOLID;
       cpx->rgb = COLOR_BLUE;
       continue;

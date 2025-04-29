@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "demo_neopixels.h"
 #include "ws281x.h"
 #include "ws281x_params.h"
@@ -236,6 +237,26 @@ void Neopixel_SetAnimation(uint8_t animIdx) // TODO Smooth transitions? prolly n
 void Neopixel_NextAnimation(void)
 {
   Neopixel_SetAnimation((currentAnimationIdx + 1) % ANIMATION_MAX);
+}
+
+void Neopixel_IncrementAllByHSV(float h, float s, float v)
+{
+  for (int i = 0; i < NEOPIXEL_NUM_LEDS; i++)
+  {
+    Pixel_t *p = Neopixel_GetPixelByIdx(i);
+    color_hsv_t hsv = (color_hsv_t) p->hsv;
+
+    hsv.h = fmod(hsv.h + h, 360.0);
+    hsv.h = (hsv.h < 0) ? 360.0 + hsv.h : hsv.h;
+
+    hsv.s += s;
+    hsv.s = (hsv.s > 0.0) ? ((hsv.s > 1.0) ? 1.0 : hsv.s) : 0.0;
+
+    hsv.v += v;
+    hsv.v = (hsv.v > 0.0) ? ((hsv.v > 1.0) ? 1.0 : hsv.v) : 0.0;
+
+    Neopixel_SetPixelHsv(p, hsv.h, hsv.s, hsv.v);
+  }
 }
 
 // SHELL COMMANDS

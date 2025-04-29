@@ -12,7 +12,7 @@
 #define DEFAULT_TX_POWER (-20)
 
 #ifdef JON_RSSI_LIMITING
-#define DEFAULT_RSSI_LIMITOR (-80) //(JON_RSSI_LIMITING)
+#define DEFAULT_RSSI_LIMITOR (-60) //(JON_RSSI_LIMITING)
 
 extern int rssiLimitor;
 extern bool rssiPrint;
@@ -20,7 +20,7 @@ extern bool rssiPrint;
 #endif
 
 #ifdef JON_FAKE_LATENCY_MS
-#define DEFAULT_FAKE_LATENCY_MS (200) //(JON_FAKE_LATENCY_MS) // TODO maybe remove these settings from the makefile 
+#define DEFAULT_FAKE_LATENCY_MS (0) //(JON_FAKE_LATENCY_MS) // TODO maybe remove these settings from the makefile 
 extern uint32_t fakeLatencyMs;
 #endif
 

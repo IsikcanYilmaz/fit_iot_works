@@ -56,6 +56,8 @@ typedef enum {
   NUM_LED_STATES
 } LedState_e;
 
+ztimer_t onboardLedBlinkTimers[NUM_ONBOARD_LEDS];
+
 static HardwareType_e currentHardware = HW_NEOPIXELS; //HW_BREADBOARD_LEDS; //HW_ONBOARD_LEDS;
 
 static LedState_e ledStates[NUM_ONBOARD_LEDS];
@@ -107,9 +109,24 @@ static bool prefix_exists(char *prefixStr)
   return (content != NULL);
 }
 
+static void timed_onboard_led_trigger_callback(void *arg)
+{
+  OnboardLedID_e led = (OnboardLedID_e) arg;
+  if (led >= NUM_ONBOARD_LEDS)
+  {
+    return;
+  }
+  led_off(led);
+}
+
 static void init_hardware(HardwareType_e type)
 {
-  switch(type)
+  for (int i = 0; i < NUM_ONBOARD_LEDS; i++)
+  {
+    onboardLedBlinkTimers[i] = (ztimer_t) {.callback = timed_onboard_led_trigger_callback, .arg = i};
+  }
+
+  switch(type) // TODO just remove this distinction its unnecessary
   {
     case HW_ONBOARD_LEDS:
       {
@@ -352,7 +369,6 @@ void CCN_NC_Init(void)
   Throttler_Init();
   init_hardware(currentHardware);
 }
-
 void CCN_NC_ShowCS(void)
 {
   ccnl_cs_dump(&ccnl_relay);
@@ -451,6 +467,18 @@ int CCN_NC_Interest(char *prefixStr)
   int res = ccnl_send_interest(prefix, _int_buf, BUF_SIZE, NULL);
   ccnl_prefix_free(prefix);
   return res;
+}
+
+
+void CCN_NC_TimedOnboardLedTrigger(uint8_t i, uint16_t ms) // TODO maybe move this elsewhere
+{
+  if (i >= NUM_ONBOARD_LEDS)
+  {
+    return;
+  }
+  led_on(i);
+  ztimer_remove(ZTIMER_MSEC, &onboardLedBlinkTimers[i]); // remove if already set
+  ztimer_set(ZTIMER_MSEC, &onboardLedBlinkTimers[i], ms);
 }
 
 ///////////////////////////////////////////////////////////////////

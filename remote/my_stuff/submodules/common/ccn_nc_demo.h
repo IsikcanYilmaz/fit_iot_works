@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef enum 
 {
@@ -18,6 +19,8 @@ void CCN_NC_ShowCS(void);
 void CCN_NC_Produce(ContentTypes_e t, bool overwrite);
 void CCN_NC_RemoveAll(void);
 int CCN_NC_Interest(char *prefixStr);
+
+void CCN_NC_TimedOnboardLedTrigger(uint8_t i, uint16_t ms); // TODO maybe move this elsewhere
 
 // Shell cmds
 int cmd_ccnl_nc_produce(int argc, char **argv);

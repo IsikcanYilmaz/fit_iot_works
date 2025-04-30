@@ -39,13 +39,6 @@ static bool initialized = false;
  * ~ SHELL COMMANDS ~
  */
 
-int producer_func(struct ccnl_relay_s *relay, struct ccnl_face_s *from,
-                   struct ccnl_pkt_s *pkt){
-	(void)from;
-	printf("%s\n", __FUNCTION__);
-	return 0;
-}
-
 /*
  * ~ PROGRAM ~
  */
@@ -111,24 +104,6 @@ static const shell_command_t commands[] = {
 int main(void)
 {
 	msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);
-
-	ccnl_core_init(); // TODO ccn stuff should go to its own file
-	ccnl_start();
-
-	/* get the default interface */
-	gnrc_netif_t *netif;
-
-	/* set the relay's PID, configure the interface to use CCN nettype */
-	if (((netif = gnrc_netif_iter(NULL)) == NULL) || (ccnl_open_netif(netif->pid, GNRC_NETTYPE_CCN) < 0)) 
-	{
-		puts("Error registering at network interface!");
-		return -1;
-	}
-
-	gnrc_netreg_entry_t dump = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, gnrc_pktdump_pid);
-	gnrc_netreg_register(GNRC_NETTYPE_CCN_CHUNK, &dump);
-
-	ccnl_set_local_producer(producer_func);
 
 	kernel_pid_t experiment_threadId = thread_create(
 		experiment_threadStack,

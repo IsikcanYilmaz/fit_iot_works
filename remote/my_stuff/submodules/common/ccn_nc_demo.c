@@ -5,6 +5,7 @@
 #include "ccn-lite-riot.h"
 #include "ccnl-pkt-ndntlv.h"
 #include "net/gnrc/netif.h"
+#include "net/gnrc/pktdump.h"
 
 #include "thread.h"
 #include "ztimer.h"

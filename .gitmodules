@@ -1,0 +1,4 @@
+[submodule "RIOT"]
+  path = CCNL_RIOT
+  url = https://github.com/IsikcanYilmaz/RIOT
+  branch = CCNL_WORK

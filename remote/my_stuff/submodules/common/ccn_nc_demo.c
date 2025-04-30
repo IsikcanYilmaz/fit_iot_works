@@ -346,6 +346,8 @@ static int producer_func(struct ccnl_relay_s *relay, struct ccnl_face_s *from,
 ///////////////////////////////////////////////
 ///////////////////////////////////////////////
 
+gnrc_netif_t *netif;
+gnrc_netreg_entry_t dump;
 void CCN_NC_Init(void)
 {
   for (int i = 0; i < NUM_ONBOARD_LEDS; i++)
@@ -378,7 +380,7 @@ void CCN_NC_Init(void)
 	ccnl_start();
 
 	/* get the default interface */
-	gnrc_netif_t *netif;
+	/*gnrc_netif_t *netif;*/
 
 	/* set the relay's PID, configure the interface to use CCN nettype */
 	if (((netif = gnrc_netif_iter(NULL)) == NULL) || (ccnl_open_netif(netif->pid, GNRC_NETTYPE_CCN) < 0)) 
@@ -387,7 +389,7 @@ void CCN_NC_Init(void)
 		return -1;
 	}
 
-	gnrc_netreg_entry_t dump = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, gnrc_pktdump_pid);
+	dump = (gnrc_netreg_entry_t) GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, gnrc_pktdump_pid); // TODO this may mess things up once the functione is done
 	gnrc_netreg_register(GNRC_NETTYPE_CCN_CHUNK, &dump);
 
 	ccnl_set_local_producer(producer_func);
@@ -405,6 +407,11 @@ void CCN_NC_ShowCS(void)
 void CCN_NC_RemoveAll(void)
 {
   struct ccnl_content_s *c;
+  printf("%s %d contents\n", __FUNCTION__, ccnl_relay.contentcnt);
+  if (ccnl_relay.contentcnt == 0)
+  {
+    return;
+  }
   for (c = ccnl_relay.contents; c; c=c->next)
   {
     ccnl_content_remove(&ccnl_relay, c);

@@ -44,8 +44,8 @@ typedef enum ButtonGesture_e_
 typedef struct ButtonGestureMessage_s_ // TODO better naming // and maybe it can be bigger than 1 byte?
 {
   bool shift:1;
-  DemoButton_e button:4;
-  ButtonGesture_e gesture:3;
+  DemoButton_e button:3;
+  ButtonGesture_e gesture:4;
 } ButtonGestureMessage_s;
 
 typedef enum LongPressLengthMs_e_

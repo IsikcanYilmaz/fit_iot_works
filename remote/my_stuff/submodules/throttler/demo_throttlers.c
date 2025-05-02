@@ -12,7 +12,7 @@
 #define DEFAULT_TX_POWER (-20)
 
 #ifdef JON_RSSI_LIMITING
-#define DEFAULT_RSSI_LIMITOR (-70) //(JON_RSSI_LIMITING)
+#define DEFAULT_RSSI_LIMITOR (-80) //(JON_RSSI_LIMITING)
 
 extern int rssiLimitor;
 extern bool rssiPrint;
@@ -76,6 +76,16 @@ int Throttler_GetTxPower(void)
   return 0; // TODO
 }
 
+int Throttler_CmdSetTxPower(int argc, char **argv)
+{
+  if (argc != 2)
+  {
+    printf("Usage: txpower <int>\n");
+    return 1;
+  }
+  return Throttler_SetTxPower(atoi(argv[1]));
+}
+
 // SHELL CMDS
 int setRssiLimitor(int argc, char **argv)
 {
@@ -98,7 +108,7 @@ int getRssiLimitor(int argc, char **argv)
   return 0;
 }
 
-int setRssiPrint(int argc, char **argv)
+int toggleRssiPrint(int argc, char **argv)
 {
   #ifdef JON_RSSI_LIMITING
   rssiPrint = !rssiPrint;
@@ -108,6 +118,7 @@ int setRssiPrint(int argc, char **argv)
 }
 
 // TODO JON add ifdef like above
+#ifdef JON_FAKE_LATENCY_MS
 int setFakeLatency(int argc, char **argv)
 {
   if (argc != 2)
@@ -125,13 +136,16 @@ int getFakeLatency(int argc, char **argv)
   printf("%d\n", fakeLatencyMs);
   return 0;
 }
+#endif
 
-int Throttler_CmdSetTxPower(int argc, char **argv)
-{
-  if (argc != 2)
-  {
-    printf("Usage: txpower <int>\n");
-    return 1;
-  }
-  return Throttler_SetTxPower(atoi(argv[1]));
-}
+#ifdef THROTTLERS_SHELL_COMMANDS
+#ifdef JON_FAKE_LATENCY_MS
+SHELL_COMMAND(setfakelat, "setfakelat <ms>", setFakeLatency);
+SHELL_COMMAND(getfakelat, "getfakelat", getFakeLatency);
+#endif
+#ifdef JON_RSSI_LIMITING
+SHELL_COMMAND(setrssi, "setrssi <dbm>. pkts at rssis worse than this will be dropped", setRssiLimitor);
+SHELL_COMMAND(getrssi, "getrssi", getRssiLimitor);
+SHELL_COMMAND(rssiprint, "rssiprint toggle rssi limitor prints", toggleRssiPrint);
+#endif
+#endif

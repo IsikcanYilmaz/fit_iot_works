@@ -124,7 +124,7 @@ static void init_hardware(HardwareType_e type)
 {
   for (int i = 0; i < NUM_ONBOARD_LEDS; i++)
   {
-    onboardLedBlinkTimers[i] = (ztimer_t) {.callback = timed_onboard_led_trigger_callback, .arg = i};
+    onboardLedBlinkTimers[i] = (ztimer_t) {.callback = timed_onboard_led_trigger_callback, .arg = (void *) i};
   }
 
   switch(type) // TODO just remove this distinction its unnecessary
@@ -386,14 +386,13 @@ void CCN_NC_Init(void)
 	if (((netif = gnrc_netif_iter(NULL)) == NULL) || (ccnl_open_netif(netif->pid, GNRC_NETTYPE_CCN) < 0)) 
 	{
 		puts("Error registering at network interface!");
-		return -1;
+		return;
 	}
 
 	dump = (gnrc_netreg_entry_t) GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, gnrc_pktdump_pid); // TODO this may mess things up once the functione is done
 	gnrc_netreg_register(GNRC_NETTYPE_CCN_CHUNK, &dump);
 
-	ccnl_set_local_producer(producer_func);
-
+	/*ccnl_set_local_producer(producer_func);*/
 
   Throttler_Init();
   init_hardware(currentHardware);

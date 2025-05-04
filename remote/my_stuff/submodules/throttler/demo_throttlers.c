@@ -67,6 +67,7 @@ int Throttler_SetTxPower(int16_t txpower)
     printf("%s unable to set tx power to %d\n", __FUNCTION__, txpower);
     return 1;
   }
+  txPower = txpower;
   printf("%s set tx power to %d\n", __FUNCTION__, txpower);
   return 0;
 }
@@ -84,6 +85,12 @@ int Throttler_CmdSetTxPower(int argc, char **argv)
     return 1;
   }
   return Throttler_SetTxPower(atoi(argv[1]));
+}
+
+int Throttler_CmdGetTxPower(int argc, char **argv)
+{
+  printf("%d\n", txPower);
+  return 0;
 }
 
 // SHELL CMDS
@@ -148,4 +155,6 @@ SHELL_COMMAND(setrssi, "setrssi <dbm>. pkts at rssis worse than this will be dro
 SHELL_COMMAND(getrssi, "getrssi", getRssiLimitor);
 SHELL_COMMAND(rssiprint, "rssiprint toggle rssi limitor prints", toggleRssiPrint);
 #endif
+SHELL_COMMAND(setpwr, "setpwr <dbm>. sets tx power", Throttler_CmdSetTxPower);
+SHELL_COMMAND(getpwr, "getpwr prints tx power", Throttler_CmdGetTxPower);
 #endif

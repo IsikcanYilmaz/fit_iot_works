@@ -23,6 +23,18 @@ else
 fi
 
 # convert to uf2
+# First check if our RIOT has the tools installed
+# If not, get em
+if [ ! -f "$RIOTBASE"/dist/tools/uf2/uf2conv.py ]; then
+  echo "uf2conv.py not found. Acquiring it..."
+  cd $RIOTBASE/dist/tools/uf2/
+  git clone https://github.com/microsoft/uf2.git 
+  cp uf2/utils/uf2conv.py .
+  cp uf2/utils/uf2families.json .
+  chmod a+x uf2conv.py
+  cd -
+fi
+
 $RIOTBASE/dist/tools/uf2/uf2conv.py -f 0xADA52840 bin/"$BOARD"/"$APPLICATION".hex --base 0x1000 -o bin/"$BOARD"/"$APPLICATION".uf2 -c
 
 if [ "$1" ]; then

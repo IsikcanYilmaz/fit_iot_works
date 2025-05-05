@@ -1,0 +1,24 @@
+ifneq (,$(filter udp_stress,$(USEMODULE)))
+
+USEMODULE += netdev_default
+
+LWIP ?= 0
+
+ifeq (0,$(LWIP))
+	USEMODULE += auto_init_gnrc_netif
+	USEMODULE += gnrc_ipv6_default
+else
+	USEMODULE += lwip_ipv6
+endif
+
+USEMODULE += netutils
+USEMODULE += sema_inv
+USEMODULE += sock_udp
+USEMODULE += xtimer
+
+USEMODULE += shell_cmds_default
+USEMODULE += ps
+USEMODULE += netstats_l2
+USEMODULE += netstats_ipv6
+
+endif

@@ -1,2 +1,4 @@
+ifneq (,$(filter neopixel,$(USEMODULE)))
 USEMODULE += ws281x
 USEMODULE += color
+endif

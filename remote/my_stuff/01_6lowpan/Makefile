@@ -91,8 +91,8 @@ USEMODULE += gnrc_pktdump
 
 USEMODULE += periph_gpio_irq
 
-USEMODULE += benchmark_udp
-USEMODULE += shell_cmd_gnrc_udp
+# USEMODULE += benchmark_udp
+# USEMODULE += shell_cmd_gnrc_udp
 
 
 EXTERNAL_MODULE_DIRS += $(CURDIR)/../submodules/
@@ -101,6 +101,7 @@ USEMODULE += neopixel
 USEMODULE += onboard_leds
 USEMODULE += throttler
 # USEMODULE += common
+USEMODULE += udp_stress
 
 
 # CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/common/

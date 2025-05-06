@@ -13,10 +13,8 @@
 
 #ifdef JON_RSSI_LIMITING
 #define DEFAULT_RSSI_LIMITOR (-80) //(JON_RSSI_LIMITING)
-
 extern int rssiLimitor;
 extern bool rssiPrint;
-
 #endif
 
 #ifdef JON_FAKE_LATENCY_MS
@@ -25,9 +23,8 @@ extern uint32_t fakeLatencyMs;
 #endif
 
 int16_t txPower;
-
-#define MAIN_IFACE (4)
 netif_t *mainIface;
+char netifName[CONFIG_NETIF_NAMELENMAX];
 
 void Throttler_Init(void)
 {
@@ -38,9 +35,13 @@ void Throttler_Init(void)
   fakeLatencyMs = DEFAULT_FAKE_LATENCY_MS;
 #endif
   txPower = DEFAULT_TX_POWER;
-  mainIface = netif_get_by_name("4");
+  /*mainIface = netif_get_by_name("4");*/
+
+  // Assuming we have one network interface, return the name of the "last" one:
+  mainIface = netif_iter(NULL);
+  netif_get_name(mainIface, netifName);
   Throttler_SetTxPower(txPower);
-  printf("Throttler initialized");
+  printf("Throttler initialized for netif %s\n", netifName);
 }
 
 void Throttler_SetRssiLimitor(int rssi)
@@ -48,6 +49,8 @@ void Throttler_SetRssiLimitor(int rssi)
 #ifdef JON_RSSI_LIMITING
   rssiLimitor = rssi;
   printf("Rssi limitor set to %d\n", rssi);
+#else
+  printf("RSSI LIMITING NOT ENABLED!\n");
 #endif
 }
 
@@ -56,6 +59,7 @@ int Throttler_GetRssiLimitor(void)
 #ifdef JON_RSSI_LIMITING
   return rssiLimitor;
 #else 
+  printf("RSSI LIMITING NOT ENABLED!\n");
   return 0;
 #endif
 }
@@ -89,6 +93,7 @@ int Throttler_CmdSetTxPower(int argc, char **argv)
 
 int Throttler_CmdGetTxPower(int argc, char **argv)
 {
+  printf("Iface: %s\n", netifName);
   printf("%d\n", txPower);
   return 0;
 }
@@ -105,6 +110,11 @@ int setRssiLimitor(int argc, char **argv)
   Throttler_SetRssiLimitor(atoi(argv[1]));
 #endif
   return 0;
+}
+
+int noRssiLimitor(int argc, char **argv)
+{
+  Throttler_SetRssiLimitor(-100);
 }
 
 int getRssiLimitor(int argc, char **argv)
@@ -153,6 +163,7 @@ SHELL_COMMAND(getfakelat, "getfakelat", getFakeLatency);
 #ifdef JON_RSSI_LIMITING
 SHELL_COMMAND(setrssi, "setrssi <dbm>. pkts at rssis worse than this will be dropped", setRssiLimitor);
 SHELL_COMMAND(getrssi, "getrssi", getRssiLimitor);
+SHELL_COMMAND(norssi, "norssi removes rssi limit", noRssiLimitor)
 SHELL_COMMAND(rssiprint, "rssiprint toggle rssi limitor prints", toggleRssiPrint);
 #endif
 SHELL_COMMAND(setpwr, "setpwr <dbm>. sets tx power", Throttler_CmdSetTxPower);

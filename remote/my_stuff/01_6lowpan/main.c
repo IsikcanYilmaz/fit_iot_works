@@ -4,11 +4,6 @@
 #include "net/gnrc/netif.h"
 #include "net/gnrc/pktdump.h"
 
-/*#include "ccn-lite-riot.h"*/
-/*#include "ccnl-pkt-ndntlv.h"*/
-/*#include "ccnl-pkt-builder.h"*/
-/*#include "ccnl-producer.h"*/
-
 #include "thread.h"
 #include "xtimer.h"
 #include "ztimer.h"
@@ -18,15 +13,10 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-/*#include "node_settings.h"*/
-/*#include "ccn_nc_demo.h"*/
 #include "demo_button.h"
 #include "demo_neopixels.h"
 #include "onboard_leds.h"
-
-/*#ifdef JON_RSSI_LIMITING*/
-/*#include "demo_throttlers.h"*/
-/*#endif*/
+#include "demo_throttlers.h"
 
 /* main thread's message queue */
 #define MAIN_QUEUE_SIZE (32)
@@ -47,41 +37,6 @@ void *experiment_threadHandler(void *arg) // TODO no need for this tbh
     printf("Message received %d\n", m.content.value);
   }
 }
-
-static const shell_command_t commands[] = {
-
-/*  // GENERAL*/
-/*  {"gettime", "Get Time", Cmd_GetTime},*/
-/*  {"getname", "Get Name", Cmd_GetName},*/
-/*  {"sethosts", "Set Hosts", Cmd_SetHosts},*/
-/*  {"gethosts", "Get Hosts", Cmd_GetHosts},*/
-/*  {"startprogram", "Start Program", Cmd_StartProgram},*/
-/**/
-/*  // RSSI LIMITING*/
-/*#ifdef JON_RSSI_LIMITING;*/
-/*  {"setrssi", "set rssi limitor", setRssiLimitor},*/
-/*  {"getrssi", "get rssi limitor", getRssiLimitor},*/
-/*  {"rssiprint", "toggle rssi print messages", setRssiPrint},*/
-/**/
-/*  // FAKE LATENCY*/
-/*  {"setfakelat", "set fake latency", setFakeLatency},*/
-/*  {"getfakelat", "get fake latency", getFakeLatency},*/
-/*#endif*/
-/**/
-/*  {"txpower", "set tx power", Throttler_CmdSetTxPower},*/
-/**/
-/*  // CCN*/
-/*  {"prod", "Produce", cmd_ccnl_nc_produce},*/
-/*  {"int", "Interest", cmd_ccnl_nc_interest},*/
-/*  {"cs", "Print CS", cmd_ccnl_nc_show_cs},*/
-/*  {"pit", "Print PIT", cmd_ccnl_nc_show_pit},*/
-/*  {"rm", "Remove from CS", cmd_ccnl_nc_rm_cs},*/
-/*  {"rmall", "Clear CS", cmd_ccnl_nc_rm_cs_all},*/
-/*  {"sethw", "Set Hardware Type", cmd_ccnl_nc_set_hw},*/
-/**/
-  //
-  {NULL, NULL, NULL}
-};
 
 /*
  * ~ MAIN ~
@@ -104,8 +59,9 @@ int main(void)
   kernel_pid_t buttonThreadId = Button_Init(experimentThreadId);
   kernel_pid_t neopixelThreadId = Neopixel_Init(experimentThreadId);
   OnboardLeds_Init();
+  Throttler_Init();
 
 	char line_buf[SHELL_DEFAULT_BUFSIZE];
-	shell_run(commands, line_buf, SHELL_DEFAULT_BUFSIZE);
+	shell_run(NULL, line_buf, SHELL_DEFAULT_BUFSIZE);
 	return 0;
 }

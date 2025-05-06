@@ -1,4 +1,3 @@
-
 #include <periph/gpio.h>
 #include "board.h"
 #include "led.h"

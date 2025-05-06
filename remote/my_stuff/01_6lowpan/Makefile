@@ -100,7 +100,6 @@ USEMODULE += button
 USEMODULE += neopixel
 USEMODULE += onboard_leds
 USEMODULE += throttler
-# USEMODULE += common
 USEMODULE += udp_stress
 
 

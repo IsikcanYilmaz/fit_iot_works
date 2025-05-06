@@ -19,6 +19,9 @@ while [ $# -gt 0 ]; do
       BOARD="$1"
       shift
       ;;
+    *)
+      shift
+      ;;
   esac
 done
 

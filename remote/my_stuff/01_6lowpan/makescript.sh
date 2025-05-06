@@ -11,6 +11,18 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
+# Parse args
+while [ $# -gt 0 ]; do
+  case "$1" in
+    "--board") # Select board. available options: "seeedstudio-xiao-nrf52840" "iotlab-m3" "nrf52850dk"
+      shift
+      BOARD="$1"
+      ;;
+  esac
+done
+
+echo "${GREEN}Building for board $BOARD ${NC}"
+
 # make the project
 make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 
 ret="$?"

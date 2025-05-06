@@ -17,11 +17,12 @@ while [ $# -gt 0 ]; do
     "--board") # Select board. available options: "seeedstudio-xiao-nrf52840" "iotlab-m3" "nrf52850dk"
       shift
       BOARD="$1"
+      shift
       ;;
   esac
 done
 
-echo "${GREEN}Building for board $BOARD ${NC}"
+echo "${GREEN}Building $APPLICATION for board $BOARD ${NC}"
 
 # make the project
 make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 

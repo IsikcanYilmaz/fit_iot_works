@@ -17,6 +17,7 @@ while [ $# -gt 0 ]; do
     "--board") # Select board. available options: "seeedstudio-xiao-nrf52840" "iotlab-m3" "nrf52850dk"
       shift
       BOARD="$1"
+      shift
       ;;
   esac
 done

@@ -20,6 +20,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     *)
+      PORT+=("$1")
       shift
       ;;
   esac
@@ -54,13 +55,9 @@ fi
 
 $RIOTBASE/dist/tools/uf2/uf2conv.py -f 0xADA52840 bin/"$BOARD"/"$APPLICATION".hex --base 0x1000 -o bin/"$BOARD"/"$APPLICATION".uf2 -c
 
-if [ "$1" ]; then
-  PORT=( "$@" )
-  echo "${PORT[@]} AS DEVICE(S) TO PROGRAM"
-fi
-
 # If port info supplied flash each supplied port with the compiled product
 if [ "$PORT" ]; then
+  echo "${PORT[@]} AS DEVICE(S) TO PROGRAM"
   for p in ${PORT[@]}; do
     echo "$p"
 

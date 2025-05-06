@@ -20,7 +20,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     *)
-      PORT+=("$1")
+      PORT+=("$1") 
       shift
       ;;
   esac

@@ -1,0 +1,3 @@
+ifneq (,$(filter button,$(USEMODULE)))
+USEMODULE += periph_gpio_irq
+endif

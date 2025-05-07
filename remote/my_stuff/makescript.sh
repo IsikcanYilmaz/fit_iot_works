@@ -3,7 +3,6 @@
 RIOTBASE="../../../RIOT/"
 
 BOARD="seeedstudio-xiao-nrf52840"
-# APPLICATION="6lp"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -55,7 +54,6 @@ if [ ! -f "$RIOTBASE"/dist/tools/uf2/uf2conv.py ]; then
   cd -
 fi
 
-# $RIOTBASE/dist/tools/uf2/uf2conv.py -f 0xADA52840 bin/"$BOARD"/"$APPLICATION".hex --base 0x1000 -o bin/"$BOARD"/"$APPLICATION".uf2 -c
 $RIOTBASE/dist/tools/uf2/uf2conv.py -f 0xADA52840 "$hexfilename" --base 0x1000 -o "$uf2filename" -c
 
 # If port info supplied flash each supplied port with the compiled product
@@ -71,14 +69,12 @@ if [ "$PORT" ]; then
       stty -F "$p" raw ispeed 1200 ospeed 1200 cs8 -cstopb ignpar eol 255 eof 255
       echo "WAITING FOR VOLUME TO COME UP"
       sleep 3
-      # cp bin/"$BOARD"/"$APPLICATION".uf2 /media/"$(whoami)"/XIAO-SENSE/
       cp "$uf2filename" /media/"$(whoami)"/XIAO-SENSE/
     else # If macos
       # set our device to boot mode
       stty -f "$p" raw ispeed 1200 ospeed 1200 cs8 -cstopb ignpar eol 255 eof 255
       echo "WAITING FOR VOLUME TO COME UP"
       sleep 3
-      # cp bin/"$BOARD"/"$APPLICATION".uf2 /Volumes/XIAO-SENSE/
       cp "$uf2filename" /Volumes/XIAO-SENSE/
     fi
 

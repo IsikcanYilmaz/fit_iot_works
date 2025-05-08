@@ -4,9 +4,14 @@ RIOTBASE="../../../RIOT/"
 
 BOARD="seeedstudio-xiao-nrf52840"
 
+ALLOWED_BOARDS=( "seeedstudio-xiao-nrf52840" "iotlab-m3" "nrf52850dk" "adafruit-feather-nrf52840-express" "adafruit-feather-nrf52840-sense" )
+NRF_BOARDS=( "seeedstudio-xiao-nrf52840" "nrf52850dk" "adafruit-feather-nrf52840-express" "adafruit-feather-nrf52840-sense" )
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
+
+FITIOT=false
 
 # Parse args
 while [ $# -gt 0 ]; do
@@ -15,6 +20,10 @@ while [ $# -gt 0 ]; do
       shift
       BOARD="$1"
       shift
+      ;;
+    "--fitiot") # We're on fit iot boards. flash them and such
+      shift
+      FITIOT=true
       ;;
     *)
       PORT+=("$1") 
@@ -27,21 +36,32 @@ done
 echo "${GREEN}Building for board $BOARD ${NC}"
 
 # make the project
-make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 
+make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
 ret="$?"
 
 if [ "$ret" != 0 ]; then
-  echo -e "${RED}Make failed!${NC}"
+  echo -e "${RED}Make failed! ${NC}"
   exit $ret
 else
-  echo -e "${GREEN}Make success${NC}"
+  echo -e "${GREEN}Make success ${NC}"
 fi
 
 # Find necessary filenames
 hexfilename=$(find bin/$BOARD -name "*\.hex")
 uf2filename=$(echo "$hexfilename" | sed 's/hex/uf2/g')
 
-# convert to uf2
+if [ "$hexfilename" == "" ]; then
+  echo -e "${RED}Cannot find .hex file! Aborting ${NC}"
+  exit 1
+fi
+
+# TODO be able to flash other boards
+if [ $BOARD != "seeedstudio-xiao-nrf52840" ]; then
+ exit 0
+fi
+
+
+# convert to uf2 # This is for seeedstudio-xiao-nrf52840 boards only!
 # First check if our RIOT has the tools installed
 # If not, get em
 if [ ! -f "$RIOTBASE"/dist/tools/uf2/uf2conv.py ]; then
@@ -60,9 +80,17 @@ $RIOTBASE/dist/tools/uf2/uf2conv.py -f 0xADA52840 "$hexfilename" --base 0x1000 -
 if [ "$PORT" ]; then
   echo "${PORT[@]} AS DEVICE(S) TO PROGRAM"
   for p in ${PORT[@]}; do
-    echo "$p"
+
+    # If provided port is not found
+    if [ ! -f "$p" ] && [ ! -e "$p" ]; then
+      echo -e "${RED}Port $p not found! ${NC}"
+      continue
+    fi
+
+    echo -e "${GREEN}$p ${NC}"
 
     # copy our uf2 file into the volume
+    # This step differs by a bit in linux vs. macos. handle it
     uname -a | grep -i linux
     if [ $? == 0 ]; then # If linux
       # set our device to boot mode

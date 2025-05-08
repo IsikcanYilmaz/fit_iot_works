@@ -15,23 +15,15 @@ RIOTBASE ?= $(CURDIR)/../..
 # development process:
 DEVELHELP ?= 1
 
-CFLAGS += -DCCNL_UAPI_H_
-CFLAGS += -DNEEDS_PREFIX_MATCHING
-CFLAGS += -DNEEDS_PACKET_CRAFTING
-CFLAGS += -DUSE_RONR
-CFLAGS += -DUSE_SUITE_NDNTLV
-CFLAGS += -DUSE_LINKLAYER
-CFLAGS += -DUSE_LOGGING
-CFLAGS += -DUSE_DEBUG
-
-CFLAGS += -DLOG_LEVEL=LOG_NONE  # disable log output
-CFLAGS += -DCONFIG_GNRC_NETIF_IPV6_ADDRS_NUMOF=2 \
-          -DGNRC_NETIF_IPV6_GROUPS_NUMOF=2 -DCONFIG_GNRC_IPV6_NIB_NUMOF=1 \
-          -DCONFIG_GNRC_IPV6_NIB_OFFL_NUMOF=1 # be able to configure at least one route
+# CFLAGS += -DLOG_LEVEL=LOG_NONE  # disable log output
+# CFLAGS += -DCONFIG_GNRC_NETIF_IPV6_ADDRS_NUMOF=2
+# CFLAGS += -DGNRC_NETIF_IPV6_GROUPS_NUMOF=2 
+# CFLAGS += -DCONFIG_GNRC_IPV6_NIB_NUMOF=1
+# CFLAGS += -DCONFIG_GNRC_IPV6_NIB_OFFL_NUMOF=1 # be able to configure at least one route
 
 # DEMO FLAGS
-CFLAGS += -DJON_RSSI_LIMITING=-60
-# CFLAGS += -DJON_FAKE_LATENCY_MS=1000
+CFLAGS += -DJON_RSSI_LIMITING=-100
+CFLAGS += -DJON_DEFAULT_TX_POWER=-20
 CFLAGS += -DLED0_TO_SHOW_RX
 CFLAGS += -DLED1_TO_SHOW_TX
 CFLAGS += -DLED2_TO_SHOW_GOOD_RX
@@ -76,20 +68,20 @@ USEMODULE += ps
 USEMODULE += shell_cmds_default
 # Include packages that pull up and auto-init the link layer.
 # NOTE: 6LoWPAN will be included if IEEE802.15.4 devices are present
-USEMODULE += netdev_default
-USEMODULE += auto_init_gnrc_netif
-USEMODULE += gnrc_netif_single
+# USEMODULE += netdev_default
+# USEMODULE += auto_init_gnrc_netif
+# USEMODULE += gnrc_netif_single
 # Specify the minimum networking modules for IPv6
-USEMODULE += gnrc_ipv6
+# USEMODULE += gnrc_ipv6
 # Additional networking modules that can be dropped if not needed
-USEMODULE += gnrc_icmpv6_echo
+# USEMODULE += gnrc_icmpv6_echo
 # Use minimal standard PRNG
-USEMODULE += prng_minstd
+# USEMODULE += prng_minstd
 # This application dumps received packets to STDIO using the pktdump module
-USEMODULE += gnrc_pktdump
+# USEMODULE += gnrc_pktdump
 # USEMODULE += prng_xorshift
 
-USEMODULE += periph_gpio_irq
+# USEMODULE += periph_gpio_irq
 
 # USEMODULE += benchmark_udp
 # USEMODULE += shell_cmd_gnrc_udp
@@ -100,7 +92,8 @@ USEMODULE += button
 USEMODULE += neopixel
 USEMODULE += onboard_leds
 USEMODULE += throttler
-USEMODULE += udp_stress
+# USEMODULE += udp_stress
+USEMODULE += udp_multihop
 
 
 # CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/common/

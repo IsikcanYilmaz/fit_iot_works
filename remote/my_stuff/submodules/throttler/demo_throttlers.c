@@ -9,16 +9,20 @@
 
 // TODO this and the settings .c file should merge
 
+#ifdef JON_DEFAULT_TX_POWER
+#define DEFAULT_TX_POWER (JON_DEFAULT_TX_POWER)
+#else
 #define DEFAULT_TX_POWER (-20)
+#endif
 
 #ifdef JON_RSSI_LIMITING
-#define DEFAULT_RSSI_LIMITOR (-80) //(JON_RSSI_LIMITING)
+#define DEFAULT_RSSI_LIMITOR (JON_RSSI_LIMITING)
 extern int rssiLimitor;
 extern bool rssiPrint;
 #endif
 
 #ifdef JON_FAKE_LATENCY_MS
-#define DEFAULT_FAKE_LATENCY_MS (0) //(JON_FAKE_LATENCY_MS) // TODO maybe remove these settings from the makefile 
+#define DEFAULT_FAKE_LATENCY_MS (JON_FAKE_LATENCY_MS) // TODO maybe remove these settings from the makefile 
 extern uint32_t fakeLatencyMs;
 #endif
 
@@ -35,7 +39,6 @@ void Throttler_Init(void)
   fakeLatencyMs = DEFAULT_FAKE_LATENCY_MS;
 #endif
   txPower = DEFAULT_TX_POWER;
-  /*mainIface = netif_get_by_name("4");*/
 
   // Assuming we have one network interface, return the name of the "last" one:
   mainIface = netif_iter(NULL);
@@ -94,7 +97,7 @@ int Throttler_CmdSetTxPower(int argc, char **argv)
 int Throttler_CmdGetTxPower(int argc, char **argv)
 {
   printf("Iface: %s\n", netifName);
-  printf("%d\n", txPower);
+  printf("%d dBm\n", txPower);
   return 0;
 }
 

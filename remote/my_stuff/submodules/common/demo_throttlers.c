@@ -9,10 +9,10 @@
 
 // TODO this and the settings .c file should merge
 
-#define DEFAULT_TX_POWER (-20)
+#define DEFAULT_TX_POWER (0)
 
 #ifdef JON_RSSI_LIMITING
-#define DEFAULT_RSSI_LIMITOR (-70) //(JON_RSSI_LIMITING)
+#define DEFAULT_RSSI_LIMITOR (-100) //(JON_RSSI_LIMITING)
 
 extern int rssiLimitor;
 extern bool rssiPrint;

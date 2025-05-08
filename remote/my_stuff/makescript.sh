@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-RIOTBASE="../../../RIOT/"
+RIOTBASE="$(git rev-parse --show-toplevel)/RIOT/"
 
 BOARD="seeedstudio-xiao-nrf52840"
 
@@ -32,10 +32,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-
 echo "${GREEN}Building for board $BOARD ${NC}"
 
-# make the project
+# build the thing 
 make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
 ret="$?"
 
@@ -74,6 +73,7 @@ if [ ! -f "$RIOTBASE"/dist/tools/uf2/uf2conv.py ]; then
   cd -
 fi
 
+# Convert hex file to uf2
 $RIOTBASE/dist/tools/uf2/uf2conv.py -f 0xADA52840 "$hexfilename" --base 0x1000 -o "$uf2filename" -c
 
 # If port info supplied flash each supplied port with the compiled product

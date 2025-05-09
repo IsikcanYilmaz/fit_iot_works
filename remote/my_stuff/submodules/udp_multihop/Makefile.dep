@@ -31,6 +31,6 @@ USEMODULE += gnrc_icmpv6_echo #
 USEMODULE += gnrc_ndp # Neighbor Discovery Protocol
 USEMODULE += gnrc_rpl
 USEMODULE += auto_init_gnrc_rpl
-
+USEMODULE += shell_cmd_gnrc_udp
 
 endif

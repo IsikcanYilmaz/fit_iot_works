@@ -4,8 +4,8 @@ RIOTBASE="$(git rev-parse --show-toplevel)/RIOT/"
 
 BOARD="seeedstudio-xiao-nrf52840"
 
-ALLOWED_BOARDS=( "seeedstudio-xiao-nrf52840" "iotlab-m3" "nrf52850dk" "adafruit-feather-nrf52840-express" "adafruit-feather-nrf52840-sense" )
-NRF_BOARDS=( "seeedstudio-xiao-nrf52840" "nrf52850dk" "adafruit-feather-nrf52840-express" "adafruit-feather-nrf52840-sense" )
+ALLOWED_BOARDS=( "seeedstudio-xiao-nrf52840" "iotlab-m3" "nrf52840dk" "adafruit-feather-nrf52840-express" "adafruit-feather-nrf52840-sense" )
+MY_BOARDS=( "seeedstudio-xiao-nrf52840" "adafruit-feather-nrf52840-express" "adafruit-feather-nrf52840-sense" )
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -49,18 +49,19 @@ fi
 hexfilename=$(find bin/$BOARD -name "*\.hex")
 uf2filename=$(echo "$hexfilename" | sed 's/hex/uf2/g')
 
+# TODO be able to flash other boards
+# After this point generates our uf2 file and programs local boards. only proceed if we're on a seeed or one of our adafruits
+if [ "$(echo ${MY_BOARDS[@]} | grep "$BOARD")" == "" ] ; then
+  echo $BOARD Not a local board. Done.
+  exit 0
+fi
+
 if [ "$hexfilename" == "" ]; then
   echo -e "${RED}Cannot find .hex file! Aborting ${NC}"
   exit 1
 fi
 
-# TODO be able to flash other boards
-if [ $BOARD != "seeedstudio-xiao-nrf52840" ]; then
- exit 0
-fi
-
-
-# convert to uf2 # This is for seeedstudio-xiao-nrf52840 boards only!
+# convert to uf2 
 # First check if our RIOT has the tools installed
 # If not, get em
 if [ ! -f "$RIOTBASE"/dist/tools/uf2/uf2conv.py ]; then

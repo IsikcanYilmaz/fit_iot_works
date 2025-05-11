@@ -3,10 +3,6 @@ APPLICATION = 6lp
 # If no BOARD is found in the environment, use this default:
 BOARD ?= native
 
-BOARD_WHITELIST := iotlab-m3 msba2 mulle native native64 nrf52dk nrf52840dk \
-                   pba-d-01-kw2x samr21-xpro seeedstudio-xiao-nrf52840
-
-
 # This has to be the absolute path to the RIOT base directory:
 RIOTBASE ?= $(CURDIR)/../..
 

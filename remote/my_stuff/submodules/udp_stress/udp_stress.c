@@ -68,7 +68,7 @@ static void *_listen_thread(void *ctx)
   static uint8_t buf[BENCH_PAYLOAD_SIZE_MAX + sizeof(benchmark_msg_ping_t)];
   benchmark_msg_cmd_t *cmd = (void *)buf;
 
-  DEBUG_PUTS("bench_udp: listen thread start");
+  puts("bench_udp: listen thread start");
 
   while (running) {
     ssize_t res;
@@ -97,7 +97,7 @@ static void *_listen_thread(void *ctx)
     irq_restore(state);
   }
 
-  DEBUG_PUTS("bench_udp: listen thread terminates");
+  puts("bench_udp: listen thread terminates");
   sema_inv_post(&thread_sync);
 
   return NULL;
@@ -107,7 +107,7 @@ static void *_send_thread(void *ctx)
 {
   sock_udp_ep_t remote = *(sock_udp_ep_t*)ctx;
 
-  DEBUG_PUTS("sending thread start");
+  puts("sending thread start");
 
   while (running) {
     _put_rtt(ping->seq_no);
@@ -124,7 +124,7 @@ static void *_send_thread(void *ctx)
     ztimer_sleep(ZTIMER_USEC, delay_us);
   }
 
-  DEBUG_PUTS("bench_udp: sending thread terminates");
+  puts("bench_udp: sending thread terminates");
   sema_inv_post(&thread_sync);
 
   return NULL;
@@ -177,13 +177,13 @@ bool benchmark_udp_stop(void)
   sema_inv_init(&thread_sync, 2);
   running = false;
 
-  DEBUG_PUTS("bench_udp: waiting for threads to terminate");
+  puts("bench_udp: waiting for threads to terminate");
 
   /* wait for threads to terminate */
   sema_inv_wait(&thread_sync);
   sock_udp_close(&sock);
 
-  DEBUG_PUTS("bench_udp: threads terminated");
+  puts("bench_udp: threads terminated");
 
   /* clear cookie & stack */
   ping->flags = 0;

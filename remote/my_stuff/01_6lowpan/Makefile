@@ -18,8 +18,8 @@ DEVELHELP ?= 1
 # CFLAGS += -DCONFIG_GNRC_IPV6_NIB_OFFL_NUMOF=1 # be able to configure at least one route
 
 # DEMO FLAGS
-CFLAGS += -DJON_RSSI_LIMITING=-100
-CFLAGS += -DJON_DEFAULT_TX_POWER=-20
+# CFLAGS += -DJON_RSSI_LIMITING=-100
+# CFLAGS += -DJON_DEFAULT_TX_POWER=-20
 CFLAGS += -DLED0_TO_SHOW_RX
 CFLAGS += -DLED1_TO_SHOW_TX
 CFLAGS += -DLED2_TO_SHOW_GOOD_RX
@@ -82,14 +82,15 @@ USEMODULE += shell_cmds_default
 # USEMODULE += benchmark_udp
 # USEMODULE += shell_cmd_gnrc_udp
 
+USEMODULE += ztimer
 
 EXTERNAL_MODULE_DIRS += $(CURDIR)/../submodules/
 USEMODULE += button
 USEMODULE += neopixel
 USEMODULE += onboard_leds
 USEMODULE += throttler
-# USEMODULE += udp_stress
-USEMODULE += udp_multihop
+USEMODULE += udp_stress
+# USEMODULE += udp_multihop
 
 
 # CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/common/

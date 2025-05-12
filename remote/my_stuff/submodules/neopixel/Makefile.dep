@@ -1,4 +1,6 @@
 ifneq (,$(filter neopixel,$(USEMODULE)))
 USEMODULE += ws281x
 USEMODULE += color
+USEMODULE += ztimer
+USEMODULE += ztimer_msec
 endif

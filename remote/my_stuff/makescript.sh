@@ -32,7 +32,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-echo "${GREEN}Building for board $BOARD ${NC}"
+echo -e "${GREEN}Building for board $BOARD ${NC}"
 
 # build the thing 
 make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP

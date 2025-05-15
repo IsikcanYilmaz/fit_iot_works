@@ -149,6 +149,7 @@ int benchmark_udp_start(const char *server, uint16_t port)
 
   if (netutils_get_ipv6((ipv6_addr_t *)&remote.addr.ipv6, &netif, server) < 0) {
     puts("can't resolve remote address");
+    sock_udp_close(&sock);
     return 1;
   }
   if (netif) {

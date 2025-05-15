@@ -56,32 +56,8 @@ endif
 # Change this to 0 show compiler invocation lines by default:
 QUIET ?= 1
 
-#neopixels
-# USEMODULE += color
-# USEMODULE += ws281x
-
 USEMODULE += ps
 USEMODULE += shell_cmds_default
-# Include packages that pull up and auto-init the link layer.
-# NOTE: 6LoWPAN will be included if IEEE802.15.4 devices are present
-# USEMODULE += netdev_default
-# USEMODULE += auto_init_gnrc_netif
-# USEMODULE += gnrc_netif_single
-# Specify the minimum networking modules for IPv6
-# USEMODULE += gnrc_ipv6
-# Additional networking modules that can be dropped if not needed
-# USEMODULE += gnrc_icmpv6_echo
-# Use minimal standard PRNG
-# USEMODULE += prng_minstd
-# This application dumps received packets to STDIO using the pktdump module
-# USEMODULE += gnrc_pktdump
-# USEMODULE += prng_xorshift
-
-# USEMODULE += periph_gpio_irq
-
-# USEMODULE += benchmark_udp
-# USEMODULE += shell_cmd_gnrc_udp
-
 USEMODULE += ztimer
 
 EXTERNAL_MODULE_DIRS += $(CURDIR)/../submodules/
@@ -90,6 +66,7 @@ USEMODULE += neopixel
 USEMODULE += onboard_leds
 USEMODULE += throttler
 USEMODULE += udp_stress
+USEMODULE += iperf
 # USEMODULE += udp_multihop
 
 
@@ -98,6 +75,7 @@ CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/button/
 CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/neopixel/
 CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/onboard_leds/
 CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/throttler/
+CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/iperf/
 
 # USEPKG += ccn-lite
 

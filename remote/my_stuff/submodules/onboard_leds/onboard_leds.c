@@ -75,4 +75,6 @@ int cmd_onboardblink(int argc, char **argv)
   return 0;
 }
 
+#ifdef ONBOARD_LEDS_SHELL_COMMANDS
 SHELL_COMMAND(blink, "blink <r|g|b> [time]", cmd_onboardblink);
+#endif

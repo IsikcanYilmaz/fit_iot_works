@@ -3,6 +3,9 @@
 #include "led.h"
 #include "onboard_leds.h"
 #include "ztimer.h"
+#include "shell.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 
 ztimer_t onboardLedBlinkTimers[NUM_ONBOARD_LEDS];
@@ -43,9 +46,16 @@ int cmd_onboardblink(int argc, char **argv)
 {
   if (argc < 2)
   {
-    printf("Usage: blink <r|g|b> [time]");
+    printf("Usage: blink <r|g|b> [time ms]");
+    return 1;
   }
+
   uint16_t ms = 10;
+  if (argc > 2)
+  {
+    ms = atoi(argv[2]);
+  }
+
   OnboardLedID_e led;
   switch(argv[1][0])
   {
@@ -75,6 +85,4 @@ int cmd_onboardblink(int argc, char **argv)
   return 0;
 }
 
-#ifdef ONBOARD_LEDS_SHELL_COMMANDS
 SHELL_COMMAND(blink, "blink <r|g|b> [time]", cmd_onboardblink);
-#endif

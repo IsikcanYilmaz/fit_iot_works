@@ -3,6 +3,7 @@
 #include "macros/utils.h"
 #include "net/gnrc.h"
 #include "net/sock/udp.h"
+#include "net/gnrc/udp.h"
 #include "net/sock/tcp.h"
 #include "net/utils.h"
 #include "sema_inv.h"
@@ -70,13 +71,13 @@ static int socklessUdpSend(const char *addr_str, const char *port_str,
     /* parse destination address */
     if (netutils_get_ipv6(&addr, &netif, addr_str) < 0) {
         printf("Error: unable to parse destination address\n");
-        return;
+        return 1;
     }
     /* parse port */
     port = atoi(port_str);
     if (port == 0) {
         printf("Error: unable to parse destination port\n");
-        return;
+        return 1;
     }
 
     while (num--) {
@@ -86,7 +87,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str,
         payload = gnrc_pktbuf_add(NULL, data, strlen(data), GNRC_NETTYPE_UNDEF);
         if (payload == NULL) {
             printf("Error: unable to copy data to packet buffer\n");
-            return;
+            return 1;
         }
         /* store size for output */
         payload_size = (unsigned)payload->size;
@@ -95,14 +96,14 @@ static int socklessUdpSend(const char *addr_str, const char *port_str,
         if (udp == NULL) {
             printf("Error: unable to allocate UDP header\n");
             gnrc_pktbuf_release(payload);
-            return;
+            return 1;
         }
         /* allocate IPv6 header */
         ip = gnrc_ipv6_hdr_build(udp, NULL, &addr);
         if (ip == NULL) {
             printf("Error: unable to allocate IPv6 header\n");
             gnrc_pktbuf_release(udp);
-            return;
+            return 1;
         }
         /* add netif header, if interface was given */
         if (netif != NULL) {
@@ -110,7 +111,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str,
             if (netif_hdr == NULL) {
                 printf("Error: unable to allocate netif header\n");
                 gnrc_pktbuf_release(ip);
-                return;
+                return 1;
             }
             gnrc_netif_hdr_set_netif(netif_hdr->data,
                                      container_of(netif, gnrc_netif_t, netif));
@@ -121,7 +122,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str,
                                        GNRC_NETREG_DEMUX_CTX_ALL, ip)) {
             printf("Error: unable to locate UDP thread\n");
             gnrc_pktbuf_release(ip);
-            return;
+            return 1;
         }
         /* access to `payload` was implicitly given up with the send operation
          * above

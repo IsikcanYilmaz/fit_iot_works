@@ -38,3 +38,41 @@ void OnboardLeds_Blink(OnboardLedID_e led, uint16_t ms)
   ztimer_remove(ZTIMER_MSEC, &onboardLedBlinkTimers[led]); // remove if already set
   ztimer_set(ZTIMER_MSEC, &onboardLedBlinkTimers[led], ms);
 }
+
+int cmd_onboardblink(int argc, char **argv)
+{
+  if (argc < 2)
+  {
+    printf("Usage: blink <r|g|b> [time]");
+  }
+  uint16_t ms = 10;
+  OnboardLedID_e led;
+  switch(argv[1][0])
+  {
+    case 'r':
+      {
+        led = ONBOARD_RED;
+        break;
+      }
+    case 'g':
+      {
+        led = ONBOARD_GREEN;
+        break;
+      }
+    case 'b':
+      {
+        led = ONBOARD_BLUE;
+        break;
+      }
+    default:
+      {
+        printf("Bad led id\n");
+        return 1;
+        break;
+      }
+  }
+  OnboardLeds_Blink(led, ms);
+  return 0;
+}
+
+SHELL_COMMAND(blink, "blink <r|g|b> [time]", cmd_onboardblink);

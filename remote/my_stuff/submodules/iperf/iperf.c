@@ -42,10 +42,31 @@ static kernel_pid_t receiver_pid = 0;
 
 static gnrc_netreg_entry_t server = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
 
+// Dunno if any of whats below is really needed but lets see how it goe
+typedef enum {
+  IPERF_CTRL_MSG,
+  IPERF_PAYLOAD_MSG,
+  IPERF_MSG_TYPE_MAX
+} IperfMsgType_e;
+
+typedef enum {
+  IPERF_BEGIN_MSG,
+  IPERF_BEGIN_RSP,
+  IPERF_STOP_MSG,
+  IPERF_STOP_RSP,
+  IPERF_CTRL_MSG_MAX
+} IperfCtrlMsg_e;
+
+typedef struct 
+{
+  
+} IperfExperimentTraffic_t;
+
 typedef struct {
+  uint8_t flags;
   uint32_t seq_no;
   uint8_t payload[];
-} iperf_udp_pkt_t;
+} __attribute__((packed)) iperf_udp_pkt_t;
 
 /*
 * Iperf
@@ -287,7 +308,6 @@ static int startUdpServer(void)
     printf("Error: server thread not running!\n");
     return 1;
   }
-
   server.target.pid = receiver_pid;
   server.demux_ctx = (uint32_t) IPERF_DEFAULT_PORT;
   gnrc_netreg_register(GNRC_NETTYPE_UDP, &server);
@@ -332,6 +352,13 @@ int Iperf_Init(bool iAmSender)
     sender_pid = thread_create(sender_thread_stack, sizeof(sender_thread_stack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_SenderThread, NULL, "Iperf sender thread"); 
   }
 
+  return 0;
+}
+
+int Iperf_Deinit(void)
+{
+  stopUdpServer();
+  running = false;
   return 0;
 }
 

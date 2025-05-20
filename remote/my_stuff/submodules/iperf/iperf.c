@@ -10,6 +10,7 @@
 #include "test_utils/benchmark_udp.h"
 #include "ztimer.h"
 #include "shell.h"
+#include "od.h"
 
 #include "iperf.h"
 
@@ -39,8 +40,9 @@ static IperfConfig_s config;
 static kernel_pid_t sender_pid = 0;
 static kernel_pid_t receiver_pid = 0;
 
+static gnrc_netreg_entry_t server = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
+
 typedef struct {
-  uint32_t flags;
   uint32_t seq_no;
   uint8_t payload[];
 } iperf_udp_pkt_t;
@@ -57,8 +59,7 @@ typedef struct {
 // SOCKLESS 
 // Yanked out of sys/shell/cmds/gnrc_udp.c
 // takes address and port in _string_ form!
-static int socklessUdpSend(const char *addr_str, const char *port_str,
-                  const char *data, size_t num, unsigned int delay)
+static int socklessUdpSend(const char *addr_str, const char *port_str, const char *data, size_t dataLen, size_t num, unsigned int delayUs)
 {
   netif_t *netif;
   uint16_t port;
@@ -69,6 +70,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str,
     printf("Error: unable to parse destination address\n");
     return 1;
   }
+
   /* parse port */
   port = atoi(port_str);
   if (port == 0) {
@@ -79,14 +81,17 @@ static int socklessUdpSend(const char *addr_str, const char *port_str,
   while (num--) {
     gnrc_pktsnip_t *payload, *udp, *ip;
     unsigned payload_size;
+
     /* allocate payload */
-    payload = gnrc_pktbuf_add(NULL, data, strlen(data), GNRC_NETTYPE_UNDEF);
+    payload = gnrc_pktbuf_add(NULL, data, dataLen, GNRC_NETTYPE_UNDEF);
     if (payload == NULL) {
       printf("Error: unable to copy data to packet buffer\n");
       return 1;
     }
+
     /* store size for output */
     payload_size = (unsigned)payload->size;
+
     /* allocate UDP header, set source port := destination port */
     udp = gnrc_udp_hdr_build(payload, port, port);
     if (udp == NULL) {
@@ -94,6 +99,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str,
       gnrc_pktbuf_release(payload);
       return 1;
     }
+
     /* allocate IPv6 header */
     ip = gnrc_ipv6_hdr_build(udp, NULL, &addr);
     if (ip == NULL) {
@@ -101,6 +107,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str,
       gnrc_pktbuf_release(udp);
       return 1;
     }
+
     /* add netif header, if interface was given */
     if (netif != NULL) {
       gnrc_pktsnip_t *netif_hdr = gnrc_netif_hdr_build(NULL, 0, NULL, 0);
@@ -109,10 +116,10 @@ static int socklessUdpSend(const char *addr_str, const char *port_str,
         gnrc_pktbuf_release(ip);
         return 1;
       }
-      gnrc_netif_hdr_set_netif(netif_hdr->data,
-                               container_of(netif, gnrc_netif_t, netif));
+      gnrc_netif_hdr_set_netif(netif_hdr->data, container_of(netif, gnrc_netif_t, netif));
       ip = gnrc_pkt_prepend(ip, netif_hdr);
     }
+
     /* send packet */
     if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_UDP,
                                    GNRC_NETREG_DEMUX_CTX_ALL, ip)) {
@@ -120,19 +127,14 @@ static int socklessUdpSend(const char *addr_str, const char *port_str,
       gnrc_pktbuf_release(ip);
       return 1;
     }
+
     /* access to `payload` was implicitly given up with the send operation
-         * above
-         * => use temporary variable for output */
+     * above
+     * => use temporary variable for output */
     printf("Success: sent %u byte(s) to [%s]:%u\n", payload_size, addr_str,
            port);
     if (num) {
-#if IS_USED(MODULE_ZTIMER_USEC)
-      ztimer_sleep(ZTIMER_USEC, delay);
-#elif IS_USED(MODULE_XTIMER)
-      xtimer_usleep(delay);
-#elif IS_USED(MODULE_ZTIMER_MSEC)
-      ztimer_sleep(ZTIMER_MSEC, (delay + US_PER_MS - 1) / US_PER_MS);
-#endif
+      ztimer_sleep(ZTIMER_USEC, delayUs);
     }
   }
   return 0;
@@ -143,15 +145,29 @@ static void *Iperf_SenderThread(void *arg)
   /*sock_udp_ep_t remote = * (sock_udp_ep_t *) ctx;*/
   printf("%s Thread start\n", __FUNCTION__);
   uint8_t txBuffer[IPERF_PAYLOAD_SIZE_MAX];
+  memset(&txBuffer, 0x00, IPERF_PAYLOAD_SIZE_MAX);
+
   iperf_udp_pkt_t *pl = (void *) &txBuffer;
+  pl->seq_no = 0;
+  strncpy(&pl->payload, "ASDQWE", 6);
+
   while (running)
   {
     printf("tx \n");
-    char *dstAddr = "fe80::dcdd:aeb8:2ef:4e8c";
+
+    char *dstAddr;
+    /*char *dstAddr = "fe80::dcdd:aeb8:2ef:4e8c";*/
     dstAddr = "2001::2";
-    int sendRet = socklessUdpSend(dstAddr, "1", "asdqwe", 1, 1000000);
-    printf("%d\n", sendRet);
+
+    /*char *testData = "zxcasdqwe\0";*/
+    /*size_t testDataLen = strlen(testData);*/
+    /*int sendRet = socklessUdpSend(dstAddr, "1", testData, testDataLen, 1, 1000000);*/
+
+    int sendRet = socklessUdpSend(dstAddr, "1", (char *) pl, 16, 1, 1000000);
+
+    /*printf("%d\n", sendRet);*/
     ztimer_sleep(ZTIMER_MSEC, 1000);
+    pl->seq_no++;
   }
 }
 
@@ -162,10 +178,61 @@ static int receiverHandlePkt(gnrc_pktsnip_t *pkt)
   gnrc_pktsnip_t *snip = pkt;
   while(snip != NULL)
   {
-    printf("SNIP %d ", snips, );
+    printf("SNIP %d. %d bytes ", snips, snip->size);
+    switch(snip->type)
+    {
+      case GNRC_NETTYPE_NETIF:
+        {
+          printf("NETIF");
+          break;
+        }
+      case GNRC_NETTYPE_UNDEF:  // APP PAYLOAD HERE
+        {
+          printf("UNDEF\n");
+          for (int i = 0; i < snip->size; i++)
+          {
+            char *data = * (char *) (snip->data + i);
+            printf("%02x:(%c) %s", data, data, (i % 8 == 0 && i > 0) ? "\n" : "");
+          }
+          break;
+        }
+      case GNRC_NETTYPE_SIXLOWPAN:
+        {
+          printf("6LP");
+          break;
+        }
+      case GNRC_NETTYPE_IPV6:
+        {
+          printf("IPV6");
+          break;
+        }
+      case GNRC_NETTYPE_ICMPV6:
+        {
+          printf("ICMPV6");
+          break;
+        }
+      case GNRC_NETTYPE_TCP:
+        {
+          printf("TCP");
+          break;
+        }
+      case GNRC_NETTYPE_UDP:
+        {
+          printf("UDP");
+          break;
+        }
+      default:
+        {
+          printf("NONE");
+          break;
+        }
+    }
+    printf("\n");
+    size += snip->size;
+    snip = snip->next;
     snips++;
   }
-
+  printf("\n");
 
   gnrc_pktbuf_release(pkt);
   return 1;
@@ -208,7 +275,6 @@ static void *Iperf_ReceiverThread(void *arg)
   return NULL;
 }
 
-static gnrc_netreg_entry_t server = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
 static int startUdpServer(void)
 {
   /* check if server is already running or the handler thread is not */
@@ -245,6 +311,11 @@ static int stopUdpServer(void)
 
 int Iperf_Init(bool iAmSender)
 {
+  if (running)
+  {
+    printf("Ipref already running!\n");
+    return 1;
+  }
   config.iAmSender = iAmSender;
   config.senderPort = 1; // TODO make more generic? 
   config.listenerPort = 1;

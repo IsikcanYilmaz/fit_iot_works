@@ -88,14 +88,14 @@ static int socklessUdpSend(const char *addr_str, const char *port_str, const cha
 
   /* parse destination address */
   if (netutils_get_ipv6(&addr, &netif, addr_str) < 0) {
-    printf("Error: unable to parse destination address\n");
+    printf("[IPERF] Error: unable to parse destination address\n");
     return 1;
   }
 
   /* parse port */
   port = atoi(port_str);
   if (port == 0) {
-    printf("Error: unable to parse destination port\n");
+    printf("[IPERF] Error: unable to parse destination port\n");
     return 1;
   }
 
@@ -104,9 +104,9 @@ static int socklessUdpSend(const char *addr_str, const char *port_str, const cha
     unsigned payload_size;
 
     /* allocate payload */
-    payload = gnrc_pktbuf_add(NULL, data, dataLen, GNRC_NETTYPE_UNDEF);
+    payload = gnrc_pktbuf_add(NULL, data, dataLen, GNRC_NETTYPE_IPERF_CTRL);
     if (payload == NULL) {
-      printf("Error: unable to copy data to packet buffer\n");
+      printf("[IPERF] Error: unable to copy data to packet buffer\n");
       return 1;
     }
 
@@ -116,7 +116,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str, const cha
     /* allocate UDP header, set source port := destination port */
     udp = gnrc_udp_hdr_build(payload, port, port);
     if (udp == NULL) {
-      printf("Error: unable to allocate UDP header\n");
+      printf("[IPERF] Error: unable to allocate UDP header\n");
       gnrc_pktbuf_release(payload);
       return 1;
     }
@@ -124,7 +124,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str, const cha
     /* allocate IPv6 header */
     ip = gnrc_ipv6_hdr_build(udp, NULL, &addr);
     if (ip == NULL) {
-      printf("Error: unable to allocate IPv6 header\n");
+      printf("[IPERF] Error: unable to allocate IPv6 header\n");
       gnrc_pktbuf_release(udp);
       return 1;
     }
@@ -133,7 +133,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str, const cha
     if (netif != NULL) {
       gnrc_pktsnip_t *netif_hdr = gnrc_netif_hdr_build(NULL, 0, NULL, 0);
       if (netif_hdr == NULL) {
-        printf("Error: unable to allocate netif header\n");
+        printf("[IPERF] Error: unable to allocate netif header\n");
         gnrc_pktbuf_release(ip);
         return 1;
       }
@@ -144,7 +144,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str, const cha
     /* send packet */
     if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_UDP,
                                    GNRC_NETREG_DEMUX_CTX_ALL, ip)) {
-      printf("Error: unable to locate UDP thread\n");
+      printf("[IPERF] Error: unable to locate UDP thread\n");
       gnrc_pktbuf_release(ip);
       return 1;
     }
@@ -152,7 +152,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str, const cha
     /* access to `payload` was implicitly given up with the send operation
      * above
      * => use temporary variable for output */
-    printf("Success: sent %u byte(s) to [%s]:%u\n", payload_size, addr_str,
+    printf("[IPERF] Success: sent %u byte(s) to [%s]:%u\n", payload_size, addr_str,
            port);
     if (num) {
       ztimer_sleep(ZTIMER_USEC, delayUs);
@@ -164,7 +164,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str, const cha
 static void *Iperf_SenderThread(void *arg)
 {
   /*sock_udp_ep_t remote = * (sock_udp_ep_t *) ctx;*/
-  printf("%s Thread start\n", __FUNCTION__);
+  printf("[IPERF] %s Thread start\n", __FUNCTION__);
   uint8_t txBuffer[IPERF_PAYLOAD_SIZE_MAX];
   memset(&txBuffer, 0x00, IPERF_PAYLOAD_SIZE_MAX);
 
@@ -174,7 +174,7 @@ static void *Iperf_SenderThread(void *arg)
 
   while (running)
   {
-    printf("tx \n");
+    printf("[IPERF] tx \n");
 
     char *dstAddr;
     /*char *dstAddr = "fe80::dcdd:aeb8:2ef:4e8c";*/
@@ -197,9 +197,10 @@ static int receiverHandlePkt(gnrc_pktsnip_t *pkt)
   int snips = 0;
   int size = 0;
   gnrc_pktsnip_t *snip = pkt;
+  printf("[IPERF] Handle packet\n");
   while(snip != NULL)
   {
-    printf("SNIP %d. %d bytes ", snips, snip->size);
+    printf("SNIP %d. %d bytes. type: %d ", snips, snip->size, snip->type);
     switch(snip->type)
     {
       case GNRC_NETTYPE_NETIF:
@@ -305,13 +306,13 @@ static int startUdpServer(void)
   }
   if (receiver_pid == KERNEL_PID_UNDEF)
   {
-    printf("Error: server thread not running!\n");
+    printf("[IPERF] Error: server thread not running!\n");
     return 1;
   }
   server.target.pid = receiver_pid;
   server.demux_ctx = (uint32_t) IPERF_DEFAULT_PORT;
   gnrc_netreg_register(GNRC_NETTYPE_UDP, &server);
-  printf("Started UDP server on port %d\n", server.demux_ctx);
+  printf("[IPERF] Started UDP server on port %d\n", server.demux_ctx);
   return 0;
 }
 
@@ -319,13 +320,13 @@ static int stopUdpServer(void)
 {
   /* check if server is running at all */
   if (server.target.pid == KERNEL_PID_UNDEF) {
-    printf("Error: server was not running\n");
+    printf("[IPERF] Error: server was not running\n");
     return 1;
   }
   /* stop server */
   gnrc_netreg_unregister(GNRC_NETTYPE_UDP, &server);
   server.target.pid = KERNEL_PID_UNDEF;
-  printf("Success: stopped UDP server\n"); 
+  printf("[IPERF] Success: stopped UDP server\n"); 
   return 0;
 }
 
@@ -333,7 +334,7 @@ int Iperf_Init(bool iAmSender)
 {
   if (running)
   {
-    printf("Ipref already running!\n");
+    printf("[IPERF] Already running!\n");
     return 1;
   }
   config.iAmSender = iAmSender;
@@ -359,6 +360,7 @@ int Iperf_Deinit(void)
 {
   stopUdpServer();
   running = false;
+  printf("[IPERF] Deinitialized\n");
   return 0;
 }
 
@@ -371,17 +373,17 @@ int Iperf_CmdHandler(int argc, char **argv)
 
   if (strncmp(argv[1], "sender", 16) == 0)
   {
-    printf("STARTING IPERF SENDER AGAINST 2001::2/120\n");
+    printf("[IPERF] STARTING IPERF SENDER AGAINST 2001::2/120\n");
     Iperf_Init(true);
   }
   else if (strncmp(argv[1], "receiver", 16) == 0)
   {
-    printf("STARTING IPERF LISTENER\n");
+    printf("[IPERF] STARTING IPERF LISTENER\n");
     Iperf_Init(false);
   }
   else if (strncmp(argv[1], "stop", 16) == 0)
   {
-    /*Iperf_Stop();*/
+    Iperf_Deinit();
   }
   else
   {

@@ -7,8 +7,9 @@ from pprint import pprint
 
 devices = {'sender':None, 'receiver':None, 'routers':[]}
 ifaceId = None # We assume this is the same number for all devices
+args = None
 
-def interact():
+def interact(): # debug
     import code
     code.InteractiveConsole(locals=globals()).interact()
 
@@ -30,17 +31,36 @@ def parseIfconfig(rawStr, dev):
         if ("fe80" in i):
             linkLocal = i.split(" ")[2]
             dev["linkLocal"] = linkLocal
-    print(f"IFACE {iface}")
-    print(f"HWADDR {hwaddr}")
-    print(f"LINK LOCAL {linkLocal}")
+    # print(f"IFACE {iface}")
+    # print(f"HWADDR {hwaddr}")
+    # print(f"LINK LOCAL {linkLocal}")
 
-def prepSender():
-    s = devices["sender"]["ser"]
+def getAddresses(dev): 
+    s = dev["ser"]
     s.reset_input_buffer() # flush
     s.write("ifconfig\n".encode())
     time.sleep(0.1)
     outStrRaw = s.read(s.in_waiting).decode()
-    parseIfconfig(outStrRaw, devices["sender"])
+    parseIfconfig(outStrRaw, dev)
+
+def setGlobalAddress(dev):
+    s = dev["ser"]
+    s.reset_input_buffer()
+    s.write(f"ifconfig {ifaceId} add 2001::{dev['id']}\n".encode())
+    time.sleep(0.1)
+    resp = s.read(s.in_waiting).decode()
+    print(">", resp)
+
+def setRplRoot(dev):
+    s = dev["ser"]
+    s.reset_input_buffer()
+    s.write(f"rpl root {ifaceId} 2001::{dev['id']}\n".encode())
+    time.sleep(0.1)
+    resp = s.read(s.in_waiting).decode()
+    print(">", resp)
+
+def prepSender():
+    pass
 
 def prepReceiver():
     pass
@@ -49,6 +69,7 @@ def prepRouters():
     pass
 
 def main():
+    global args
     parser = argparse.ArgumentParser()
     parser.add_argument("sender")
     parser.add_argument("receiver")
@@ -61,14 +82,22 @@ def main():
     print(f"SENDER {args.sender}, RECEIVER {args.receiver}, ROUTER(s) {args.router}")
     print(f"RPL {args.rpl}, FITIOT {args.fitiot}")
 
-    devices["sender"] = {"port":args.sender, "ser":serial.Serial(args.sender)}
+    devices["sender"] = {"port":args.sender, "id":1, "ser":serial.Serial(args.sender)}
     devices["receiver"] = {"port":args.receiver, "ser":serial.Serial(args.receiver)}
     if (args.router):
-        for i in args.router:
-            devices["routers"].append({"port":i, "ser":serial.Serial(i)})
+        for j, i in enumerate(args.router):
+            devices["routers"].append({"port":i, "id":j+2, "ser":serial.Serial(i)})
+            getAddresses(devices["routers"][-1])
+    devices["receiver"]["id"] = len(devices["routers"])+2
 
+    getAddresses(devices["sender"])
+    getAddresses(devices["receiver"])
 
-    prepSender()
+    setGlobalAddress(devices["sender"])
+    setGlobalAddress(devices["receiver"])
+
+    setRplRoot(devices["sender"])
+
     pprint(devices)
 
 

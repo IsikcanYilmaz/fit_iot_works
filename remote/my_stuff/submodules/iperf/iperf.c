@@ -1,10 +1,11 @@
 #include <stdio.h>
-
+#include <stdarg.h>
 #include "macros/utils.h"
 #include "net/gnrc.h"
 #include "net/sock/udp.h"
 #include "net/gnrc/udp.h"
 #include "net/sock/tcp.h"
+#include "net/gnrc/nettype.h"
 #include "net/utils.h"
 #include "sema_inv.h"
 #include "test_utils/benchmark_udp.h"
@@ -19,6 +20,7 @@
 
 #define IPERF_DEFAULT_PORT 1
 #define IPERF_PAYLOAD_SIZE_MAX 16 
+#define RECEIVER_MSG_QUEUE_SIZE 8
 
 static sock_udp_t udpSock;
 static sock_tcp_t tcpSock;
@@ -32,7 +34,6 @@ static volatile bool running = false;
 static char receiver_thread_stack[THREAD_STACKSIZE_DEFAULT];
 static char sender_thread_stack[THREAD_STACKSIZE_DEFAULT];
 
-#define RECEIVER_MSG_QUEUE_SIZE 8
 static msg_t _msg_queue[RECEIVER_MSG_QUEUE_SIZE];
 
 static IperfConfig_s config;
@@ -75,6 +76,14 @@ typedef struct {
 *
 */
 
+void logprint( const char* format, ... )  // TODO eventually move prints here and enable/disable them on the fly
+{
+    va_list args;
+    va_start( args, format );
+    vprintf( format, args );
+    va_end( args );
+}
+
 // LISTENER
 
 // SOCKLESS 
@@ -104,7 +113,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str, const cha
     unsigned payload_size;
 
     /* allocate payload */
-    payload = gnrc_pktbuf_add(NULL, data, dataLen, GNRC_NETTYPE_IPERF_CTRL);
+    payload = gnrc_pktbuf_add(NULL, data, dataLen, GNRC_NETTYPE_UNDEF);
     if (payload == NULL) {
       printf("[IPERF] Error: unable to copy data to packet buffer\n");
       return 1;
@@ -170,26 +179,17 @@ static void *Iperf_SenderThread(void *arg)
 
   iperf_udp_pkt_t *pl = (void *) &txBuffer;
   pl->seq_no = 0;
-  strncpy(&pl->payload, "ASDQWE", 6);
+  strncpy((char *) &pl->payload, "ASDQWE", 6);
 
   while (running)
   {
-    printf("[IPERF] tx \n");
-
     char *dstAddr;
-    /*char *dstAddr = "fe80::dcdd:aeb8:2ef:4e8c";*/
     dstAddr = "2001::2";
-
-    /*char *testData = "zxcasdqwe\0";*/
-    /*size_t testDataLen = strlen(testData);*/
-    /*int sendRet = socklessUdpSend(dstAddr, "1", testData, testDataLen, 1, 1000000);*/
-
     int sendRet = socklessUdpSend(dstAddr, "1", (char *) pl, 16, 1, 1000000);
-
-    /*printf("%d\n", sendRet);*/
-    ztimer_sleep(ZTIMER_MSEC, 1000);
+    ztimer_sleep(ZTIMER_USEC, delayUs);
     pl->seq_no++;
   }
+  printf("[IPERF] Sender thread exiting");
 }
 
 static int receiverHandlePkt(gnrc_pktsnip_t *pkt)
@@ -213,8 +213,8 @@ static int receiverHandlePkt(gnrc_pktsnip_t *pkt)
           printf("UNDEF\n");
           for (int i = 0; i < snip->size; i++)
           {
-            char *data = * (char *) (snip->data + i);
-            printf("%02x:(%c) %s", data, data, (i % 8 == 0 && i > 0) ? "\n" : "");
+            char data = * (char *) (snip->data + i);
+            printf("%02x %s", data, (i % 8 == 0 && i > 0) ? "\n" : "");
           }
           break;
         }
@@ -271,7 +271,7 @@ static void *Iperf_ReceiverThread(void *arg)
   reply.content.value = (uint32_t)(-ENOTSUP);
   reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
 
-  while (1) {
+  while (running) {
     msg_receive(&msg);
 
     switch (msg.type) {
@@ -293,6 +293,7 @@ static void *Iperf_ReceiverThread(void *arg)
     }
   }
 
+  printf("[IPERF] Receiver thread exiting");
   /* never reached */
   return NULL;
 }
@@ -373,17 +374,35 @@ int Iperf_CmdHandler(int argc, char **argv)
 
   if (strncmp(argv[1], "sender", 16) == 0)
   {
-    printf("[IPERF] STARTING IPERF SENDER AGAINST 2001::2/120\n");
+    printf("[IPERF] STARTING IPERF SENDER AGAINST 2001::2/128\n");
     Iperf_Init(true);
   }
   else if (strncmp(argv[1], "receiver", 16) == 0)
   {
-    printf("[IPERF] STARTING IPERF LISTENER\n");
     Iperf_Init(false);
   }
   else if (strncmp(argv[1], "stop", 16) == 0)
   {
+    if (!running)
+    {
+      return 1;
+    }
     Iperf_Deinit();
+  }
+  else if (strncmp(argv[1], "delay", 16) == 0)
+  {
+    if (argc < 3)
+    {
+      printf("[IPERF] Current delay %d us\n", delayUs);
+      return 0;
+    }
+    if (running)
+    {
+      printf("[IPERF] Need to first stop iperf!\n");
+      return 1;
+    }
+    delayUs = atoi(argv[2]);
+    printf("[IPERF] Set delay to %d us\n", delayUs);
   }
   else
   {
@@ -393,7 +412,7 @@ int Iperf_CmdHandler(int argc, char **argv)
   return 0;
 
 usage:
-  printf("Usage: iperf <sender|receiver>\n");
+  printf("[IPERF] Usage: iperf <sender|receiver|stop|delay>\n");
   return 1;
 }
 

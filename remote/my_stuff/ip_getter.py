@@ -13,6 +13,20 @@ def interact(): # debug
     import code
     code.InteractiveConsole(locals=globals()).interact()
 
+def flushDevice(dev):
+    s = dev["ser"]
+    s.write("\n\n\n".encode())
+    s.read(s.in_waiting)
+    s.reset_input_buffer()
+    s.reset_output_buffer()
+
+def resetDevice(dev):
+    s = dev["ser"]
+    s.write("\n\nreboot\n".encode())
+    s.reset_input_buffer()
+    s.reset_output_buffer()
+    time.sleep(1)
+
 def parseIfconfig(rawStr, dev):
     global ifaceId
     iface = None
@@ -25,6 +39,7 @@ def parseIfconfig(rawStr, dev):
             iface = i.split(" ")[1]
             if (not ifaceId):
                 ifaceId = iface
+                print(f"INTERFACE ID {ifaceId}")
         if ("HWaddr" in i):
             hwaddr = i.split(" ")[2]
             dev["hwaddr"] = hwaddr
@@ -59,16 +74,8 @@ def setRplRoot(dev):
     resp = s.read(s.in_waiting).decode()
     print(">", resp)
 
-def prepSender():
-    pass
-
-def prepReceiver():
-    pass
-
-def prepRouters():
-    pass
-
 def main():
+
     global args
     parser = argparse.ArgumentParser()
     parser.add_argument("sender")
@@ -84,10 +91,14 @@ def main():
 
     devices["sender"] = {"port":args.sender, "id":1, "ser":serial.Serial(args.sender)}
     devices["receiver"] = {"port":args.receiver, "ser":serial.Serial(args.receiver)}
+    flushDevice(devices["sender"])
+    flushDevice(devices["receiver"])
     if (args.router):
         for j, i in enumerate(args.router):
             devices["routers"].append({"port":i, "id":j+2, "ser":serial.Serial(i)})
+            flushDevice(devices["routers"][-1])
             getAddresses(devices["routers"][-1])
+            setGlobalAddress(devices["routers"][-1])
     devices["receiver"]["id"] = len(devices["routers"])+2
 
     getAddresses(devices["sender"])

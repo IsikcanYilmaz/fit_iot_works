@@ -20,15 +20,23 @@
 #include "debug.h"
 
 #define IPERF_DEFAULT_PORT 1
-#define IPERF_PAYLOAD_SIZE_MAX 16 
-#define RECEIVER_MSG_QUEUE_SIZE 8
+#define IPERF_PAYLOAD_DEFAULT_SIZE_BYTES 32
+#define IPERF_PAYLOAD_MAX_SIZE_BYTES 1024
+#define IPERF_DEFAULT_DELAY_US 1000000
+#define IPERF_DEFAULT_PKT_PER_SECOND 
+#define RECEIVER_MSG_QUEUE_SIZE 16
 
 static sock_udp_t udpSock;
 static sock_tcp_t tcpSock;
 static sock_tcp_t controlSock;
 
-static uint32_t pktPerSecond = 0; // TODO
-static uint32_t delayUs = 1000000;
+static IperfConfig_s config = {
+  .payloadSizeBytes = IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
+  .pktPerSecond = 0, // TODO
+  .delayUs = 1000000,
+};
+
+static IperfResults_s results;
 
 static volatile bool running = false;
 
@@ -37,8 +45,6 @@ static char sender_thread_stack[THREAD_STACKSIZE_DEFAULT];
 
 static msg_t _msg_queue[RECEIVER_MSG_QUEUE_SIZE];
 
-static IperfConfig_s config;
-
 static kernel_pid_t sender_pid = 0;
 static kernel_pid_t receiver_pid = 0;
 
@@ -46,40 +52,7 @@ static gnrc_netreg_entry_t server = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX
 
 static bool printEnabled = true;
 
-// Dunno if any of whats below is really needed but lets see how it goe
-/*typedef enum {*/
-/*  IPERF_CTRL_MSG,*/
-/*  IPERF_PAYLOAD_MSG,*/
-/*  IPERF_MSG_TYPE_MAX*/
-/*} IperfMsgType_e;*/
-/**/
-/*typedef enum {*/
-/*  IPERF_BEGIN_MSG,*/
-/*  IPERF_BEGIN_RSP,*/
-/*  IPERF_STOP_MSG,*/
-/*  IPERF_STOP_RSP,*/
-/*  IPERF_CTRL_MSG_MAX*/
-/*} IperfCtrlMsg_e;*/
-
-/*typedef struct */
-/*{*/
-/**/
-/*} IperfExperimentTraffic_t;*/
-
-/*typedef struct {*/
-/*  uint8_t flags;*/
-/*  uint32_t seq_no;*/
-/*  uint8_t payload[];*/
-/*} __attribute__((packed)) iperf_udp_pkt_t;*/
-/**/
-/*
-* Iperf
-*
-*
-*
-*/
-
-void logprint( const char* format, ... )  // TODO eventually move prints here and enable/disable them on the fly
+static void logprint( const char* format, ... )  // TODO eventually move prints here and enable/disable them on the fly
 {
   if (!printEnabled)
   {
@@ -89,6 +62,27 @@ void logprint( const char* format, ... )  // TODO eventually move prints here an
   va_start( args, format );
   vprintf( format, args );
   va_end( args );
+}
+
+static void printConfig(void)
+{
+  logprint("[IPERF] Payload size %d, Pkt per second %d, DelayUs %d, I am %s\n", 
+           config.payloadSizeBytes, config.pktPerSecond, config.delayUs, (config.iAmSender) ? "SENDER" : "RECEIVER");
+}
+
+static void printResults(void)
+{
+  logprint("[IPERF] {\"iAmSender\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numSentPkts\":%d, \"startTimestamp\":%d, \"endTimestamp\":%d, \"timeDiff\":%d}\n", config.iAmSender, results.lastPktSeqNo, results.pktLossCounter, results.numReceivedPkts, results.numSentPkts, results.startTimestamp, results.endTimestamp, results.endTimestamp - results.startTimestamp);
+}
+
+static void setDelayFromPps(uint16_t pktPerSecond)
+{
+
+}
+
+static void setPpsFromDelay(uint32_t delayUs)
+{
+
 }
 
 // LISTENER
@@ -168,8 +162,8 @@ static int socklessUdpSend(const char *addr_str, const char *port_str, const cha
     /* access to `payload` was implicitly given up with the send operation
      * above
      * => use temporary variable for output */
-    logprint("[IPERF] Success: sent %u byte(s) to [%s]:%u\n", payload_size, addr_str,
-           port);
+    logprint("[IPERF] Success: sent %u byte(s) to [%s]:%u\n", payload_size, addr_str, port);
+    results.numSentPkts++;
     if (num) {
       ztimer_sleep(ZTIMER_USEC, delayUs);
     }
@@ -177,24 +171,29 @@ static int socklessUdpSend(const char *addr_str, const char *port_str, const cha
   return 0;
 }
 
-static uint32_t seqCounter = 0;
-static uint16_t lossCounter = 0;
 static int receiverHandleIperfPayload(gnrc_pktsnip_t *pkt)
 {
   iperf_udp_pkt_t *iperfPl = (iperf_udp_pkt_t *) pkt;
   logprint("Received seq no %d\n", iperfPl->seq_no);
   logprint("Payload %s\n", iperfPl->payload);
-  logprint("Losses %d\n", lossCounter);
-  if (seqCounter == iperfPl->seq_no - 1)
+  logprint("Losses %d\n", results.pktLossCounter);
+  if (results.lastPktSeqNo == iperfPl->seq_no - 1)
   {
     // No loss
   }
   else
   {
     // Loss happened
-    lossCounter += seqCounter - iperfPl->seq_no;
+    results.pktLossCounter += (iperfPl->seq_no - results.lastPktSeqNo);
+    printf("LOSS %d (%d - %d) \n", results.pktLossCounter, iperfPl->seq_no, results.lastPktSeqNo);
   }
-  seqCounter = iperfPl->seq_no;
+  results.lastPktSeqNo = iperfPl->seq_no;
+  results.numReceivedPkts++;
+  results.endTimestamp = ztimer_now(ZTIMER_USEC);
+  if (results.numReceivedPkts == 1)
+  {
+    results.startTimestamp = results.endTimestamp;
+  }
 }
 
 static int receiverHandlePkt(gnrc_pktsnip_t *pkt)
@@ -221,6 +220,7 @@ static int receiverHandlePkt(gnrc_pktsnip_t *pkt)
             char data = * (char *) (snip->data + i);
             logprint("%02x(%c) %s", data, data, (i % 8 == 0 && i > 0) ? "\n" : "");
           }
+          logprint("\n");
           receiverHandleIperfPayload((iperf_udp_pkt_t *) snip->data);
           break;
         }
@@ -303,8 +303,8 @@ static void *Iperf_SenderThread(void *arg)
 {
   /*sock_udp_ep_t remote = * (sock_udp_ep_t *) ctx;*/
   logprint("[IPERF] %s Thread start\n", __FUNCTION__);
-  uint8_t txBuffer[IPERF_PAYLOAD_SIZE_MAX];
-  memset(&txBuffer, 0x00, IPERF_PAYLOAD_SIZE_MAX);
+  uint8_t txBuffer[config.payloadSizeBytes];
+  memset(&txBuffer, 0x00, config.payloadSizeBytes);
 
   iperf_udp_pkt_t *pl = (void *) &txBuffer;
 
@@ -314,14 +314,16 @@ static void *Iperf_SenderThread(void *arg)
   pl->seq_no = 0;
   pl->pl_size = 16;
 
+  results.startTimestamp = ztimer_now(ZTIMER_USEC);
   while (running)
   {
     char *dstAddr;
     dstAddr = "2001::2";
-    int sendRet = socklessUdpSend(dstAddr, "1", (char *) pl, 32, 1, delayUs);
-    ztimer_sleep(ZTIMER_USEC, delayUs);
+    int sendRet = socklessUdpSend(dstAddr, "1", (char *) pl, 32, 1, config.delayUs);
+    ztimer_sleep(ZTIMER_USEC, config.delayUs);
     pl->seq_no++;
   }
+  results.endTimestamp = ztimer_now(ZTIMER_USEC);
   logprint("[IPERF] Sender thread exiting");
 }
 
@@ -341,7 +343,7 @@ static void *Iperf_ReceiverThread(void *arg)
 
     switch (msg.type) {
       case GNRC_NETAPI_MSG_TYPE_RCV:
-        logprint("[IPERF] Data received");
+        logprint("[IPERF] Data received\n");
         receiverHandlePkt(msg.content.ptr);
         break;
       case GNRC_NETAPI_MSG_TYPE_SND:
@@ -370,11 +372,13 @@ int Iperf_Init(bool iAmSender)
     logprint("[IPERF] Already running!\n");
     return 1;
   }
-  lossCounter = 0;
-  seqCounter = 0;
+
+  // Reset our results and config structs
+  memset(&results, 0x00, sizeof(IperfResults_s));
+
   config.iAmSender = iAmSender;
-  config.senderPort = 1; // TODO make more generic? 
-  config.listenerPort = 1;
+  config.senderPort = IPERF_DEFAULT_PORT; // TODO make more generic? 
+  config.listenerPort = IPERF_DEFAULT_PORT;
  
   running = true;
   if (!iAmSender)
@@ -427,7 +431,7 @@ int Iperf_CmdHandler(int argc, char **argv)
   {
     if (argc < 3)
     {
-      logprint("[IPERF] Current delay %d us\n", delayUs);
+      logprint("[IPERF] Current delay %d us\n", config.delayUs);
       return 0;
     }
     if (running)
@@ -435,13 +439,54 @@ int Iperf_CmdHandler(int argc, char **argv)
       logprint("[IPERF] Need to first stop iperf!\n");
       return 1;
     }
-    delayUs = atoi(argv[2]);
-    logprint("[IPERF] Set delay to %d us\n", delayUs);
+    config.delayUs = atoi(argv[2]);
+    logprint("[IPERF] Set delay to %d us\n", config.delayUs);
   }
   else if (strncmp(argv[1], "toggleprint", 16) == 0)
   {
     logprint("[IPERF] Toggling iperf prints\n");
     printEnabled = !printEnabled;
+  }
+  else if (strncmp(argv[1], "config", 16) == 0)
+  {
+    if (argc < 3)
+    {
+      printConfig();
+      return 0;
+    }
+    else
+    {
+      if (running)
+      {
+        logprint("[IPERF] Stop iperf first!");
+        return 1;
+      }
+      if (strncmp(argv[2], "payloadsize", 16) == 0)
+      {
+        config.payloadSizeBytes = atoi(argv[3]);
+        logprint("[IPERF] Set payloadSizeBytes to %d\n", config.payloadSizeBytes);
+      }
+      else if (strncmp(argv[2], "pktpersecond", 16) == 0)
+      {
+        config.pktPerSecond = atoi(argv[3]);
+        logprint("[IPERF] Set pktpersecond to %d\n", config.pktPerSecond);
+      }
+      else if (strncmp(argv[2], "delayus", 16) == 0)
+      {
+        config.delayUs = atoi(argv[3]);
+        logprint("[IPERF] Set delayus to %d\n", config.delayUs);
+      }
+      else
+      {
+        logprint("[IPERF] Wrong config parameter %s. Available options:\npayloadsize, pktpersecond, delayus\n", argv[2]);
+        return 1;
+      }
+      printConfig();
+    }
+  }
+  else if (strncmp(argv[1], "results", 16) == 0)
+  {
+    printResults();
   }
   else
   {
@@ -451,7 +496,7 @@ int Iperf_CmdHandler(int argc, char **argv)
   return 0;
 
 usage:
-  logprint("[IPERF] Usage: iperf <sender|receiver|stop|delay|toggleprint>\n");
+  logprint("[IPERF] Usage: iperf <sender|receiver|stop|delay|toggleprint|config|results>\n");
   return 1;
 }
 

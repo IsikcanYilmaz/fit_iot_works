@@ -75,7 +75,6 @@ def setRplRoot(dev):
     print(">", resp)
 
 def main():
-
     global args
     parser = argparse.ArgumentParser()
     parser.add_argument("sender")

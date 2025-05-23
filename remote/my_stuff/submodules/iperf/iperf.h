@@ -1,7 +1,5 @@
 #include <stdbool.h>
 
-
-
 typedef enum
 {
   IPERF_MODE_TIMED,
@@ -20,8 +18,19 @@ typedef struct
   char *listenerIpStr;
 
   uint16_t payloadSizeBytes;
-  uint16_t packetsPerSecond;
+  uint16_t pktPerSecond;
+  uint32_t delayUs;
 
   IperfMode_e mode;
 
 } IperfConfig_s;
+
+typedef struct
+{
+  uint32_t lastPktSeqNo;
+  uint32_t pktLossCounter;
+  uint32_t numReceivedPkts;
+  uint32_t numSentPkts;
+  uint32_t startTimestamp;
+  uint32_t endTimestamp;
+} IperfResults_s;

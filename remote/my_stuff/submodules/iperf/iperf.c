@@ -34,6 +34,7 @@ static IperfConfig_s config = {
   .payloadSizeBytes = IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
   .delayUs = 1000000,
+  .mode = IPERF_MODE_SIZE,
 };
 
 static IperfResults_s results;
@@ -64,15 +65,36 @@ static void logprint( const char* format, ... )  // TODO eventually move prints 
   va_end( args );
 }
 
-static void printConfig(void)
+static void printConfig(bool json)
 {
-  logprint("[IPERF] Payload size %d, Pkt per second %d, DelayUs %d, I am %s\n", 
-           config.payloadSizeBytes, config.pktPerSecond, config.delayUs, (config.iAmSender) ? "SENDER" : "RECEIVER");
+  if (json)
+  {
+    logprint("{\"iAmSender\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d}\n", 
+           config.iAmSender, config.payloadSizeBytes, config.pktPerSecond, config.delayUs);
+  }
+  else
+  {
+    logprint("[IPERF] I am %s, Payload size %d, Pkt per second %d, DelayUs %d\n", 
+          (config.iAmSender) ? "SENDER" : "RECEIVER", config.payloadSizeBytes, config.pktPerSecond, config.delayUs);
+  }
 }
 
-static void printResults(void)
+static void printResults(bool json)
 {
-  logprint("[IPERF] {\"iAmSender\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numSentPkts\":%d, \"startTimestamp\":%d, \"endTimestamp\":%d, \"timeDiff\":%d}\n", config.iAmSender, results.lastPktSeqNo, results.pktLossCounter, results.numReceivedPkts, results.numSentPkts, results.startTimestamp, results.endTimestamp, results.endTimestamp - results.startTimestamp);
+    logprint((json) ? \
+             "{\"iAmSender\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numReceivedGoodBytes\":%d, \"numDuplicates\":%d, \"numSentPkts\":%d, \"startTimestamp\":%d, \"endTimestamp\":%d, \"timeDiff\":%d}\n" : \
+             "iAmSender:%d\nlastPktSeqNo:%d\npktLossCounter:%d\nnumReceivedPkts:%d\nnumReceivedBytes:%d\nnumReceivedGoodBytes:%d\nnumDuplicates:%d\nnumSentPkts:%d\nstartTimestamp:%d\nendTimestamp:%d\ntimeDiff:%d\n", \
+             config.iAmSender, \
+             results.lastPktSeqNo, \
+             results.pktLossCounter, \
+             results.numReceivedPkts, \
+             results.numReceivedBytes, \
+             results.numReceivedGoodBytes, \
+             results.numDuplicates, \
+             results.numSentPkts, \
+             results.startTimestamp, \
+             results.endTimestamp, \
+             results.endTimestamp - results.startTimestamp);
 }
 
 static void setDelayFromPps(uint16_t pktPerSecond)
@@ -177,18 +199,28 @@ static int receiverHandleIperfPayload(gnrc_pktsnip_t *pkt)
   logprint("Received seq no %d\n", iperfPl->seq_no);
   logprint("Payload %s\n", iperfPl->payload);
   logprint("Losses %d\n", results.pktLossCounter);
+  logprint("Dups %d\n", results.numDuplicates);
   if (results.lastPktSeqNo == iperfPl->seq_no - 1)
   {
     // No loss
+    results.lastPktSeqNo = iperfPl->seq_no;
+    results.numReceivedGoodBytes += pkt->size;
   }
-  else
+  else if (results.lastPktSeqNo == iperfPl->seq_no)
+  {
+    // Duplicate
+    printf("DUP %d\n", iperfPl->seq_no);
+    results.numDuplicates++;
+  }
+  else if (results.lastPktSeqNo < iperfPl->seq_no)
   {
     // Loss happened
     results.pktLossCounter += (iperfPl->seq_no - results.lastPktSeqNo);
-    printf("LOSS %d (%d - %d) \n", results.pktLossCounter, iperfPl->seq_no, results.lastPktSeqNo);
+    printf("LOSS %d pkts \n", iperfPl->seq_no - results.lastPktSeqNo);
+    results.lastPktSeqNo = iperfPl->seq_no;
   }
-  results.lastPktSeqNo = iperfPl->seq_no;
   results.numReceivedPkts++;
+  results.numReceivedBytes += pkt->size;
   results.endTimestamp = ztimer_now(ZTIMER_USEC);
   if (results.numReceivedPkts == 1)
   {
@@ -204,7 +236,7 @@ static int receiverHandlePkt(gnrc_pktsnip_t *pkt)
   logprint("[IPERF] Handle packet\n");
   while(snip != NULL)
   {
-    logprint("SNIP %d. %d bytes. type: %d ", snips, snip->size, snip->type);
+    /*logprint("SNIP %d. %d bytes. type: %d ", snips, snip->size, snip->type);*/
     switch(snip->type)
     {
       case GNRC_NETTYPE_NETIF:
@@ -215,13 +247,13 @@ static int receiverHandlePkt(gnrc_pktsnip_t *pkt)
       case GNRC_NETTYPE_UNDEF:  // APP PAYLOAD HERE
         {
           logprint("UNDEF\n");
-          for (int i = 0; i < snip->size; i++)
-          {
-            char data = * (char *) (snip->data + i);
-            logprint("%02x(%c) %s", data, data, (i % 8 == 0 && i > 0) ? "\n" : "");
-          }
-          logprint("\n");
-          receiverHandleIperfPayload((iperf_udp_pkt_t *) snip->data);
+          /*for (int i = 0; i < snip->size; i++)*/
+          /*{*/
+          /*  char data = * (char *) (snip->data + i);*/
+          /*  logprint("%02x(%c) %s", data, data, (i % 8 == 0 && i > 0) ? "\n" : "");*/
+          /*}*/
+          /*logprint("\n");*/
+          receiverHandleIperfPayload(snip->data);
           break;
         }
       case GNRC_NETTYPE_SIXLOWPAN:
@@ -301,7 +333,6 @@ static int stopUdpServer(void)
 
 static void *Iperf_SenderThread(void *arg)
 {
-  /*sock_udp_ep_t remote = * (sock_udp_ep_t *) ctx;*/
   logprint("[IPERF] %s Thread start\n", __FUNCTION__);
   uint8_t txBuffer[config.payloadSizeBytes];
   memset(&txBuffer, 0x00, config.payloadSizeBytes);
@@ -451,7 +482,7 @@ int Iperf_CmdHandler(int argc, char **argv)
   {
     if (argc < 3)
     {
-      printConfig();
+      printConfig(false);
       return 0;
     }
     else
@@ -481,12 +512,19 @@ int Iperf_CmdHandler(int argc, char **argv)
         logprint("[IPERF] Wrong config parameter %s. Available options:\npayloadsize, pktpersecond, delayus\n", argv[2]);
         return 1;
       }
-      printConfig();
+      printConfig(false);
     }
   }
   else if (strncmp(argv[1], "results", 16) == 0)
   {
-    printResults();
+    if (argc > 2 && strncmp(argv[2], "json", 16) == 0)
+    {
+      printResults(true);
+    }
+    else
+    {
+      printResults(false);
+    }
   }
   else
   {

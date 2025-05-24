@@ -23,6 +23,12 @@ typedef struct
 
   IperfMode_e mode;
 
+  // TIMED MODE
+  uint32_t transferTimeUs;
+
+  // SIZE MODE
+  uint32_t transferSizeBytes;
+
 } IperfConfig_s;
 
 typedef struct
@@ -30,6 +36,9 @@ typedef struct
   uint32_t lastPktSeqNo;
   uint32_t pktLossCounter;
   uint32_t numReceivedPkts;
+  uint32_t numReceivedBytes;
+  uint32_t numReceivedGoodBytes;
+  uint32_t numDuplicates;
   uint32_t numSentPkts;
   uint32_t startTimestamp;
   uint32_t endTimestamp;

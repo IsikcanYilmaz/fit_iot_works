@@ -40,6 +40,10 @@ typedef struct
   uint32_t numReceivedGoodBytes;
   uint32_t numDuplicates;
   uint32_t numSentPkts;
+  uint32_t numSentBytes;
   uint32_t startTimestamp;
   uint32_t endTimestamp;
 } IperfResults_s;
+
+int Iperf_Deinit(void);
+int Iperf_Init(bool iAmSender);

@@ -12,7 +12,7 @@ typedef enum {
 } IperfCtrlMsgList_e;
 
 typedef struct {
-  uint32_t seq_no;   // 4
+  uint16_t seq_no;   // 4
   uint16_t pl_size;  // 2 
   uint8_t payload[]; // *
 } __attribute__((packed)) iperf_udp_pkt_t;

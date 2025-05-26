@@ -244,24 +244,25 @@ static int receiverHandleIperfPayload(gnrc_pktsnip_t *pkt)
   logverbose("Received seq no %d\nPayload %s\nLosses %d\nDups %d\n", iperfPl->seq_no, iperfPl->payload, results.pktLossCounter, results.numDuplicates);
 
 
-  if (results.lastPktSeqNo == iperfPl->seq_no - 1)
-  {
-    // No loss
-    results.lastPktSeqNo = iperfPl->seq_no;
-  }
-  else if (results.lastPktSeqNo == iperfPl->seq_no && results.lastPktSeqNo != 0)
-  {
-    // Duplicate
-    logverbose("DUP %d\n", iperfPl->seq_no);
-    results.numDuplicates++;
-  }
-  else if (results.lastPktSeqNo < iperfPl->seq_no)
-  {
-    // Loss happened
-    results.pktLossCounter += (iperfPl->seq_no - results.lastPktSeqNo);
-    logverbose("LOSS %d pkts \n", iperfPl->seq_no - results.lastPktSeqNo);
-    results.lastPktSeqNo = iperfPl->seq_no;
-  }
+  /*if (results.lastPktSeqNo == iperfPl->seq_no - 1)*/
+  /*{*/
+  /*  // No loss*/
+  /*  results.lastPktSeqNo = iperfPl->seq_no;*/
+  /*}*/
+  /*else if (results.lastPktSeqNo == iperfPl->seq_no && results.lastPktSeqNo != 0)*/
+  /*{*/
+  /*  // Duplicate*/
+  /*  logverbose("DUP %d\n", iperfPl->seq_no);*/
+  /*  results.numDuplicates++;*/
+  /*}*/
+  /*else if (results.lastPktSeqNo < iperfPl->seq_no)*/
+  /*{*/
+  /*  // Loss happened*/
+  /*  results.pktLossCounter += (iperfPl->seq_no - results.lastPktSeqNo);*/
+  /*  logverbose("LOSS %d pkts \n", iperfPl->seq_no - results.lastPktSeqNo);*/
+  /*  results.lastPktSeqNo = iperfPl->seq_no;*/
+  /*}*/
+
 
    
 

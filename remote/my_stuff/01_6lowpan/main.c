@@ -59,7 +59,7 @@ int main(void)
 
   // Thread initializations
   kernel_pid_t buttonThreadId = Button_Init(experimentThreadId);
-  kernel_pid_t neopixelThreadId = Neopixel_Init(experimentThreadId);
+  /*kernel_pid_t neopixelThreadId = Neopixel_Init(experimentThreadId);*/
   OnboardLeds_Init();
   Throttler_Init();
 

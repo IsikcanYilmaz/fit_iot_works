@@ -13,7 +13,7 @@ def rebootAll(portList):
             i = os.readlink(i)
         try:
             print(i)
-            ser = serial.Serial(i)
+            ser = serial.Serial(i, timeout=TIMEOUT_S, writeTimeout=TIMEOUT_S)
             ser.write("\n\nreboot\n".encode())
             ser.close()
             time.sleep(1)

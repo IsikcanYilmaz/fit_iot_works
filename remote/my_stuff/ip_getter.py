@@ -31,7 +31,8 @@ def parseIfconfig(rawStr, dev):
     global ifaceId
     iface = None
     hwaddr = None
-    linkLocal = None
+    linkLocalAddr = None
+    globalAddr = None
     for i in rawStr.replace("  ", " ").split("\n"):
         i = i.lstrip()
         # print(i)
@@ -44,8 +45,12 @@ def parseIfconfig(rawStr, dev):
             hwaddr = i.split(" ")[2]
             dev["hwaddr"] = hwaddr
         if ("fe80" in i):
-            linkLocal = i.split(" ")[2]
-            dev["linkLocal"] = linkLocal
+            linkLocalAddr = i.split(" ")[2]
+            dev["linkLocalAddr"] = linkLocalAddr
+        if ("global" in i):
+            globalAddr = i.split(" ")[2]
+            dev["globalAddr"] = globalAddr
+            
     # print(f"IFACE {iface}")
     # print(f"HWADDR {hwaddr}")
     # print(f"LINK LOCAL {linkLocal}")
@@ -66,6 +71,22 @@ def setGlobalAddress(dev):
     resp = s.read(s.in_waiting).decode()
     print(">", resp)
 
+def unsetGlobalAddress(dev):
+    s = dev["ser"]
+    s.reset_input_buffer()
+    s.write(f"ifconfig {ifaceId} del {dev['globalAddr']} \n".encode())
+    time.sleep(0.1)
+    resp = s.read(s.in_waiting).decode()
+    print(">", resp)
+
+def unsetRpl(dev):
+    s = dev['ser']
+    s.reset_input_buffer()
+    s.write(f"rpl rm {ifaceId}\n".encode())
+    time.sleep(0.1)
+    resp = s.read(s.in_waiting).decode()
+    print(">", resp)
+
 def setRplRoot(dev):
     s = dev["ser"]
     s.reset_input_buffer()
@@ -80,7 +101,7 @@ def main():
     parser.add_argument("sender")
     parser.add_argument("receiver")
     parser.add_argument("-r", "--router", nargs="*")
-    parser.add_argument("--rpl", type=bool, default=True)
+    parser.add_argument("--rpl", action="store_true", default=True)
     parser.add_argument("--manual_route", type=bool, default=False)
     parser.add_argument("--fitiot", type=bool, default=False)
     args = parser.parse_args()
@@ -92,26 +113,38 @@ def main():
     devices["receiver"] = {"port":args.receiver, "ser":serial.Serial(args.receiver)}
     flushDevice(devices["sender"])
     flushDevice(devices["receiver"])
+
+    getAddresses(devices["sender"])
+    getAddresses(devices["receiver"])
+
+    unsetRpl(devices["receiver"])
+    unsetRpl(devices["sender"])
+
+    if ("globalAddr" in devices["sender"]): # TODO still needs some work: if one of the devices reboots, its easier to reboot every device and have them go thru this script all over again
+        unsetGlobalAddress(devices["sender"])
+
+    if ("globalAddr" in devices["receiver"]):
+        unsetGlobalAddress(devices["receiver"])
+
     if (args.router):
         for j, i in enumerate(args.router):
             devices["routers"].append({"port":i, "id":j+2, "ser":serial.Serial(i)})
             flushDevice(devices["routers"][-1])
             getAddresses(devices["routers"][-1])
+            if ("globalAddr" in devices["routers"][-1]):
+                unsetGlobalAddress(devices["receiver"])
             setGlobalAddress(devices["routers"][-1])
     devices["receiver"]["id"] = len(devices["routers"])+2
-
-    getAddresses(devices["sender"])
-    getAddresses(devices["receiver"])
 
     setGlobalAddress(devices["sender"])
     setGlobalAddress(devices["receiver"])
 
-    setRplRoot(devices["sender"])
+    if (args.rpl):
+        setRplRoot(devices["sender"])
+    else:
+        pass
 
     pprint(devices)
-
-
-
 
 if __name__ == "__main__":
     main()

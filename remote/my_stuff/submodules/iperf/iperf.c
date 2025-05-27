@@ -106,7 +106,7 @@ static void _logprint(LogprintTag_e tag, const char* format, ... )
 static void printConfig(bool json)
 {
   loginfo((json) ? "{\"iAmSender\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d}\n" : \
-           "Sender %d, Payload size %d, Pkt per second %d, DelayUs %d, Mode %d, Transfer Size %d, Transfer Time %d\n", 
+           "iAmSender: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\n", 
            config.iAmSender, 
            config.payloadSizeBytes, 
            config.pktPerSecond, 
@@ -598,6 +598,11 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       printConfig(false);
       return 0;
     }
+    else if (strncmp(argv[2], "json", 16) == 0)
+    {
+      printConfig(true);
+      return 0;
+    }
     else
     {
       if (running)
@@ -605,45 +610,64 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
         logerror("Stop iperf first!");
         return 1;
       }
-      if (strncmp(argv[2], "payloadsize", 16) == 0)
+      uint8_t argIdx = 2;
+      while (argIdx < argc)
       {
-        config.payloadSizeBytes = atoi(argv[3]);
-        loginfo("Set payloadSizeBytes to %d\n", config.payloadSizeBytes);
-      }
-      else if (strncmp(argv[2], "pktpersecond", 16) == 0)
-      {
-        config.pktPerSecond = atoi(argv[3]);
-        loginfo("Set pktpersecond to %d\n", config.pktPerSecond);
-      }
-      else if (strncmp(argv[2], "delayus", 16) == 0)
-      {
-        config.delayUs = atoi(argv[3]);
-        loginfo("Set delayus to %d\n", config.delayUs);
-      }
-      else if (strncmp(argv[2], "transfertimeus", 16) == 0)
-      {
-        config.transferTimeUs = atoi(argv[3]);
-        loginfo("Set transferTimeUs to %d\n", config.transferTimeUs);
-      }
-      else if (strncmp(argv[2], "transfersizebytes", 16) == 0)
-      {
-        config.transferSizeBytes = atoi(argv[3]);
-        loginfo("Set transferSizeBytes to %d\n", config.transferSizeBytes);
-      }
-      else if (strncmp(argv[2], "mode", 16) == 0)
-      {
-        uint8_t newMode = atoi(argv[3]);
-        if (newMode < IPERF_MODE_MAX)
+
+        if (strncmp(argv[argIdx], "payloadsizebytes", 16) == 0)
         {
-          config.mode = newMode;
-          loginfo("Set mode to %d\n", config.mode);
+          config.payloadSizeBytes = atoi(argv[argIdx+1]);
+          loginfo("Set payloadSizeBytes to %d\n", config.payloadSizeBytes);
+          argIdx+=2;
+          continue;
         }
+        else if (strncmp(argv[argIdx], "pktpersecond", 16) == 0)
+        {
+          config.pktPerSecond = atoi(argv[argIdx+1]);
+          loginfo("Set pktpersecond to %d\n", config.pktPerSecond);
+          argIdx+=2;
+          continue;
+        }
+        else if (strncmp(argv[argIdx], "delayus", 16) == 0)
+        {
+          config.delayUs = atoi(argv[argIdx+1]);
+          loginfo("Set delayus to %d\n", config.delayUs);
+          argIdx+=2;
+          continue;
+        }
+        else if (strncmp(argv[argIdx], "transfertimeus", 16) == 0)
+        {
+          config.transferTimeUs = atoi(argv[argIdx+1]);
+          loginfo("Set transferTimeUs to %d\n", config.transferTimeUs);
+          argIdx+=2;
+          continue;
+        }
+        else if (strncmp(argv[argIdx], "transfersizebytes", 16) == 0)
+        {
+          config.transferSizeBytes = atoi(argv[argIdx+1]);
+          loginfo("Set transferSizeBytes to %d\n", config.transferSizeBytes);
+          argIdx+=2;
+          continue;
+        }
+        else if (strncmp(argv[argIdx], "mode", 16) == 0)
+        {
+          uint8_t newMode = atoi(argv[argIdx+1]);
+          if (newMode < IPERF_MODE_MAX)
+          {
+            config.mode = newMode;
+            loginfo("Set mode to %d\n", config.mode);
+            argIdx+=2;
+            continue;
+          }
+        }
+        else
+        {
+          logerror("Wrong config parameter %s. Available options:\npayloadsize, pktpersecond, delayus, transfertimeus, transfersizebytes, mode\n", argv[argIdx]);
+          /*return 1;*/
+        }
+        argIdx++;
       }
-      else
-      {
-        logerror("Wrong config parameter %s. Available options:\npayloadsize, pktpersecond, delayus, transfertimeus, transfersizebytes, mode\n", argv[2]);
-        return 1;
-      }
+
       printConfig(false);
     }
   }

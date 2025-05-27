@@ -95,6 +95,15 @@ def setRplRoot(dev):
     resp = s.read(s.in_waiting).decode()
     print(">", resp)
 
+def pingTest(srcDev, dstDev):
+    srcS = srcDev["ser"]
+    dstIp = dstDev["globalAddr"]
+    srcS.reset_input_buffer()
+    srcS.write(f"ping {dstIp}\n".encode())
+    time.sleep(5)
+    resp = srcS.read(srcS.in_waiting).decode()
+    print(">", resp)
+
 def main():
     global args
     parser = argparse.ArgumentParser()
@@ -134,16 +143,20 @@ def main():
             if ("globalAddr" in devices["routers"][-1]):
                 unsetGlobalAddress(devices["receiver"])
             setGlobalAddress(devices["routers"][-1])
+            getAddresses(devices["routers"][-1])
     devices["receiver"]["id"] = len(devices["routers"])+2
 
     setGlobalAddress(devices["sender"])
+    getAddresses(devices["sender"])
     setGlobalAddress(devices["receiver"])
+    getAddresses(devices["receiver"]) # may not be needed? 
 
     if (args.rpl):
         setRplRoot(devices["sender"])
+        pingTest(devices["sender"], devices["receiver"])
     else:
         pass
-
+    
     pprint(devices)
 
 if __name__ == "__main__":

@@ -243,28 +243,28 @@ static int receiverHandleIperfPayload(gnrc_pktsnip_t *pkt)
   iperf_udp_pkt_t *iperfPl = (iperf_udp_pkt_t *) pkt;
   logverbose("Received seq no %d\nPayload %s\nLosses %d\nDups %d\n", iperfPl->seq_no, iperfPl->payload, results.pktLossCounter, results.numDuplicates);
 
+  if (results.lastPktSeqNo == iperfPl->seq_no - 1)
+  {
+    // NO LOSS 
+    results.lastPktSeqNo = iperfPl->seq_no;
+    logverbose("RX %d\n", iperfPl->seq_no);
+  }
+  else if (receivedPktIds[iperfPl->seq_no])
+  {
+    // Dup
+    results.numDuplicates++;
+    logverbose("DUP %d\n", iperfPl->seq_no);
+  }
+  else if (results.lastPktSeqNo < iperfPl->seq_no)
+  {
+    // Loss happened
+    uint16_t lostPkts = (iperfPl->seq_no - results.lastPktSeqNo);
+    results.pktLossCounter += lostPkts;
+    results.lastPktSeqNo = iperfPl->seq_no;
+    logverbose("LOSS %d pkts \n", lostPkts);
+  }
 
-  /*if (results.lastPktSeqNo == iperfPl->seq_no - 1)*/
-  /*{*/
-  /*  // No loss*/
-  /*  results.lastPktSeqNo = iperfPl->seq_no;*/
-  /*}*/
-  /*else if (results.lastPktSeqNo == iperfPl->seq_no && results.lastPktSeqNo != 0)*/
-  /*{*/
-  /*  // Duplicate*/
-  /*  logverbose("DUP %d\n", iperfPl->seq_no);*/
-  /*  results.numDuplicates++;*/
-  /*}*/
-  /*else if (results.lastPktSeqNo < iperfPl->seq_no)*/
-  /*{*/
-  /*  // Loss happened*/
-  /*  results.pktLossCounter += (iperfPl->seq_no - results.lastPktSeqNo);*/
-  /*  logverbose("LOSS %d pkts \n", iperfPl->seq_no - results.lastPktSeqNo);*/
-  /*  results.lastPktSeqNo = iperfPl->seq_no;*/
-  /*}*/
-
-
-   
+  receivedPktIds[iperfPl->seq_no] = true;
 
   results.numReceivedPkts++;
   results.endTimestamp = ztimer_now(ZTIMER_USEC);

@@ -10,7 +10,7 @@ from common import *
 from pprint import pprint
 
 SERIAL_TIMEOUT_S = 10
-EXPERIMENT_TIMEOUT_S = 60
+EXPERIMENT_TIMEOUT_S = 60*3
 
 devices = {'sender':None, 'receiver':None, 'routers':[]}
 ifaceId = None # We assume this is the same number for all devices
@@ -130,20 +130,22 @@ def experiment(mode=1, delayus=10000, payloadsizebytes=32, transfersizebytes=409
 
     print("----------------")
 
-def bulkExperiments():
-    experiment(1, 1000000, 32, 1024, "results")
+def bulkExperiments(resultsDir):
+    experiment(1, 1000000, 32, 1024, resultsDir)
     time.sleep(1)
-    # experiment(1, 750000, 32, 1024, "results")
-    # time.sleep(1)
-    # experiment(1, 500000, 32, 1024, "results")
-    # time.sleep(1)
-    # experiment(1, 250000, 32, 1024, "results")
-    # time.sleep(1)
-    # experiment(1, 100000, 32, 1024, "results")
-    # time.sleep(1)
-    # experiment(1, 50000, 32, 1024, "results")
-    # time.sleep(1)
-    # experiment(1, 10000, 32, 1024, "results")
+    experiment(1, 750000, 32, 1024, resultsDir)
+    time.sleep(1)
+    experiment(1, 500000, 32, 1024, resultsDir)
+    time.sleep(1)
+    experiment(1, 250000, 32, 1024, resultsDir)
+    time.sleep(1)
+    experiment(1, 100000, 32, 1024, resultsDir)
+    time.sleep(1)
+    experiment(1, 50000, 32, 1024, resultsDir)
+    time.sleep(1)
+    experiment(1, 10000, 32, 1024, resultsDir)
+    time.sleep(1)
+    experiment(1, 5000, 32, 1024, resultsDir)
 
 def main():
     global args
@@ -155,6 +157,7 @@ def main():
     parser.add_argument("--experiment", action="store_true", default=False)
     parser.add_argument("--manual_route", type=bool, default=False)
     parser.add_argument("--fitiot", type=bool, default=False)
+    parser.add_argument("--results_dir", type=str)
     args = parser.parse_args()
 
     print(f"SENDER {args.sender}, RECEIVER {args.receiver}, ROUTER(s) {args.router}")
@@ -202,7 +205,7 @@ def main():
     pprint(devices)
 
     if (args.experiment):
-        bulkExperiments()
+        bulkExperiments(resultsDir=(args.results_dir if args.results_dir else "../results/"))
     
 
 if __name__ == "__main__":

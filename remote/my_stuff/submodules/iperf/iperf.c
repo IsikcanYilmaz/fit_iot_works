@@ -613,7 +613,6 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       uint8_t argIdx = 2;
       while (argIdx < argc)
       {
-
         if (strncmp(argv[argIdx], "payloadsizebytes", 16) == 0)
         {
           config.payloadSizeBytes = atoi(argv[argIdx+1]);

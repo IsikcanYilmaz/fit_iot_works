@@ -105,7 +105,7 @@ static void _logprint(LogprintTag_e tag, const char* format, ... )
 
 static void printConfig(bool json)
 {
-  loginfo((json) ? "{\"iAmSender\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d}\n" : \
+  printf((json) ? "{\"iAmSender\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d}\n" : \
            "iAmSender: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\n", 
            config.iAmSender, 
            config.payloadSizeBytes, 
@@ -118,9 +118,9 @@ static void printConfig(bool json)
 
 static void printResults(bool json)
 {
-  loginfo((json) ? \
-           "{\"iAmSender\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"numSentPkts\":%d, \"numSentBytes\":%d, \"startTimestamp\":%i, \"endTimestamp\":%i, \"timeDiff\":%d}\n" : \
-           "Results\niAmSender           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nnumSentPkts         :%d\nnumSentBytes        :%d\nstartTimestamp      :%i\nendTimestamp        :%i\ntimeDiff            :%d\n", \
+  printf((json) ? \
+           "{\"iAmSender\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"numSentPkts\":%d, \"numSentBytes\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu}\n" : \
+           "Results\niAmSender           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nnumSentPkts         :%d\nnumSentBytes        :%d\nstartTimestamp      :%lu\nendTimestamp        :%lu\ntimeDiff            :%lu\n", \
            config.iAmSender, \
            results.lastPktSeqNo, \
            results.pktLossCounter, \
@@ -133,6 +133,15 @@ static void printResults(bool json)
            results.endTimestamp, \
            results.endTimestamp - results.startTimestamp);
 }
+
+static void printAll(void)
+{
+  printf("{\"config\": ");
+  printConfig(true);
+  printf(",\"results\" : ");
+  printResults(true);
+  printf("}\n");
+} 
 
 static void setDelayFromPps(uint16_t pktPerSecond)
 {
@@ -677,6 +686,10 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       if (strncmp(argv[2], "json", 16) == 0)
       {
         printResults(true);
+      }
+      else if (strncmp(argv[2], "all", 16) == 0)
+      {
+        printAll();
       }
       else if (strncmp(argv[2], "reset", 16) == 0)
       {

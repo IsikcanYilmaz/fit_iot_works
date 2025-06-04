@@ -9,6 +9,7 @@ import pdb
 from common import *
 from pprint import pprint
 
+DEFAULT_RESULTS_DIR = "./results/"
 SERIAL_TIMEOUT_S = 10
 EXPERIMENT_TIMEOUT_S = 60*10
 
@@ -63,6 +64,48 @@ def unsetRpl(dev):
 def setRplRoot(dev):
     outStrRaw = sendSerialCommand(dev, f"rpl root {ifaceId} 2001::{dev['id']}")
     print(">", outStrRaw)
+
+def unsetRoutes(dev):
+    pass
+
+def setManualRoutes(devices):
+    if (len(devices["routers"]) == 0):
+        return
+    print("Setting routes manually...")
+
+    # From the sender to the receiver
+    print(f"Setting Sender->Receiver {devices['routers'][0]['linkLocalAddr']}")
+    outStrRaw = sendSerialCommand(devices["sender"], f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {devices['routers'][0]['linkLocalAddr']}") # Sender routes thru first router towards receiver
+    print(">", outStrRaw)
+
+    # From the receiver to the sender
+    print(f"Setting Receiver->Sender {devices['routers'][-1]['linkLocalAddr']}")
+    outStrRaw = sendSerialCommand(devices["receiver"], f"nib route add {ifaceId} {devices['sender']['globalAddr']} {devices['routers'][-1]['linkLocalAddr']}") # Receiver routes thru last router towards sender
+    print(">", outStrRaw)
+
+    for idx, dev in enumerate(devices["routers"]):
+        nextHop = ""
+        prevHop = ""
+        if idx == len(devices["routers"])-1: # Last router in the line. Next hop is the rx
+            nextHop = devices["receiver"]["linkLocalAddr"]
+            prevHop = devices["routers"][idx-1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["sender"]["linkLocalAddr"]
+        elif idx == 0: # First router in the line
+            nextHop = devices["routers"][idx+1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["receiver"]["linkLocalAddr"]
+            prevHop = devices["sender"]["linkLocalAddr"]
+        else: # Router in between 0th and nth
+            nextHop = devices["routers"][idx+1]["linkLocalAddr"]
+            prevHop = devices["routers"][idx-1]["linkLocalAddr"]
+
+        print(f"Setting R{idx} nextHop:{nextHop} prevHop:{prevHop}")
+
+        # tx->rx
+        outStrRaw = sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}")
+        print(">", outStrRaw)
+
+        # rx->tx
+        outStrRaw = sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}")
+        print(">", outStrRaw)
+
 
 def pingTest(srcDev, dstDev):
     dstIp = dstDev["globalAddr"]
@@ -160,6 +203,7 @@ def bulkExperiments(resultsDir):
             print(e)
             print(f"Exception while creating results dir {resultsDir}. Will use . as resultsDir")
             resultsDir = "./"
+
     delayUsArr = [1000000, 750000, 500000, 250000, 100000, 50000, 10000, 5000, 1000, 100]
     payloadSizeArr = [64, 32, 16, 8]
     transferSizeArr = [1024]
@@ -178,9 +222,8 @@ def main():
     parser.add_argument("sender")
     parser.add_argument("receiver")
     parser.add_argument("-r", "--router", nargs="*")
-    parser.add_argument("--rpl", action="store_true", default=True)
+    parser.add_argument("--rpl", action="store_true", default=False)
     parser.add_argument("--experiment", action="store_true", default=False)
-    parser.add_argument("--manual_route", action="store_true", default=False)
     parser.add_argument("--fitiot", action="store_true", default=False)
     parser.add_argument("--results_dir", type=str)
     args = parser.parse_args()
@@ -189,7 +232,7 @@ def main():
     # return
 
     print(f"SENDER {args.sender}, RECEIVER {args.receiver}, ROUTER(s) {args.router}")
-    print(f"RPL {args.rpl}, FITIOT {args.fitiot}")
+    print(f"RPL {args.rpl}, FITIOT {args.fitiot}, EXPERIMENT {args.experiment}")
 
     devices["sender"] = {"port":args.sender, "id":1, "ser":serial.Serial(args.sender, timeout=SERIAL_TIMEOUT_S)}
     devices["receiver"] = {"port":args.receiver, "ser":serial.Serial(args.receiver, timeout=SERIAL_TIMEOUT_S)}
@@ -210,13 +253,15 @@ def main():
 
     if (args.router):
         for j, i in enumerate(args.router):
-            devices["routers"].append({"port":i, "id":j+2, "ser":serial.Serial(i, timeout=SERIAL_TIMEOUT_S)})
-            flushDevice(devices["routers"][-1])
-            getAddresses(devices["routers"][-1])
-            if ("globalAddr" in devices["routers"][-1]):
-                unsetGlobalAddress(devices["receiver"])
-            setGlobalAddress(devices["routers"][-1])
-            getAddresses(devices["routers"][-1])
+            r = {"port":i, "id":j+2, "ser":serial.Serial(i, timeout=SERIAL_TIMEOUT_S)}
+            flushDevice(r)
+            getAddresses(r)
+            unsetRpl(r)
+            if ("globalAddr" in r):
+                unsetGlobalAddress(r)
+            setGlobalAddress(r)
+            getAddresses(r)
+            devices["routers"].append(r)
     devices["receiver"]["id"] = len(devices["routers"])+2
 
     setGlobalAddress(devices["sender"])
@@ -226,14 +271,17 @@ def main():
 
     if (args.rpl):
         setRplRoot(devices["sender"])
-        pingTest(devices["sender"], devices["receiver"])
     else:
-        pass
+        setManualRoutes(devices)
+
+    # pdb.set_trace()
+
+    pingTest(devices["sender"], devices["receiver"])
 
     pprint(devices)
 
     if (args.experiment):
-        bulkExperiments(resultsDir=(args.results_dir if args.results_dir else "../results/"))
+        bulkExperiments(resultsDir=(args.results_dir if args.results_dir else DEFAULT_RESULTS_DIR))
     
 
 if __name__ == "__main__":

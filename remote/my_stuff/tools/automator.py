@@ -21,6 +21,7 @@ args = None
 Example usage: ./automator.py /dev/ttyACM0 /dev/ttyACM1 --rpl --experiment --results_dir ../results/
 """
 
+
 def parseIfconfig(dev, rawStr):
     global ifaceId
     iface = None

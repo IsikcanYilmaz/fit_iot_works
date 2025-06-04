@@ -69,6 +69,7 @@ def setRplRoot(dev):
 def unsetRoutes(dev):
     pass
 
+# NOTE AND TODO: This only sets the nib entries for the source and the destination basically. if you want any of the other nodes to be reachable you'll haveto consider the logic for it
 def setManualRoutes(devices):
     if (len(devices["routers"]) == 0):
         return
@@ -93,7 +94,7 @@ def setManualRoutes(devices):
         elif idx == 0: # First router in the line
             nextHop = devices["routers"][idx+1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["receiver"]["linkLocalAddr"]
             prevHop = devices["sender"]["linkLocalAddr"]
-        else: # Router in between 0th and nth
+        else: # Router after 0th and before nth
             nextHop = devices["routers"][idx+1]["linkLocalAddr"]
             prevHop = devices["routers"][idx-1]["linkLocalAddr"]
 
@@ -107,6 +108,9 @@ def setManualRoutes(devices):
         outStrRaw = sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}")
         print(">", outStrRaw)
 
+def setIperfTarget(dev, targetGlobalAddr):
+    outStrRaw = sendSerialCommand(dev, f"iperf target {targetGlobalAddr}")
+    print(">", outStrRaw)
 
 def pingTest(srcDev, dstDev):
     dstIp = dstDev["globalAddr"]
@@ -205,16 +209,21 @@ def bulkExperiments(resultsDir):
             print(f"Exception while creating results dir {resultsDir}. Will use . as resultsDir")
             resultsDir = "./"
 
-    delayUsArr = [1000000, 750000, 500000, 250000, 100000, 50000, 10000, 5000, 1000, 100]
-    payloadSizeArr = [64, 32, 16, 8]
-    transferSizeArr = [1024]
+    # delayUsArr = [1000000, 750000, 500000, 250000, 100000, 50000, 10000, 5000, 1000, 100]
+    # payloadSizeArr = [64, 32, 16, 8]
+    # transferSizeArr = [1024]
+
+    delayUsArr = [10000]
+    payloadSizeArr = [64]
+    transferSizeArr = [4096]
+    
     mode = 1
 
     # Sweep
     for delayUs in delayUsArr:
         for payloadSize in payloadSizeArr:
             for transferSize in transferSizeArr:
-                experiment(1, delayUs, payloadSize, transferSize)
+                experiment(1, delayUs, payloadSize, transferSize, resultsDir)
                 time.sleep(2)
 
 def main():
@@ -274,6 +283,9 @@ def main():
         setRplRoot(devices["sender"])
     else:
         setManualRoutes(devices)
+
+    if (len(devices["routers"]) > 0):
+        setIperfTarget(devices["sender"], devices["receiver"]["globalAddr"])
 
     # pdb.set_trace()
 

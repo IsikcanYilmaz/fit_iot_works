@@ -50,6 +50,8 @@ static char receiver_thread_stack[THREAD_STACKSIZE_DEFAULT];
 static char sender_thread_stack[THREAD_STACKSIZE_DEFAULT];
 static uint8_t txBuffer[IPERF_PAYLOAD_MAX_SIZE_BYTES];
 
+static char target_global_ip_addr[25] = "2001::2";
+
 static msg_t _msg_queue[RECEIVER_MSG_QUEUE_SIZE];
 
 static kernel_pid_t sender_pid = 0;
@@ -423,12 +425,11 @@ static void *Iperf_SenderThread(void *arg)
 
   while (!isTransferDone())
   {
-    char *dstAddr;
-    dstAddr = "2001::2";
-    int sendRet = socklessUdpSend(dstAddr, "1", (char *) pl, pktSize, 1, config.delayUs);
+    int sendRet = socklessUdpSend(&target_global_ip_addr, "1", (char *) pl, pktSize, 1, config.delayUs);
     ztimer_sleep(ZTIMER_USEC, config.delayUs);
     pl->seq_no++;
     results.numSentBytes += pktSize;
+    results.lastPktSeqNo = pl->seq_no;
   }
   results.endTimestamp = ztimer_now(ZTIMER_USEC);
   Iperf_Deinit();
@@ -701,6 +702,14 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       printResults(false);
     }
   }
+  else if (strncmp(argv[1], "target", 16) == 0)
+  {
+    if (argc > 2)
+    {
+      strncpy(&target_global_ip_addr, argv[2], 25);
+    }
+    loginfo("%s\n", target_global_ip_addr);
+  }
   else
   {
     goto usage;
@@ -709,7 +718,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|stop|delay|log|config|results>\n");
+  logerror("Usage: iperf <sender|receiver|stop|delay|log|config|target|results>\n");
   return 1;
 }
 

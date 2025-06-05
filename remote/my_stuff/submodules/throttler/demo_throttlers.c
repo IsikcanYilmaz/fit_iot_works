@@ -26,6 +26,10 @@ extern bool rssiPrint;
 extern uint32_t fakeLatencyMs;
 #endif
 
+#ifdef JON_802154_MAX_RETRANS
+extern uint8_t jon802154MaxRetrans; 
+#endif
+
 int16_t txPower;
 netif_t *mainIface;
 char netifName[CONFIG_NETIF_NAMELENMAX];
@@ -158,17 +162,46 @@ int getFakeLatency(int argc, char **argv)
 }
 #endif
 
+#ifdef JON_802154_MAX_RETRANS
+int setL2Retrans(int argc, char **argv)
+{
+  if (argc < 2)
+  {
+    printf("Usage: setretrans <int>\n");
+    return 1;
+  }
+  jon802154MaxRetrans = atoi(argv[1]);
+  printf("L2 retransmissions set to %d\n", jon802154MaxRetrans);
+  return 0;
+}
+
+int getL2Retrans(int argc, char **argv)
+{
+  printf("%d\n", jon802154MaxRetrans);
+}
+
+#endif
+
 #ifdef THROTTLERS_SHELL_COMMANDS
+
 #ifdef JON_FAKE_LATENCY_MS
 SHELL_COMMAND(setfakelat, "setfakelat <ms>", setFakeLatency);
 SHELL_COMMAND(getfakelat, "getfakelat", getFakeLatency);
 #endif
+
 #ifdef JON_RSSI_LIMITING
 SHELL_COMMAND(setrssi, "setrssi <dbm>. pkts at rssis worse than this will be dropped", setRssiLimitor);
 SHELL_COMMAND(getrssi, "getrssi", getRssiLimitor);
 SHELL_COMMAND(norssi, "norssi removes rssi limit", noRssiLimitor)
 SHELL_COMMAND(rssiprint, "rssiprint toggle rssi limitor prints", toggleRssiPrint);
 #endif
+
+#ifdef JON_802154_MAX_RETRANS
+SHELL_COMMAND(getretrans, "get max l2 frame retransmissions", getL2Retrans);
+SHELL_COMMAND(setretrans, "set max l2 frame retransmissions. 0 means disabled", setL2Retrans);
+#endif
+
 SHELL_COMMAND(setpwr, "setpwr <dbm>. sets tx power", Throttler_CmdSetTxPower);
 SHELL_COMMAND(getpwr, "getpwr prints tx power", Throttler_CmdGetTxPower);
+
 #endif

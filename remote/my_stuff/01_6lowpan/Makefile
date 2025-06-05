@@ -51,6 +51,9 @@ ifndef CONFIG_GNRC_PKTBUF_SIZE
   CFLAGS += -DCONFIG_GNRC_PKTBUF_SIZE=512
 endif
 
+# WATCHDOG CONFIG
+CFLAGS += -DCONFIG_PERIPH_WDT_WIN_MAX_MS=10000 # 10 seconds watchdog time
+
 ###########
 
 # Change this to 0 show compiler invocation lines by default:
@@ -59,6 +62,7 @@ QUIET ?= 1
 USEMODULE += ps
 USEMODULE += shell_cmds_default
 USEMODULE += ztimer
+USEMODULE += auto_init_wdt_thread
 
 EXTERNAL_MODULE_DIRS += $(CURDIR)/../submodules/
 USEMODULE += button

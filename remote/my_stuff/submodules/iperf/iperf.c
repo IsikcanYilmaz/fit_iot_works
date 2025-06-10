@@ -36,10 +36,10 @@ static sock_tcp_t controlSock;
 static IperfConfig_s config = {
   .payloadSizeBytes = IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 1000000,
+  .delayUs = 10000,
   .transferSizeBytes = IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
-  .mode = IPERF_MODE_TIMED,
+  .mode = IPERF_MODE_SIZE,
 };
 
 static IperfResults_s results;

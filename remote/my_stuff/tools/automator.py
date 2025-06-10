@@ -118,7 +118,32 @@ def pingTest(srcDev, dstDev):
     outStrRaw = sendSerialCommand(srcDev, f"ping {dstIp}", cooldownS=5)
     print(">", outStrRaw)
 
-def experiment(mode=1, delayus=10000, payloadsizebytes=32, transfersizebytes=4096, resultsDir="./"):
+def setTxPower(dev, txpower):
+    outStrRaw = sendSerialCommand(dev, f"setpwr {txpower}")
+    print(">", outStrRaw)
+
+def setRetrans(dev, retrans):
+    outStrRaw = sendSerialCommand(dev, f"setretrans {retrans}")
+    print(">", outStrRaw)
+
+def parseDeviceJsons(j):
+    global args
+    # Expects {"rx":{}, "tx":{}, "config":{}}
+    timeDiffSecs = j["tx"]["timeDiff"] / 1000000
+    numLostPackets = j["tx"]["numSentPkts"] - j["rx"]["numReceivedPkts"]
+    lossPercent = numLostPackets * 100 / j["tx"]["numSentPkts"]
+    sendRate = j["tx"]["numSentPkts"] * j["config"]["payloadSizeBytes"] / timeDiffSecs
+    receiveRate = j["rx"]["numReceivedPkts"] * j["config"]["payloadSizeBytes"] / timeDiffSecs
+    return {"timeDiffSecs":timeDiffSecs, "numLostPackets":numLostPackets, "lossPercent":lossPercent, "sendRate":sendRate, "receiveRate":receiveRate}
+
+def averageRoundsJsons(j):
+    avgNumLostPkts = sum([j[i]["results"]["numLostPackets"] for i in range(0, len(j))])/len(j)
+    avgLossPercent = sum([j[i]["results"]["lossPercent"] for i in range(0, len(j))])/len(j)
+    avgSendRate = sum([j[i]["results"]["sendRate"] for i in range(0, len(j))])/len(j)
+    avgReceiveRate = sum([j[i]["results"]["receiveRate"] for i in range(0, len(j))])/len(j)
+    return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate}
+
+def experiment(mode=1, delayus=10000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, resultsDir="./"):
     global devices
     txDev = devices["sender"]
     txSer = txDev["ser"]
@@ -127,74 +152,63 @@ def experiment(mode=1, delayus=10000, payloadsizebytes=32, transfersizebytes=409
     routers = devices["routers"]
 
     outFilenamePrefix = f"m{mode}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
+    overallJson = []
+    for round in range(0, rounds):
+        txOut = ""
+        rxOut = ""
 
-    txOut = ""
-    rxOut = ""
+        print("----------------")
+        print(f"EXPERIMENT mode:{mode} delayus:{delayus} payloadsizebytes:{payloadsizebytes} transfersizebytes:{transfersizebytes} round:{round}")
 
-    print("----------------")
-    print(f"EXPERIMENT mode:{mode} delayus:{delayus} payloadsizebytes:{payloadsizebytes} transfersizebytes:{transfersizebytes}")
+        flushDevice(rxDev)
+        flushDevice(txDev)
+        
+        rxOut += sendSerialCommand(rxDev, "iperf receiver")
+        txOut += sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=2)
+        txOut += sendSerialCommand(txDev, "iperf sender")
 
-    flushDevice(rxDev)
-    flushDevice(txDev)
-    
-    rxOut += sendSerialCommand(rxDev, "iperf receiver")
-    txOut += sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=2)
-    txOut += sendSerialCommand(txDev, "iperf sender")
+        print("RX:", rxOut)
+        print("TX:", txOut)
+        
+        now = time.time()
+        while("done" not in txOut):
+            if (txSer.in_waiting > 0):
+                raw = txSer.readline().decode()
+                print(f">{raw}")
+                txOut += raw
+            if (time.time() - now > EXPERIMENT_TIMEOUT_S):
+                print("EXPERIMENT TIMEOUT")
+                return
+            time.sleep(0.1)
 
-    print("RX:", rxOut)
-    print("TX:", txOut)
-    
-    # pdb.set_trace()
+        rxOut += rxSer.read(rxSer.in_waiting).decode()
 
-    now = time.time()
-    while("done" not in txOut):
-        raw = txSer.readline().decode()
-        print(f">{raw}")
-        txOut += raw
-        if (time.time() - now > EXPERIMENT_TIMEOUT_S):
-            print("EXPERIMENT TIMEOUT")
-            return
+        # TODO Hacky parsing below. Could do better formatting on the fw side
+        rxJsonRaw = sendSerialCommand(rxDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
+        txJsonRaw = sendSerialCommand(txDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
 
-    rxOut += rxSer.read(rxSer.in_waiting).decode()
+        rxJsonRaw = " ".join(rxJsonRaw)
+        txJsonRaw = " ".join(txJsonRaw)
 
-    # TODO Hacky parsing below. Could do better formatting on the fw side
-    rxJsonRaw = sendSerialCommand(rxDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
-    txJsonRaw = sendSerialCommand(txDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
+        rxOut += rxJsonRaw
+        txOut += txJsonRaw
 
-    rxJsonRaw = " ".join(rxJsonRaw)
-    txJsonRaw = " ".join(txJsonRaw)
+        rxOut += sendSerialCommand(rxDev, "iperf results reset")
 
-    rxOut += rxJsonRaw
-    txOut += txJsonRaw
+        rxJson = json.loads(rxJsonRaw)
+        txJson = json.loads(txJsonRaw)
 
-    rxOut += sendSerialCommand(rxDev, "iperf results reset")
+        deviceJson = {"rx":rxJson["results"], "tx":txJson["results"], "config":txJson["config"]}
+        roundOverallJson = {"deviceoutput":deviceJson, "results":parseDeviceJsons(deviceJson)}
+        pprint(roundOverallJson)
+        overallJson.append(roundOverallJson)
 
-    # txF = open(f"{resultsDir}/{outFilenamePrefix}_txout.txt", "w")   
-    # txF.write(txOut)
-    # txF.close()
-    #
-    # rxF = open(f"{resultsDir}/{outFilenamePrefix}_rxout.txt", "w")
-    # rxF.write(rxOut)
-    # rxF.close()
-    #
-    # txJsonF = open(f"{resultsDir}/{outFilenamePrefix}_tx.json", "w")
-    # txJsonF.write(parseDirtyJson(txJsonRaw))
-    # txJsonF.close()
-    #
-    # rxJsonF = open(f"{resultsDir}/{outFilenamePrefix}_rx.json", "w")
-    # rxJsonF.write(parseDirtyJson(rxJsonRaw))
-    # rxJsonF.close()
-
-    rxJson = json.loads(rxJsonRaw)
-    txJson = json.loads(txJsonRaw)
-
-    overallJson = {"rx":rxJson["results"], "tx":txJson["results"], "config":txJson["config"]}
     with open(f"{resultsDir}/{outFilenamePrefix}.json", "w") as f:
         json.dump(overallJson, f, indent=4)
 
-    # print("RX JSON", rxJson, "\n")
-    # print("TX JSON", txJson, "\n")
-    pprint(overallJson)
+    overallAveragesJson = averageRoundsJsons(overallJson)
+    with open(f"{resultsDir}/{outFilenamePrefix}_averages.json", "w") as f:
+        json.dump(overallAveragesJson, f, indent=4)
 
     print(f"Results written to {resultsDir}")
     print("----------------")
@@ -209,21 +223,22 @@ def bulkExperiments(resultsDir):
             print(f"Exception while creating results dir {resultsDir}. Will use . as resultsDir")
             resultsDir = "./"
 
-    # delayUsArr = [1000000, 750000, 500000, 250000, 100000, 50000, 10000, 5000, 1000, 100]
-    # payloadSizeArr = [64, 32, 16, 8]
-    # transferSizeArr = [1024]
-
-    delayUsArr = [10000]
-    payloadSizeArr = [64]
+    delayUsArr = [i*1000 for i in range(10,101,10)]
+    delayUsArr.extend([1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000])
+    payloadSizeArr = [64, 32, 16, 8]
     transferSizeArr = [4096]
-    
+    rounds = 10
     mode = 1
 
     # Sweep
+    experimentCount = 0
+    numExperiments = len(delayUsArr) * len(payloadSizeArr) * len(transferSizeArr)
     for delayUs in delayUsArr:
         for payloadSize in payloadSizeArr:
             for transferSize in transferSizeArr:
-                experiment(1, delayUs, payloadSize, transferSize, resultsDir)
+                print(f"Running experiment {experimentCount}/{numExperiments}")
+                experiment(1, delayUs, payloadSize, transferSize, rounds, resultsDir)
+                experimentCount += 1
                 time.sleep(2)
 
 def main():
@@ -236,6 +251,8 @@ def main():
     parser.add_argument("--experiment", action="store_true", default=False)
     parser.add_argument("--fitiot", action="store_true", default=False)
     parser.add_argument("--results_dir", type=str)
+    parser.add_argument("--txpower", type=int)
+    parser.add_argument("--retrans", type=int)
     args = parser.parse_args()
 
     # print(args)
@@ -248,6 +265,20 @@ def main():
     devices["receiver"] = {"port":args.receiver, "ser":serial.Serial(args.receiver, timeout=SERIAL_TIMEOUT_S)}
     flushDevice(devices["sender"])
     flushDevice(devices["receiver"])
+
+    if (args.txpower != None):
+        print(f"Setting txpowers to {args.txpower}")
+        setTxPower(devices["sender"], args.txpower)
+        setTxPower(devices["receiver"], args.txpower)
+        for dev in devices["routers"]:
+            setTxPower(dev, args.txpower)
+
+    if (args.retrans != None):
+        print(f"Setting L2 retransmissions to {args.retrans}")
+        setRetrans(devices["sender"], args.retrans)
+        setRetrans(devices["receiver"], args.retrans)
+        for dev in devices["routers"]:
+            setRetrans(dev, args.retrans)
 
     getAddresses(devices["sender"])
     getAddresses(devices["receiver"])

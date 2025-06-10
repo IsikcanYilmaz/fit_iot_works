@@ -234,18 +234,23 @@ def main():
     parser.add_argument("-r", "--router", nargs="*")
     parser.add_argument("--rpl", action="store_true", default=False)
     parser.add_argument("--experiment", action="store_true", default=False)
-    parser.add_argument("--fitiot", action="store_true", default=False)
+    parser.add_argument("--fitiot", type=str, help="The location of the FIT-IOT nodes, e.g. saclay")
     parser.add_argument("--results_dir", type=str)
     args = parser.parse_args()
 
-    # print(args)
-    # return
+    # check if fit-iot location is valid
+    if args.fitiot is not None and args.fitiot not in ["grenoble", "lille", "paris", "saclay", "strasbourg", "toulouse"]:        
+        raise Exception("The FIT-IOT option is selected, but the site name is invalid.")
 
     print(f"SENDER {args.sender}, RECEIVER {args.receiver}, ROUTER(s) {args.router}")
     print(f"RPL {args.rpl}, FITIOT {args.fitiot}, EXPERIMENT {args.experiment}")
 
-    devices["sender"] = {"port":args.sender, "id":1, "ser":serial.Serial(args.sender, timeout=SERIAL_TIMEOUT_S)}
-    devices["receiver"] = {"port":args.receiver, "ser":serial.Serial(args.receiver, timeout=SERIAL_TIMEOUT_S)}
+    devices["sender"] = {"port":args.sender, "id":1, "ser":
+                         serial.Serial(args.sender, timeout=SERIAL_TIMEOUT_S) if not args.fitiot
+                    else RemoteSerial(deviceName=args.sender, siteName=args.fitiot, timeout=SERIAL_TIMEOUT_S)}
+    devices["receiver"] = {"port":args.receiver, "ser":
+                         serial.Serial(args.receiver, timeout=SERIAL_TIMEOUT_S) if not args.fitiot
+                    else RemoteSerial(deviceName=args.receiver, siteName=args.fitiot, timeout=SERIAL_TIMEOUT_S)}
     flushDevice(devices["sender"])
     flushDevice(devices["receiver"])
 
@@ -288,6 +293,8 @@ def main():
         setIperfTarget(devices["sender"], devices["receiver"]["globalAddr"])
 
     # pdb.set_trace()
+    devices["sender"]["ser"].stop()
+    devices["receiver"]["ser"].stop()
 
     pingTest(devices["sender"], devices["receiver"])
 

@@ -50,6 +50,8 @@ ifneq (, $(FREQ))
   CFLAGS += '-DWS281X_TIMER_FREQ=$(FREQ)'
 endif
 
+# WATCHDOG CONFIG
+
 ###########
 
 # Change this to 0 show compiler invocation lines by default:
@@ -70,6 +72,9 @@ USEMODULE += gnrc_pktdump
 USEMODULE += prng_xorshift
 
 USEMODULE += periph_gpio_irq
+
+# Watchdog
+USEMODULE += auto_init_wdt_thread
 
 
 EXTERNAL_MODULE_DIRS += $(CURDIR)/../submodules/

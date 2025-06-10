@@ -1,4 +1,4 @@
-ifneq (,$(filter udp_stress,$(USEMODULE)))
+ifneq (,$(filter iperf,$(USEMODULE)))
 
 USEMODULE += netdev_default
 USEMODULE += auto_init_gnrc_netif

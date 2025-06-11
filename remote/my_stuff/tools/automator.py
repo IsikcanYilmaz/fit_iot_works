@@ -16,11 +16,11 @@ EXPERIMENT_TIMEOUT_S = 60*10
 devices = {'sender':None, 'receiver':None, 'routers':[]}
 ifaceId = None # We assume this is the same number for all devices
 args = None
+comm = None
 
 """
 Example usage: ./automator.py /dev/ttyACM0 /dev/ttyACM1 --rpl --experiment --results_dir ../results/
 """
-
 
 def parseIfconfig(dev, rawStr):
     global ifaceId
@@ -46,24 +46,29 @@ def parseIfconfig(dev, rawStr):
             globalAddr = i.split(" ")[2]
             dev["globalAddr"] = globalAddr
             
-def getAddresses(dev): 
-    outStrRaw = sendSerialCommand(dev, "ifconfig")
+def getAddresses(dev):
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, "ifconfig")
     parseIfconfig(dev, outStrRaw)
 
 def setGlobalAddress(dev):
-    outStrRaw = sendSerialCommand(dev, f"ifconfig {ifaceId} add 2001::{dev['id']}")
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} add 2001::{dev['id']}")
     print(">", outStrRaw)
 
 def unsetGlobalAddress(dev):
-    outStrRaw = sendSerialCommand(dev, f"ifconfig {ifaceId} del {dev['globalAddr']}")
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} del {dev['globalAddr']}")
     print(">", outStrRaw)
 
 def unsetRpl(dev):
-    outStrRaw = sendSerialCommand(dev, f"rpl rm {ifaceId}")
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"rpl rm {ifaceId}")
     print(">", outStrRaw)
 
 def setRplRoot(dev):
-    outStrRaw = sendSerialCommand(dev, f"rpl root {ifaceId} 2001::{dev['id']}")
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"rpl root {ifaceId} 2001::{dev['id']}")
     print(">", outStrRaw)
 
 def unsetRoutes(dev):
@@ -71,18 +76,19 @@ def unsetRoutes(dev):
 
 # NOTE AND TODO: This only sets the nib entries for the source and the destination basically. if you want any of the other nodes to be reachable you'll haveto consider the logic for it
 def setManualRoutes(devices):
+    global comm
     if (len(devices["routers"]) == 0):
         return
     print("Setting routes manually...")
 
     # From the sender to the receiver
     print(f"Setting Sender->Receiver {devices['routers'][0]['linkLocalAddr']}")
-    outStrRaw = sendSerialCommand(devices["sender"], f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {devices['routers'][0]['linkLocalAddr']}") # Sender routes thru first router towards receiver
+    outStrRaw = comm.sendSerialCommand(devices["sender"], f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {devices['routers'][0]['linkLocalAddr']}") # Sender routes thru first router towards receiver
     print(">", outStrRaw)
 
     # From the receiver to the sender
     print(f"Setting Receiver->Sender {devices['routers'][-1]['linkLocalAddr']}")
-    outStrRaw = sendSerialCommand(devices["receiver"], f"nib route add {ifaceId} {devices['sender']['globalAddr']} {devices['routers'][-1]['linkLocalAddr']}") # Receiver routes thru last router towards sender
+    outStrRaw = comm.sendSerialCommand(devices["receiver"], f"nib route add {ifaceId} {devices['sender']['globalAddr']} {devices['routers'][-1]['linkLocalAddr']}") # Receiver routes thru last router towards sender
     print(">", outStrRaw)
 
     for idx, dev in enumerate(devices["routers"]):
@@ -101,39 +107,43 @@ def setManualRoutes(devices):
         print(f"Setting R{idx} nextHop:{nextHop} prevHop:{prevHop}")
 
         # tx->rx
-        outStrRaw = sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}")
+        outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}")
         print(">", outStrRaw)
 
         # rx->tx
-        outStrRaw = sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}")
+        outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}")
         print(">", outStrRaw)
 
 def setIperfTarget(dev, targetGlobalAddr):
-    outStrRaw = sendSerialCommand(dev, f"iperf target {targetGlobalAddr}")
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"iperf target {targetGlobalAddr}")
     print(">", outStrRaw)
 
 def pingTest(srcDev, dstDev):
+    global comm
     dstIp = dstDev["globalAddr"]
     print(f"{srcDev['globalAddr']} Pinging {dstIp}")
-    outStrRaw = sendSerialCommand(srcDev, f"ping {dstIp}", cooldownS=5)
+    outStrRaw = comm.sendSerialCommand(srcDev, f"ping {dstIp}", cooldownS=10, captureOutput=True)
     print(">", outStrRaw)
 
 def setTxPower(dev, txpower):
-    outStrRaw = sendSerialCommand(dev, f"setpwr {txpower}")
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"setpwr {txpower}")
     print(">", outStrRaw)
 
 def setRetrans(dev, retrans):
-    outStrRaw = sendSerialCommand(dev, f"setretrans {retrans}")
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"setretrans {retrans}")
     print(">", outStrRaw)
 
 def parseDeviceJsons(j):
     global args
     # Expects {"rx":{}, "tx":{}, "config":{}}
     timeDiffSecs = j["tx"]["timeDiff"] / 1000000
-    numLostPackets = j["tx"]["numSentPkts"] - j["rx"]["numReceivedPkts"]
+    numLostPackets = j["tx"]["numSentPkts"] - (j["rx"]["numReceivedPkts"] - j["rx"]["numDuplicates"])
     lossPercent = numLostPackets * 100 / j["tx"]["numSentPkts"]
     sendRate = j["tx"]["numSentPkts"] * j["config"]["payloadSizeBytes"] / timeDiffSecs
-    receiveRate = j["rx"]["numReceivedPkts"] * j["config"]["payloadSizeBytes"] / timeDiffSecs
+    receiveRate = (j["rx"]["numReceivedPkts"] - j["rx"]["numDuplicates"]) * j["config"]["payloadSizeBytes"] / timeDiffSecs
     return {"timeDiffSecs":timeDiffSecs, "numLostPackets":numLostPackets, "lossPercent":lossPercent, "sendRate":sendRate, "receiveRate":receiveRate}
 
 def averageRoundsJsons(j):
@@ -143,12 +153,10 @@ def averageRoundsJsons(j):
     avgReceiveRate = sum([j[i]["results"]["receiveRate"] for i in range(0, len(j))])/len(j)
     return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate}
 
-def experiment(mode=1, delayus=10000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, resultsDir="./"):
-    global devices
+def experiment(mode=1, delayus=1000000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, resultsDir="./"):
+    global devices, comm, args
     txDev = devices["sender"]
-    txSer = txDev["ser"]
     rxDev = devices["receiver"]
-    rxSer = rxDev["ser"]
     routers = devices["routers"]
 
     outFilenamePrefix = f"m{mode}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
@@ -160,32 +168,37 @@ def experiment(mode=1, delayus=10000, payloadsizebytes=32, transfersizebytes=409
         print("----------------")
         print(f"EXPERIMENT mode:{mode} delayus:{delayus} payloadsizebytes:{payloadsizebytes} transfersizebytes:{transfersizebytes} round:{round}")
 
-        flushDevice(rxDev)
-        flushDevice(txDev)
+        comm.flushDevice(rxDev)
+        comm.flushDevice(txDev)
         
-        rxOut += sendSerialCommand(rxDev, "iperf receiver")
-        txOut += sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=2)
-        txOut += sendSerialCommand(txDev, "iperf sender")
+        rxOut += comm.sendSerialCommand(rxDev, "iperf receiver")
+        txOut += comm.sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=2)
+        txOut += comm.sendSerialCommand(txDev, "iperf sender")
 
         print("RX:", rxOut)
         print("TX:", txOut)
         
         now = time.time()
-        while("done" not in txOut):
-            if (txSer.in_waiting > 0):
-                raw = txSer.readline().decode()
-                print(f">{raw}")
-                txOut += raw
-            if (time.time() - now > EXPERIMENT_TIMEOUT_S):
-                print("EXPERIMENT TIMEOUT")
-                return
-            time.sleep(0.1)
 
-        rxOut += rxSer.read(rxSer.in_waiting).decode()
+        if (args.fitiot):
+            time.sleep(30) # TODO better output handling
+        else:
+            txSer = txDev["ser"]
+            rxSer = rxDev["ser"]
+            while("done" not in txOut):
+                if (txSer.in_waiting > 0):
+                    raw = txSer.readline().decode()
+                    print(f">{raw}")
+                    txOut += raw
+                if (time.time() - now > EXPERIMENT_TIMEOUT_S):
+                    print("EXPERIMENT TIMEOUT")
+                    return
+                time.sleep(0.1)
+            rxOut += rxSer.read(rxSer.in_waiting).decode()
 
         # TODO Hacky parsing below. Could do better formatting on the fw side
-        rxJsonRaw = sendSerialCommand(rxDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
-        txJsonRaw = sendSerialCommand(txDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
+        rxJsonRaw = comm.sendSerialCommand(rxDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
+        txJsonRaw = comm.sendSerialCommand(txDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
 
         rxJsonRaw = " ".join(rxJsonRaw)
         txJsonRaw = " ".join(txJsonRaw)
@@ -193,7 +206,7 @@ def experiment(mode=1, delayus=10000, payloadsizebytes=32, transfersizebytes=409
         rxOut += rxJsonRaw
         txOut += txJsonRaw
 
-        rxOut += sendSerialCommand(rxDev, "iperf results reset")
+        rxOut += comm.sendSerialCommand(rxDev, "iperf results reset")
 
         rxJson = json.loads(rxJsonRaw)
         txJson = json.loads(txJsonRaw)
@@ -223,8 +236,11 @@ def bulkExperiments(resultsDir):
             print(f"Exception while creating results dir {resultsDir}. Will use . as resultsDir")
             resultsDir = "./"
 
-    delayUsArr = [i*1000 for i in range(10,101,10)]
-    delayUsArr.extend([1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000])
+    # delayUsArr = [i*1000 for i in range(10,101,10)]
+    # delayUsArr.extend([1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000])
+    # payloadSizeArr = [64, 32, 16, 8]
+
+    delayUsArr = [500000, 400000, 300000, 200000, 100000, 90000, 80000, 70000, 60000, 50000]
     payloadSizeArr = [64, 32, 16, 8]
     transferSizeArr = [4096]
     rounds = 10
@@ -242,12 +258,13 @@ def bulkExperiments(resultsDir):
                 time.sleep(2)
 
 def main():
-    global args
+    global args, comm
     parser = argparse.ArgumentParser()
     parser.add_argument("sender")
     parser.add_argument("receiver")
     parser.add_argument("-r", "--router", nargs="*")
     parser.add_argument("--rpl", action="store_true", default=False)
+    parser.add_argument("--experiment_test", action="store_true", default=False)
     parser.add_argument("--experiment", action="store_true", default=False)
     parser.add_argument("--fitiot", action="store_true", default=False)
     parser.add_argument("--results_dir", type=str)
@@ -261,10 +278,17 @@ def main():
     print(f"SENDER {args.sender}, RECEIVER {args.receiver}, ROUTER(s) {args.router}")
     print(f"RPL {args.rpl}, FITIOT {args.fitiot}, EXPERIMENT {args.experiment}")
 
-    devices["sender"] = {"port":args.sender, "id":1, "ser":serial.Serial(args.sender, timeout=SERIAL_TIMEOUT_S)}
-    devices["receiver"] = {"port":args.receiver, "ser":serial.Serial(args.receiver, timeout=SERIAL_TIMEOUT_S)}
-    flushDevice(devices["sender"])
-    flushDevice(devices["receiver"])
+    comm = DeviceCommunicator(args.fitiot)
+
+    if (args.fitiot): # TODO make this dictionary a class and have this distinction logic be done in its constructor
+        devices["sender"] = {"name":args.sender, "id":1}
+        devices["receiver"] = {"name":args.receiver}
+    else:
+        devices["sender"] = {"name":args.sender, "id":1, "ser":serial.Serial(args.sender, timeout=SERIAL_TIMEOUT_S)}
+        devices["receiver"] = {"name":args.receiver, "ser":serial.Serial(args.receiver, timeout=SERIAL_TIMEOUT_S)}
+
+    comm.flushDevice(devices["sender"])
+    comm.flushDevice(devices["receiver"])
 
     if (args.txpower != None):
         print(f"Setting txpowers to {args.txpower}")
@@ -294,8 +318,11 @@ def main():
 
     if (args.router):
         for j, i in enumerate(args.router):
-            r = {"port":i, "id":j+2, "ser":serial.Serial(i, timeout=SERIAL_TIMEOUT_S)}
-            flushDevice(r)
+            if (args.fitiot):
+                r = {"name":i, "id":j+2}
+            else:
+                r = {"name":i, "id":j+2, "ser":serial.Serial(i, timeout=SERIAL_TIMEOUT_S)}
+            comm.flushDevice(r)
             getAddresses(r)
             unsetRpl(r)
             if ("globalAddr" in r):
@@ -324,7 +351,9 @@ def main():
 
     pprint(devices)
 
-    if (args.experiment):
+    if (args.experiment_test):
+        experiment()
+    elif (args.experiment):
         bulkExperiments(resultsDir=(args.results_dir if args.results_dir else DEFAULT_RESULTS_DIR))
     
 

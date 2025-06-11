@@ -53,7 +53,9 @@ endif
 
 # 802154 CONFIG # Found in sys/include/net/ieee802154.h
 # CFLAGS += -DCONFIG_IEEE802154_DEFAULT_MAX_FRAME_RETRANS=0 # 0 to disable L2 retransmissions
+ifeq ("seeedstudio-xiao-nrf52840", $(BOARD))
 CFLAGS += -DJON_802154_MAX_RETRANS=4
+endif
 
 # WATCHDOG CONFIG
 CFLAGS += -DCONFIG_PERIPH_WDT_WIN_MAX_MS=10000 # 10 seconds watchdog time
@@ -70,7 +72,9 @@ USEMODULE += auto_init_wdt_thread
 
 EXTERNAL_MODULE_DIRS += $(CURDIR)/../submodules/
 USEMODULE += button
+ifeq ("seeedstudio-xiao-nrf52840", $(BOARD))
 USEMODULE += neopixel
+endif
 USEMODULE += onboard_leds
 USEMODULE += throttler
 USEMODULE += udp_stress

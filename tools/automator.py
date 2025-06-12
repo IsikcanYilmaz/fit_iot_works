@@ -237,15 +237,18 @@ def bulkExperiments(resultsDir):
             print(f"Exception while creating results dir {resultsDir}. Will use . as resultsDir")
             resultsDir = "./"
 
-    # delayUsArr = [i*1000 for i in range(10,101,10)]
-    # delayUsArr.extend([1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000])
-    # payloadSizeArr = [64, 32, 16, 8]
+    with open(f"{resultsDir}/config.txt", "w") as f:
+        f.write(" ".join(sys.argv))
 
     delayUsArr = [5000, 10000, 15000, 20000, 25000, 30000]
     payloadSizeArr = [64, 32, 16, 8]
     transferSizeArr = [4096]
-    rounds = 1
+    rounds = 10
     mode = 1
+
+    with open(f"{resultsDir}/config.txt", "w") as f:
+        f.write(" ".join(sys.argv))
+        f.write(f"\ndelayUsArr:{delayUsArr}, payloadSizeArr:{payloadSizeArr}, transferSizeArr:{transferSizeArr}, rounds:{rounds}")
 
     # Sweep
     experimentCount = 0

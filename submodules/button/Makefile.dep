@@ -1,0 +1,5 @@
+ifneq (,$(filter button,$(USEMODULE)))
+USEMODULE += periph_gpio_irq
+USEMODULE += ztimer
+USEMODULE += ztimer_msec
+endif

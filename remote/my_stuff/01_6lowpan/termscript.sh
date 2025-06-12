@@ -1,1 +1,0 @@
-../termscript.sh

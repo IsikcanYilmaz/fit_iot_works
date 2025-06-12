@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import serial 
 import argparse
@@ -153,7 +153,7 @@ def averageRoundsJsons(j):
     avgReceiveRate = sum([j[i]["results"]["receiveRate"] for i in range(0, len(j))])/len(j)
     return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate}
 
-def experiment(mode=1, delayus=1000000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, resultsDir="./"):
+def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, resultsDir="./"):
     global devices, comm, args
     txDev = devices["sender"]
     rxDev = devices["receiver"]
@@ -172,7 +172,7 @@ def experiment(mode=1, delayus=1000000, payloadsizebytes=32, transfersizebytes=4
         comm.flushDevice(txDev)
         
         rxOut += comm.sendSerialCommand(rxDev, "iperf receiver")
-        txOut += comm.sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=2)
+        txOut += comm.sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=3)
         txOut += comm.sendSerialCommand(txDev, "iperf sender")
 
         print("RX:", rxOut)
@@ -181,7 +181,8 @@ def experiment(mode=1, delayus=1000000, payloadsizebytes=32, transfersizebytes=4
         now = time.time()
 
         if (args.fitiot):
-            time.sleep(30) # TODO better output handling
+            expectedTime = (delayus / 1000000) * (transfersizebytes / payloadsizebytes)
+            time.sleep(expectedTime + 10) # TODO better output handling
         else:
             txSer = txDev["ser"]
             rxSer = rxDev["ser"]
@@ -240,10 +241,10 @@ def bulkExperiments(resultsDir):
     # delayUsArr.extend([1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000])
     # payloadSizeArr = [64, 32, 16, 8]
 
-    delayUsArr = [500000, 400000, 300000, 200000, 100000, 90000, 80000, 70000, 60000, 50000]
+    delayUsArr = [5000, 10000, 15000, 20000, 25000, 30000]
     payloadSizeArr = [64, 32, 16, 8]
     transferSizeArr = [4096]
-    rounds = 10
+    rounds = 1
     mode = 1
 
     # Sweep

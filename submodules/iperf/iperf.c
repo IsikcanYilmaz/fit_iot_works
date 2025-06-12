@@ -519,7 +519,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
 
   if (strncmp(argv[1], "sender", 16) == 0)
   {
-    loginfo("STARTING IPERF SENDER AT 2001::2/128\n");
+    loginfo("STARTING IPERF SENDER AT %s\n", target_global_ip_addr);
     Iperf_Init(true);
   }
   else if (strncmp(argv[1], "receiver", 16) == 0)

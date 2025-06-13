@@ -45,6 +45,12 @@ def parseIfconfig(dev, rawStr):
         if ("global" in i):
             globalAddr = i.split(" ")[2]
             dev["globalAddr"] = globalAddr
+
+def resetNetstats(dev):
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats l2 reset")
+    outStrRaw += comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats ipv6 reset")
+    print("<", outStrRaw)
             
 def getAddresses(dev):
     global comm
@@ -54,22 +60,22 @@ def getAddresses(dev):
 def setGlobalAddress(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} add 2001::{dev['id']}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def unsetGlobalAddress(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} del {dev['globalAddr']}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def unsetRpl(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"rpl rm {ifaceId}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def setRplRoot(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"rpl root {ifaceId} 2001::{dev['id']}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def unsetRoutes(dev):
     pass
@@ -84,12 +90,12 @@ def setManualRoutes(devices):
     # From the sender to the receiver
     print(f"Setting Sender->Receiver {devices['routers'][0]['linkLocalAddr']}")
     outStrRaw = comm.sendSerialCommand(devices["sender"], f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {devices['routers'][0]['linkLocalAddr']}") # Sender routes thru first router towards receiver
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
     # From the receiver to the sender
     print(f"Setting Receiver->Sender {devices['routers'][-1]['linkLocalAddr']}")
     outStrRaw = comm.sendSerialCommand(devices["receiver"], f"nib route add {ifaceId} {devices['sender']['globalAddr']} {devices['routers'][-1]['linkLocalAddr']}") # Receiver routes thru last router towards sender
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
     for idx, dev in enumerate(devices["routers"]):
         nextHop = ""
@@ -108,33 +114,33 @@ def setManualRoutes(devices):
 
         # tx->rx
         outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}")
-        print(">", outStrRaw)
+        print("<", outStrRaw)
 
         # rx->tx
         outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}")
-        print(">", outStrRaw)
+        print("<", outStrRaw)
 
 def setIperfTarget(dev, targetGlobalAddr):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"iperf target {targetGlobalAddr}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def pingTest(srcDev, dstDev):
     global comm
     dstIp = dstDev["globalAddr"]
     print(f"{srcDev['globalAddr']} Pinging {dstIp}")
     outStrRaw = comm.sendSerialCommand(srcDev, f"ping {dstIp}", cooldownS=10, captureOutput=True)
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def setTxPower(dev, txpower):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"setpwr {txpower}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def setRetrans(dev, retrans):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"setretrans {retrans}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def parseDeviceJsons(j):
     global args
@@ -243,7 +249,7 @@ def bulkExperiments(resultsDir):
     delayUsArr = [5000, 10000, 15000, 20000, 25000, 30000]
     payloadSizeArr = [64, 32, 16, 8]
     transferSizeArr = [4096]
-    rounds = 10
+    rounds = 20
     mode = 1
 
     with open(f"{resultsDir}/config.txt", "w") as f:

@@ -43,6 +43,20 @@ typedef struct
   uint32_t numSentBytes;
   uint32_t startTimestamp;
   uint32_t endTimestamp;
+
+  uint32_t l2numSentPackets;
+  uint32_t l2numSentBytes;
+  uint32_t l2numReceivedPackets;
+  uint32_t l2numReceivedBytes;
+  uint32_t l2numSuccessfulTx;
+  uint32_t l2numErroredTx;
+
+  uint32_t ipv6numSentPackets;
+  uint32_t ipv6numSentBytes;
+  uint32_t ipv6numReceivedPackets;
+  uint32_t ipv6numReceivedBytes;
+  uint32_t ipv6numSuccessfulTx;
+  uint32_t ipv6numErroredTx;
 } IperfResults_s;
 
 int Iperf_Deinit(void);

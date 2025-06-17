@@ -46,10 +46,19 @@ def parseIfconfig(dev, rawStr):
             globalAddr = i.split(" ")[2]
             dev["globalAddr"] = globalAddr
 
+def getL2Stats(dev):
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats l2")
+    print("<", outStrRaw)
+
+def getIpv6Stats(dev):
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats ipv6")
+    print("<", outStrRaw)
+
 def resetNetstats(dev):
     global comm
-    outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats l2 reset")
-    outStrRaw += comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats ipv6 reset")
+    outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats all reset")
     print("<", outStrRaw)
             
 def getAddresses(dev):
@@ -159,6 +168,13 @@ def averageRoundsJsons(j):
     avgReceiveRate = sum([j[i]["results"]["receiveRate"] for i in range(0, len(j))])/len(j)
     return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate}
 
+def resetAllDevicesNetstats():
+    global devices
+    resetNetstats(devices["sender"])
+    resetNetstats(devices["receiver"])
+    for dev in devices["routers"]:
+        resetNetstats(dev)
+
 def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, resultsDir="./"):
     global devices, comm, args
     txDev = devices["sender"]
@@ -176,6 +192,8 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
 
         comm.flushDevice(rxDev)
         comm.flushDevice(txDev)
+
+        resetAllDevicesNetstats()
         
         rxOut += comm.sendSerialCommand(rxDev, "iperf receiver")
         txOut += comm.sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=3)
@@ -215,8 +233,11 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
 
         rxOut += comm.sendSerialCommand(rxDev, "iperf results reset")
 
-        rxJson = json.loads(rxJsonRaw)
-        txJson = json.loads(txJsonRaw)
+        try:
+            rxJson = json.loads(rxJsonRaw)
+            txJson = json.loads(txJsonRaw)
+        except Exception as e:
+            pdb.set_trace()
 
         deviceJson = {"rx":rxJson["results"], "tx":txJson["results"], "config":txJson["config"]}
         roundOverallJson = {"deviceoutput":deviceJson, "results":parseDeviceJsons(deviceJson)}
@@ -267,6 +288,11 @@ def bulkExperiments(resultsDir):
                 experimentCount += 1
                 time.sleep(2)
 
+def tester(dev):
+    getL2Stats(dev)
+    getIpv6Stats(dev)
+    resetNetstats(dev)
+
 def main():
     global args, comm
     parser = argparse.ArgumentParser()
@@ -280,6 +306,7 @@ def main():
     parser.add_argument("--results_dir", type=str)
     parser.add_argument("--txpower", type=int)
     parser.add_argument("--retrans", type=int)
+    parser.add_argument("--test", action="store_true", default=False)
     args = parser.parse_args()
 
     # print(args)
@@ -360,6 +387,11 @@ def main():
     pingTest(devices["sender"], devices["receiver"])
 
     pprint(devices)
+
+    if (args.test):
+        tester(devices["sender"])
+        tester(devices["receiver"])
+        return
 
     if (args.experiment_test):
         experiment()

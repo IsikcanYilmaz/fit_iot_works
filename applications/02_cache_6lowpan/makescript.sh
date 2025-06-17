@@ -1,0 +1,1 @@
+/home/jon/KODMOD/fit_iot_works/applications/01_6lowpan/../../tools/makescript.sh

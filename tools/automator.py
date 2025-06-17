@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import serial 
 import argparse
@@ -45,6 +45,21 @@ def parseIfconfig(dev, rawStr):
         if ("global" in i):
             globalAddr = i.split(" ")[2]
             dev["globalAddr"] = globalAddr
+
+def getL2Stats(dev):
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats l2")
+    print("<", outStrRaw)
+
+def getIpv6Stats(dev):
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats ipv6")
+    print("<", outStrRaw)
+
+def resetNetstats(dev):
+    global comm
+    outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats all reset")
+    print("<", outStrRaw)
             
 def getAddresses(dev):
     global comm
@@ -54,22 +69,22 @@ def getAddresses(dev):
 def setGlobalAddress(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} add 2001::{dev['id']}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def unsetGlobalAddress(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} del {dev['globalAddr']}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def unsetRpl(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"rpl rm {ifaceId}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def setRplRoot(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"rpl root {ifaceId} 2001::{dev['id']}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def unsetRoutes(dev):
     pass
@@ -84,12 +99,12 @@ def setManualRoutes(devices):
     # From the sender to the receiver
     print(f"Setting Sender->Receiver {devices['routers'][0]['linkLocalAddr']}")
     outStrRaw = comm.sendSerialCommand(devices["sender"], f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {devices['routers'][0]['linkLocalAddr']}") # Sender routes thru first router towards receiver
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
     # From the receiver to the sender
     print(f"Setting Receiver->Sender {devices['routers'][-1]['linkLocalAddr']}")
     outStrRaw = comm.sendSerialCommand(devices["receiver"], f"nib route add {ifaceId} {devices['sender']['globalAddr']} {devices['routers'][-1]['linkLocalAddr']}") # Receiver routes thru last router towards sender
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
     for idx, dev in enumerate(devices["routers"]):
         nextHop = ""
@@ -108,33 +123,33 @@ def setManualRoutes(devices):
 
         # tx->rx
         outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}")
-        print(">", outStrRaw)
+        print("<", outStrRaw)
 
         # rx->tx
         outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}")
-        print(">", outStrRaw)
+        print("<", outStrRaw)
 
 def setIperfTarget(dev, targetGlobalAddr):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"iperf target {targetGlobalAddr}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def pingTest(srcDev, dstDev):
     global comm
     dstIp = dstDev["globalAddr"]
     print(f"{srcDev['globalAddr']} Pinging {dstIp}")
     outStrRaw = comm.sendSerialCommand(srcDev, f"ping {dstIp}", cooldownS=10, captureOutput=True)
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def setTxPower(dev, txpower):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"setpwr {txpower}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def setRetrans(dev, retrans):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"setretrans {retrans}")
-    print(">", outStrRaw)
+    print("<", outStrRaw)
 
 def parseDeviceJsons(j):
     global args
@@ -153,7 +168,14 @@ def averageRoundsJsons(j):
     avgReceiveRate = sum([j[i]["results"]["receiveRate"] for i in range(0, len(j))])/len(j)
     return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate}
 
-def experiment(mode=1, delayus=1000000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, resultsDir="./"):
+def resetAllDevicesNetstats():
+    global devices
+    resetNetstats(devices["sender"])
+    resetNetstats(devices["receiver"])
+    for dev in devices["routers"]:
+        resetNetstats(dev)
+
+def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, resultsDir="./"):
     global devices, comm, args
     txDev = devices["sender"]
     rxDev = devices["receiver"]
@@ -170,9 +192,11 @@ def experiment(mode=1, delayus=1000000, payloadsizebytes=32, transfersizebytes=4
 
         comm.flushDevice(rxDev)
         comm.flushDevice(txDev)
+
+        resetAllDevicesNetstats()
         
         rxOut += comm.sendSerialCommand(rxDev, "iperf receiver")
-        txOut += comm.sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=2)
+        txOut += comm.sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=3)
         txOut += comm.sendSerialCommand(txDev, "iperf sender")
 
         print("RX:", rxOut)
@@ -181,7 +205,8 @@ def experiment(mode=1, delayus=1000000, payloadsizebytes=32, transfersizebytes=4
         now = time.time()
 
         if (args.fitiot):
-            time.sleep(30) # TODO better output handling
+            expectedTime = (delayus / 1000000) * (transfersizebytes / payloadsizebytes)
+            time.sleep(expectedTime + 10) # TODO better output handling
         else:
             txSer = txDev["ser"]
             rxSer = rxDev["ser"]
@@ -208,8 +233,11 @@ def experiment(mode=1, delayus=1000000, payloadsizebytes=32, transfersizebytes=4
 
         rxOut += comm.sendSerialCommand(rxDev, "iperf results reset")
 
-        rxJson = json.loads(rxJsonRaw)
-        txJson = json.loads(txJsonRaw)
+        try:
+            rxJson = json.loads(rxJsonRaw)
+            txJson = json.loads(txJsonRaw)
+        except Exception as e:
+            pdb.set_trace()
 
         deviceJson = {"rx":rxJson["results"], "tx":txJson["results"], "config":txJson["config"]}
         roundOverallJson = {"deviceoutput":deviceJson, "results":parseDeviceJsons(deviceJson)}
@@ -236,15 +264,18 @@ def bulkExperiments(resultsDir):
             print(f"Exception while creating results dir {resultsDir}. Will use . as resultsDir")
             resultsDir = "./"
 
-    # delayUsArr = [i*1000 for i in range(10,101,10)]
-    # delayUsArr.extend([1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000])
-    # payloadSizeArr = [64, 32, 16, 8]
+    with open(f"{resultsDir}/config.txt", "w") as f:
+        f.write(" ".join(sys.argv))
 
-    delayUsArr = [500000, 400000, 300000, 200000, 100000, 90000, 80000, 70000, 60000, 50000]
+    delayUsArr = [5000, 10000, 15000, 20000, 25000, 30000]
     payloadSizeArr = [64, 32, 16, 8]
     transferSizeArr = [4096]
-    rounds = 10
+    rounds = 20
     mode = 1
+
+    with open(f"{resultsDir}/config.txt", "w") as f:
+        f.write(" ".join(sys.argv))
+        f.write(f"\ndelayUsArr:{delayUsArr}, payloadSizeArr:{payloadSizeArr}, transferSizeArr:{transferSizeArr}, rounds:{rounds}")
 
     # Sweep
     experimentCount = 0
@@ -256,6 +287,11 @@ def bulkExperiments(resultsDir):
                 experiment(1, delayUs, payloadSize, transferSize, rounds, resultsDir)
                 experimentCount += 1
                 time.sleep(2)
+
+def tester(dev):
+    getL2Stats(dev)
+    getIpv6Stats(dev)
+    resetNetstats(dev)
 
 def main():
     global args, comm
@@ -270,6 +306,7 @@ def main():
     parser.add_argument("--results_dir", type=str)
     parser.add_argument("--txpower", type=int)
     parser.add_argument("--retrans", type=int)
+    parser.add_argument("--test", action="store_true", default=False)
     args = parser.parse_args()
 
     # print(args)
@@ -350,6 +387,11 @@ def main():
     pingTest(devices["sender"], devices["receiver"])
 
     pprint(devices)
+
+    if (args.test):
+        tester(devices["sender"])
+        tester(devices["receiver"])
+        return
 
     if (args.experiment_test):
         experiment()

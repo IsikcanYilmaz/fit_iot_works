@@ -12,6 +12,7 @@
 #include "ztimer.h"
 #include "shell.h"
 #include "od.h"
+#include "net/netstats.h"
 
 #include "iperf.h"
 #include "iperf_pkt.h"
@@ -105,6 +106,41 @@ static void _logprint(LogprintTag_e tag, const char* format, ... )
 
 ///////////////////////////////////
 
+static void getNetifStats(void)
+{
+  netstats_t stats;
+  netif_t *mainIface = netif_iter(NULL);
+
+  int res = netif_get_opt(mainIface, NETOPT_STATS, NETSTATS_LAYER2, &stats, sizeof(stats));
+  
+  results.l2numReceivedPackets = stats.rx_count;
+  results.l2numReceivedBytes = stats.rx_bytes;
+  results.l2numSentPackets = (stats.tx_unicast_count + stats.tx_mcast_count);
+  results.l2numSentBytes = stats.tx_bytes;
+  results.l2numSuccessfulTx = stats.tx_success;
+  results.l2numErroredTx = stats.tx_failed;
+
+  res = netif_get_opt(mainIface, NETOPT_STATS, NETSTATS_IPV6, &stats, sizeof(stats));
+
+  results.ipv6numReceivedPackets = stats.rx_count;
+  results.ipv6numReceivedBytes = stats.rx_bytes;
+  results.ipv6numSentPackets = (stats.tx_unicast_count + stats.tx_mcast_count);
+  results.ipv6numSentBytes = stats.tx_bytes;
+  results.ipv6numSuccessfulTx = stats.tx_success;
+  results.ipv6numErroredTx = stats.tx_failed;
+}
+
+static void resetNetifStats(void)
+{
+  netif_t *mainIface = netif_iter(NULL);
+  int res = netif_set_opt(mainIface, NETOPT_STATS, NETSTATS_LAYER2, NULL, 0);
+  res |= netif_set_opt(mainIface, NETOPT_STATS, NETSTATS_IPV6, NULL, 0);
+  if (res != 0)
+  {
+    logerror("%s failed to reset netif stats\n", __FUNCTION__);
+  }
+}
+
 static void printConfig(bool json)
 {
   printf((json) ? "{\"iAmSender\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d}\n" : \
@@ -120,9 +156,13 @@ static void printConfig(bool json)
 
 static void printResults(bool json)
 {
+  getNetifStats();
   printf((json) ? \
-           "{\"iAmSender\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"numSentPkts\":%d, \"numSentBytes\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu}\n" : \
-           "Results\niAmSender           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nnumSentPkts         :%d\nnumSentBytes        :%d\nstartTimestamp      :%lu\nendTimestamp        :%lu\ntimeDiff            :%lu\n", \
+
+           "{\"iAmSender\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"numSentPkts\":%d, \"numSentBytes\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu, \"l2numReceivedPackets\":%d, \"l2numReceivedBytes\":%d, \"l2numSentPackets\":%d, \"l2numSentBytes\":%d, \"l2numSuccessfulTx\":%d, \"l2numErroredTx\":%d, \"ipv6numReceivedPackets\":%d, \"ipv6numReceivedBytes\":%d, \"ipv6numSentPackets\":%d, \"ipv6numSentBytes\":%d, \"ipv6numSuccessfulTx\":%d, \"ipv6numErroredTx\":%d}\n" : \
+
+           "Results\niAmSender           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nnumSentPkts         :%d\nnumSentBytes        :%d\nstartTimestamp      :%lu\nendTimestamp        :%lu\ntimeDiff            :%lu\nl2numRxPkts         :%d\nl2numRxBytes        :%d\nl2numTxPkts         :%d\nl2numTxBytes        :%d\nl2numSuccessTx      :%d\nl2numErroredTx      :%d\nipv6numRxPkts       :%d\nipv6numRxBytes      :%d\nipv6numTxPkts       :%d\nipv6numTxBytes      :%d\nipv6numSuccessTx    :%d\nipv6numErroredTx    :%d\n", \
+
            config.iAmSender, \
            results.lastPktSeqNo, \
            results.pktLossCounter, \
@@ -133,7 +173,22 @@ static void printResults(bool json)
            results.numSentBytes, \
            results.startTimestamp, \
            results.endTimestamp, \
-           results.endTimestamp - results.startTimestamp);
+           results.endTimestamp - results.startTimestamp, \
+
+           results.l2numReceivedPackets, \
+           results.l2numReceivedBytes, \
+           results.l2numSentPackets, \
+           results.l2numSentBytes, \
+           results.l2numSuccessfulTx, \
+           results.l2numErroredTx,
+
+           results.ipv6numReceivedPackets, \
+           results.ipv6numReceivedBytes, \
+           results.ipv6numSentPackets, \
+           results.ipv6numSentBytes, \
+           results.ipv6numSuccessfulTx, \
+           results.ipv6numErroredTx
+         );
 }
 
 static void printAll(void)
@@ -160,6 +215,7 @@ static void resetResults(void)
 {
   memset(&results, 0x00, sizeof(IperfResults_s));
   memset(&receivedPktIds, 0x00, 1024);
+  resetNetifStats();
   loginfo("Results reset\n");
 }
 
@@ -519,7 +575,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
 
   if (strncmp(argv[1], "sender", 16) == 0)
   {
-    loginfo("STARTING IPERF SENDER AT 2001::2/128\n");
+    loginfo("STARTING IPERF SENDER AT %s\n", target_global_ip_addr);
     Iperf_Init(true);
   }
   else if (strncmp(argv[1], "receiver", 16) == 0)

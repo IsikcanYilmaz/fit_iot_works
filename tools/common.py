@@ -17,6 +17,7 @@ def sendSerialCommand_local(dev, cmd, cooldownS=1, captureOutput=True):
     s = dev["ser"]
     s.reset_input_buffer()
     s.reset_output_buffer()
+    print(f"{dev['name']}>", cmd)
     while(len(cmd) > 0):
         s.write(cmd[0:SERIAL_COMMAND_BUFFER_SIZE].encode())
         cmd = cmd[SERIAL_COMMAND_BUFFER_SIZE:]
@@ -31,6 +32,7 @@ def sendSerialCommand_fitiot(dev, cmd, cooldownS=1, captureOutput=True):
     procCmd = f"echo \'{cmd}\' | nc -q {cooldownS} {dev['name']} 20000"
     out = ""
     trial = 0
+    print(f"{dev['name']}>", cmd)
     while (trial <= NC_RETRIES):
         proc = subprocess.Popen(procCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         time.sleep(cooldownS)

@@ -33,6 +33,12 @@ Animation_s animations[ANIMATION_MAX] =
     .init = AnimationLine_Init,
     .update = AnimationLine_Update,
     .draw = AnimationLine_Draw,
+  },
+  [ANIMATION_CANVAS] = {
+    .name = "canvas",
+    .init = NULL,
+    .update = NULL,
+    .draw = NULL,
   }
 };
 
@@ -136,7 +142,10 @@ kernel_pid_t Neopixel_Init(kernel_pid_t i)
 
   for (int i = 0; i < ANIMATION_MAX; i++)
   {
-    animations[i].init();
+    if (animations[i].init)
+    {
+      animations[i].init();
+    }
   }
 
   printf("Neopixels initialized\n");

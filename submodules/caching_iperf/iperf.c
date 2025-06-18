@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdarg.h>
 #include "macros/utils.h"
 #include "net/gnrc.h"
 #include "net/sock/udp.h"
@@ -17,9 +16,9 @@
 #include "iperf.h"
 #include "iperf_pkt.h"
 #include "message.h"
+#include "logger.h"
 
-#define ENABLE_DEBUG 0
-#include "debug.h"
+#include "receiver.h"
 
 #define IPERF_DEFAULT_PORT 1
 #define IPERF_PAYLOAD_DEFAULT_SIZE_BYTES 32
@@ -29,15 +28,13 @@
 #define IPERF_DEFAULT_TRANSFER_SIZE_BYTES (IPERF_PAYLOAD_DEFAULT_SIZE_BYTES * 16) // 512 bytes
 #define IPERF_DEFAULT_TRANSFER_TIME_US (IPERF_DEFAULT_DELAY_US * 10) // 10 secs
 
-#define RECEIVER_MSG_QUEUE_SIZE 16
-
 static IperfConfig_s config = {
   .payloadSizeBytes = IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
   .delayUs = 10000,
   .transferSizeBytes = IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
-  .mode = IPERF_MODE_SIZE,
+  .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
 };
 
 static IperfResults_s results;
@@ -50,56 +47,14 @@ static uint8_t txBuffer[IPERF_PAYLOAD_MAX_SIZE_BYTES];
 
 static char target_global_ip_addr[25] = "2001::2";
 
-static msg_t _msg_queue[RECEIVER_MSG_QUEUE_SIZE];
+/*static msg_t _msg_queue[RECEIVER_MSG_QUEUE_SIZE];*/
 
 static kernel_pid_t sender_pid = 0;
 static kernel_pid_t receiver_pid = 0;
 
-static gnrc_netreg_entry_t server = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
+/*static gnrc_netreg_entry_t server = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);*/
 
-/////////////////////////////////// LOGPRINT TODO maybe move this chunk into its own file? or module?
-typedef enum
-{
-  INFO,
-  VERBOSE,
-  ERROR,
-  DEBUG,
-  LOGPRINT_MAX
-} LogprintTag_e;
-
-bool logprintTags[LOGPRINT_MAX] = // TODO this can be a bitmap if you really want to deal with it
-  {
-    [INFO] = true,
-    [VERBOSE] = false,
-    [ERROR] = true,
-    [DEBUG] = false 
-  };
-
-char logprintTagChars[LOGPRINT_MAX] = 
-  {
-    [INFO] = 'I',
-    [VERBOSE] = 'V',
-    [ERROR] = 'E',
-    [DEBUG] = 'D'
-  };
-
-static void _logprint(LogprintTag_e tag, const char* format, ... )
-{
-  if (!logprintTags[tag])
-  {
-    return;
-  }
-  va_list args;
-  va_start( args, format );
-  printf("[IPERF][%c] ", logprintTagChars[tag]);
-  vprintf( format, args );
-  va_end( args );
-}
-
-#define loginfo(...) _logprint(INFO, __VA_ARGS__) // default
-#define logverbose(...) _logprint(VERBOSE, __VA_ARGS__)
-#define logdebug(...) _logprint(DEBUG, __VA_ARGS__)
-#define logerror(...) _logprint(ERROR, __VA_ARGS__)
+bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this?
 
 ///////////////////////////////////
 
@@ -197,26 +152,27 @@ static void printAll(void)
   printf("}\n");
 } 
 
-static void setDelayFromPps(uint16_t pktPerSecond)
-{
-
-}
-
-static void setPpsFromDelay(uint32_t delayUs)
-{
-
-}
-
-static bool receivedPktIds[1024]; // TODO bitmap this?
 static void resetResults(void)
 {
   memset(&results, 0x00, sizeof(IperfResults_s));
-  memset(&receivedPktIds, 0x00, 1024);
+  memset(&receivedPktIds, 0x00, IPERF_TOTAL_TRANSMISSION_SIZE_MAX);
   resetNetifStats();
   loginfo("Results reset\n");
 }
 
-// LISTENER
+static bool isTransferDone(void)
+{
+  bool ret = false;
+  if (config.mode == IPERF_MODE_SIZE)
+  {
+    ret = (results.numSentBytes >= config.transferSizeBytes);
+  }
+  else if (config.mode == IPERF_MODE_TIMED)
+  {
+    ret = (ztimer_now(ZTIMER_USEC) - results.startTimestamp >= config.transferTimeUs);
+  }
+  return ret;
+}
 
 // SOCKLESS 
 // Yanked out of sys/shell/cmds/gnrc_udp.c
@@ -302,43 +258,7 @@ static int socklessUdpSend(const char *addr_str, const char *port_str, const cha
   return 0;
 }
 
-static int receiverHandleIperfPayload(gnrc_pktsnip_t *pkt)
-{
-  iperf_udp_pkt_t *iperfPl = (iperf_udp_pkt_t *) pkt;
-  logverbose("Received seq no %d\nPayload %s\nLosses %d\nDups %d\n", iperfPl->seq_no, iperfPl->payload, results.pktLossCounter, results.numDuplicates);
-
-  if (results.lastPktSeqNo == iperfPl->seq_no - 1)
-  {
-    // NO LOSS 
-    results.lastPktSeqNo = iperfPl->seq_no;
-    logverbose("RX %d\n", iperfPl->seq_no);
-  }
-  else if (receivedPktIds[iperfPl->seq_no])
-  {
-    // Dup
-    results.numDuplicates++;
-    logverbose("DUP %d\n", iperfPl->seq_no);
-  }
-  else if (results.lastPktSeqNo < iperfPl->seq_no)
-  {
-    // Loss happened
-    uint16_t lostPkts = (iperfPl->seq_no - results.lastPktSeqNo);
-    results.pktLossCounter += lostPkts;
-    results.lastPktSeqNo = iperfPl->seq_no;
-    logverbose("LOSS %d pkts \n", lostPkts);
-  }
-
-  receivedPktIds[iperfPl->seq_no] = true;
-
-  results.numReceivedPkts++;
-  results.endTimestamp = ztimer_now(ZTIMER_USEC);
-  if (results.numReceivedPkts == 1)
-  {
-    results.startTimestamp = results.endTimestamp;
-  }
-}
-
-static int receiverHandlePkt(gnrc_pktsnip_t *pkt)
+int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
 {
   int snips = 0;
   int size = 0;
@@ -366,7 +286,11 @@ static int receiverHandlePkt(gnrc_pktsnip_t *pkt)
             }
           }
           logdebug("\n");
-          receiverHandleIperfPayload(snip->data);
+          if (fn)
+          {
+            fn(snip->data);
+          }
+          /*receiverHandleIperfPayload(snip->data);*/
           break;
         }
       case GNRC_NETTYPE_SIXLOWPAN:
@@ -413,51 +337,32 @@ static int receiverHandlePkt(gnrc_pktsnip_t *pkt)
   return 1;
 }
 
-static int startUdpServer(void)
+int Iperf_StartUdpServer(gnrc_netreg_entry_t *server, kernel_pid_t pid)
 {
   /* check if server is already running or the handler thread is not */
-  if (server.target.pid != KERNEL_PID_UNDEF) {
-    loginfo("Error: server already running on port %" PRIu32 "\n", server.demux_ctx);
+  if (server->target.pid != KERNEL_PID_UNDEF) {
+    loginfo("Error: server already running on port %" PRIu32 "\n", server->demux_ctx);
     return 1;
   }
-  if (receiver_pid == KERNEL_PID_UNDEF)
-  {
-    logerror("Error: server thread not running!\n");
-    return 1;
-  }
-  server.target.pid = receiver_pid;
-  server.demux_ctx = (uint32_t) IPERF_DEFAULT_PORT;
-  gnrc_netreg_register(GNRC_NETTYPE_UDP, &server);
-  loginfo("Started UDP server on port %d\n", server.demux_ctx);
+  server->target.pid = pid;
+  server->demux_ctx = (uint32_t) IPERF_DEFAULT_PORT;
+  gnrc_netreg_register(GNRC_NETTYPE_UDP, server);
+  loginfo("Started UDP server on port %d\n", server->demux_ctx);
   return 0;
 }
 
-static int stopUdpServer(void)
+int Iperf_StopUdpServer(gnrc_netreg_entry_t *server)
 {
   /* check if server is running at all */
-  if (server.target.pid == KERNEL_PID_UNDEF) {
+  if (server->target.pid == KERNEL_PID_UNDEF) {
     logerror("Error: server was not running\n");
     return 1;
   }
   /* stop server */
   gnrc_netreg_unregister(GNRC_NETTYPE_UDP, &server);
-  server.target.pid = KERNEL_PID_UNDEF;
+  server->target.pid = KERNEL_PID_UNDEF;
   loginfo("Success: stopped UDP server\n"); 
   return 0;
-}
-
-static bool isTransferDone(void)
-{
-  bool ret = false;
-  if (config.mode == IPERF_MODE_SIZE)
-  {
-    ret = (results.numSentBytes >= config.transferSizeBytes);
-  }
-  else if (config.mode == IPERF_MODE_TIMED)
-  {
-    ret = (ztimer_now(ZTIMER_USEC) - results.startTimestamp >= config.transferTimeUs);
-  }
-  return ret;
 }
 
 static void *Iperf_SenderThread(void *arg)
@@ -491,74 +396,40 @@ static void *Iperf_SenderThread(void *arg)
   /*loginfo("Sender thread exiting\n");*/
 }
 
-static void *Iperf_ReceiverThread(void *arg)
-{
-  (void)arg;
-  msg_t msg, reply;
-
-  /* setup the message queue */
-  msg_init_queue(_msg_queue, RECEIVER_MSG_QUEUE_SIZE);
-
-  reply.content.value = (uint32_t)(-ENOTSUP);
-  reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
-
-  while (running) {
-    msg_receive(&msg);
-
-    switch (msg.type) {
-      case GNRC_NETAPI_MSG_TYPE_RCV:
-        logdebug("Data received\n");
-        receiverHandlePkt(msg.content.ptr);
-        break;
-      case GNRC_NETAPI_MSG_TYPE_SND:
-        logdebug("Data to send");
-        receiverHandlePkt(msg.content.ptr);
-        break;
-      case GNRC_NETAPI_MSG_TYPE_GET:
-      case GNRC_NETAPI_MSG_TYPE_SET:
-        msg_reply(&msg, &reply);
-        break;
-      default:
-        /*loginfo("received something unexpected");*/
-        break;
-    }
-  }
-  loginfo("Receiver thread exiting");
-}
-
 int Iperf_Init(bool iAmSender)
 {
-  if (running)
-  {
-    logerror("Already running!\n");
-    return 1;
-  }
-
-  resetResults();
-
-  config.iAmSender = iAmSender;
-  config.senderPort = IPERF_DEFAULT_PORT; // TODO make more generic? TODO make address more generic
-  config.listenerPort = IPERF_DEFAULT_PORT;
- 
-  running = true;
+  /*if (running)*/
+  /*{*/
+  /*  logerror("Already running!\n");*/
+  /*  return 1;*/
+  /*}*/
+  /**/
+  /*resetResults();*/
+  /**/
+  /*config.iAmSender = iAmSender;*/
+  /*config.senderPort = IPERF_DEFAULT_PORT; // TODO make more generic? TODO make address more generic*/
+  /*config.listenerPort = IPERF_DEFAULT_PORT;*/
+  /**/
+  /*running = true;*/
   if (!iAmSender)
   {
-    receiver_pid = thread_create(receiver_thread_stack, sizeof(receiver_thread_stack), THREAD_PRIORITY_MAIN - 2, 0, Iperf_ReceiverThread, NULL, "Iperf receiver thread");
-
-    startUdpServer();
+    receiver_pid = thread_create(receiver_thread_stack, sizeof(receiver_thread_stack), THREAD_PRIORITY_MAIN - 2, 0, Iperf_ReceiverThread, NULL, "iperf_receiver");
   }
   if (iAmSender)
   {
-    sender_pid = thread_create(sender_thread_stack, sizeof(sender_thread_stack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_SenderThread, NULL, "Iperf sender thread"); 
+    sender_pid = thread_create(sender_thread_stack, sizeof(sender_thread_stack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_SenderThread, NULL, "iperf_sender"); 
   }
-
+  running = true;
   return 0;
 }
 
 int Iperf_Deinit(void)
 {
-  stopUdpServer();
   running = false;
+  msg_t m;
+  m.type = IPERF_MSG_TYPE_DONE;
+  msg_send(&m, receiver_pid);
+  receiver_pid = KERNEL_PID_UNDEF;
   loginfo("Deinitialized\n");
   return 0;
 }

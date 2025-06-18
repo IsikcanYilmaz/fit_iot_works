@@ -1,9 +1,18 @@
 #include <stdbool.h>
 
+#include "net/gnrc.h"
+#include "net/gnrc/nettype.h"
+
+#define IPERF_TOTAL_TRANSMISSION_SIZE_MAX (4096)
+#define IPERF_RECEIVER_MSG_QUEUE_SIZE 16
+#define IPERF_DEFAULT_PORT (1)
+#define IPERF_MSG_TYPE_DONE (0xfff0)
+
 typedef enum
 {
   IPERF_MODE_TIMED,
   IPERF_MODE_SIZE,
+  IPERF_MODE_CACHING_BIDIRECTIONAL,
   // TODO
   IPERF_MODE_MAX
 } IperfMode_e;
@@ -59,5 +68,9 @@ typedef struct
   uint32_t ipv6numErroredTx;
 } IperfResults_s;
 
+int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt));
+int Iperf_StartUdpServer(gnrc_netreg_entry_t *server, kernel_pid_t pid);
+int Iperf_StopUdpServer(gnrc_netreg_entry_t *server);
 int Iperf_Deinit(void);
 int Iperf_Init(bool iAmSender);
+

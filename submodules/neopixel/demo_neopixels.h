@@ -38,6 +38,7 @@ typedef enum
   ANIMATION_CCN_DISPLAY,
   #endif
   ANIMATION_LINE,
+  ANIMATION_CANVAS,
   ANIMATION_MAX
 } AnimationIdx_e;
 

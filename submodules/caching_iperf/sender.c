@@ -77,7 +77,7 @@ static void initSender(void)
   payloadPkt->plSize = config.payloadSizeBytes;
   payloadPkt->msgType = IPERF_PAYLOAD;
   payloadPkt->seqNo = 0;
-  strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(0), config.payloadSizeBytes);
+  /*strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(0), config.payloadSizeBytes);*/
   Iperf_StartUdpServer(&udpServer, senderPid);
 }
 

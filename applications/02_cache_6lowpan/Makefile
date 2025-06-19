@@ -4,7 +4,7 @@ APPLICATION = cache_6lp
 BOARD ?= native
 
 # This has to be the absolute path to the RIOT base directory:
-RIOTBASE ?= $(CURDIR)/../..
+RIOTBASE ?= $(CURDIR)/../../RIOT
 
 # Comment this out to disable code in RIOT that does safety checking
 # which is not needed in a production environment but helps in the
@@ -88,6 +88,12 @@ CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/neopixel/
 CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/onboard_leds/
 CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/throttler/
 CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/caching_iperf/
+
+
+# use the IPv6 caching submodule
+USEMODULE += gnrc_ipv6_cache
+CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/gnrc_ipv6_cache/
+
 
 # USEPKG += ccn-lite
 

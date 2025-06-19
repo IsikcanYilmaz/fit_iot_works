@@ -15,7 +15,6 @@
 #include "net/utils.h"
 #include "sema_inv.h"
 #include "test_utils/benchmark_udp.h"
-#include "ztimer.h"
 #include "shell.h"
 #include "od.h"
 #include "net/netstats.h"
@@ -38,59 +37,68 @@ typedef enum
   RECEIVER_STATE_MAX
 } IperfReceiverState_e;
 
-static msg_t _msg_queue[IPERF_RECEIVER_MSG_QUEUE_SIZE];
-
-static IperfReceiverState_e receiverState = RECEIVER_IDLE;
-static char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
-
-static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
-
-static kernel_pid_t receiverPid = KERNEL_PID_UNDEF;
-
 extern IperfResults_s results;
+extern IperfConfig_s config;
+extern uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];
 extern bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
+
+static uint8_t *txBuffer = &rxtxBuffer;
+static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
+
+static IperfReceiverState_e receiverState = RECEIVER_STOPPED;
+static kernel_pid_t receiverPid = KERNEL_PID_UNDEF;
+static char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
+static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
 
 static int receiverHandleIperfPayload(gnrc_pktsnip_t *pkt)
 {
-  iperf_udp_pkt_t *iperfPl = (iperf_udp_pkt_t *) pkt;
-  logverbose("Received seq no %d\nPayload %s\nLosses %d\nDups %d\n", iperfPl->seq_no, iperfPl->payload, results.pktLossCounter, results.numDuplicates);
+  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) pkt;
+  printf("RECEIVER RECEIVED PKT\n");
 
-  if (results.lastPktSeqNo == iperfPl->seq_no - 1)
+  if (iperfPkt->msgType >= IPERF_CTRL_MSG_MAX)
   {
-    // NO LOSS 
-    results.lastPktSeqNo = iperfPl->seq_no;
-    logverbose("RX %d\n", iperfPl->seq_no);
-  }
-  else if (receivedPktIds[iperfPl->seq_no])
-  {
-    // Dup
-    results.numDuplicates++;
-    logverbose("DUP %d\n", iperfPl->seq_no);
-  }
-  else if (results.lastPktSeqNo < iperfPl->seq_no)
-  {
-    // Loss happened
-    uint16_t lostPkts = (iperfPl->seq_no - results.lastPktSeqNo);
-    results.pktLossCounter += lostPkts;
-    results.lastPktSeqNo = iperfPl->seq_no;
-    logverbose("LOSS %d pkts \n", lostPkts);
+    logerror("Receiver received bad msg_type %x\n", iperfPkt->msgType);
+    return 1;
   }
 
-  receivedPktIds[iperfPl->seq_no] = true;
+  /*logverbose("Received seq no %d\nPayload %s\nLosses %d\nDups %d\n", iperfPl->seq_no, iperfPl->payload, results.pktLossCounter, results.numDuplicates);*/
 
-  results.numReceivedPkts++;
-  results.endTimestamp = ztimer_now(ZTIMER_USEC);
-  if (results.numReceivedPkts == 1)
-  {
-    results.startTimestamp = results.endTimestamp;
-  }
+  /*if (results.lastPktSeqNo == iperfPl->seq_no - 1)*/
+  /*{*/
+  /*  // NO LOSS */
+  /*  results.lastPktSeqNo = iperfPl->seq_no;*/
+  /*  logverbose("RX %d\n", iperfPl->seq_no);*/
+  /*}*/
+  /*else if (receivedPktIds[iperfPl->seq_no])*/
+  /*{*/
+  /*  // Dup*/
+  /*  results.numDuplicates++;*/
+  /*  logverbose("DUP %d\n", iperfPl->seq_no);*/
+  /*}*/
+  /*else if (results.lastPktSeqNo < iperfPl->seq_no)*/
+  /*{*/
+  /*  // Loss happened*/
+  /*  uint16_t lostPkts = (iperfPl->seq_no - results.lastPktSeqNo);*/
+  /*  results.pktLossCounter += lostPkts;*/
+  /*  results.lastPktSeqNo = iperfPl->seq_no;*/
+  /*  logverbose("LOSS %d pkts \n", lostPkts);*/
+  /*}*/
+  /**/
+  /*receivedPktIds[iperfPl->seq_no] = true;*/
+  /**/
+  /*results.numReceivedPkts++;*/
+  /*results.endTimestamp = ztimer_now(ZTIMER_USEC);*/
+  /*if (results.numReceivedPkts == 1)*/
+  /*{*/
+  /*  results.startTimestamp = results.endTimestamp;*/
+  /*}*/
 }
 
 void *Iperf_ReceiverThread(void *arg)
 {
   (void) arg;
   msg_t msg, reply;
-  msg_init_queue(_msg_queue, IPERF_RECEIVER_MSG_QUEUE_SIZE);
+  msg_init_queue(_msg_queue, IPERF_MSG_QUEUE_SIZE);
 
   reply.content.value = (uint32_t)(-ENOTSUP);
   reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
@@ -106,17 +114,17 @@ void *Iperf_ReceiverThread(void *arg)
     switch (msg.type) {
       case GNRC_NETAPI_MSG_TYPE_RCV:
         logdebug("Data received\n");
-        Iperf_PacketHandler(msg.content.ptr, NULL);
+        Iperf_PacketHandler(msg.content.ptr, receiverHandleIperfPayload);
         break;
       case GNRC_NETAPI_MSG_TYPE_SND:
         logdebug("Data to send");
-        Iperf_PacketHandler(msg.content.ptr, NULL);
+        Iperf_PacketHandler(msg.content.ptr, receiverHandleIperfPayload);
         break;
       case GNRC_NETAPI_MSG_TYPE_GET:
       case GNRC_NETAPI_MSG_TYPE_SET:
         msg_reply(&msg, &reply);
         break;
-      case IPERF_MSG_TYPE_DONE:
+      case IPERF_IPC_MSG_DONE:
         receiverState = RECEIVER_STOPPED;
         break;
       default:

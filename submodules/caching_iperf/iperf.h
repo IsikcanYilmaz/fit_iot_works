@@ -4,9 +4,19 @@
 #include "net/gnrc/nettype.h"
 
 #define IPERF_TOTAL_TRANSMISSION_SIZE_MAX (4096)
-#define IPERF_RECEIVER_MSG_QUEUE_SIZE 16
+#define IPERF_BUFFER_SIZE_BYTES 256
+#define IPERF_MSG_QUEUE_SIZE 32
 #define IPERF_DEFAULT_PORT (1)
-#define IPERF_MSG_TYPE_DONE (0xfff0)
+#define IPERF_PAYLOAD_DEFAULT_SIZE_BYTES 32
+#define IPERF_PAYLOAD_MAX_SIZE_BYTES 512
+#define IPERF_DEFAULT_DELAY_US 1000000
+#define IPERF_DEFAULT_PKT_PER_SECOND // TODO
+#define IPERF_DEFAULT_TRANSFER_SIZE_BYTES (IPERF_PAYLOAD_DEFAULT_SIZE_BYTES * 16) // 512 bytes
+#define IPERF_DEFAULT_TRANSFER_TIME_US (IPERF_DEFAULT_DELAY_US * 10) // 10 secs
+
+// IPERF IPC MESSAGE TYPES
+#define IPERF_IPC_MSG_DONE         (0xfff0)
+#define IPERF_IPC_MSG_SEND_PAYLOAD (0xfff1)
 
 typedef enum
 {
@@ -73,4 +83,5 @@ int Iperf_StartUdpServer(gnrc_netreg_entry_t *server, kernel_pid_t pid);
 int Iperf_StopUdpServer(gnrc_netreg_entry_t *server);
 int Iperf_Deinit(void);
 int Iperf_Init(bool iAmSender);
-
+void Iperf_ResetResults(void);
+int Iperf_SocklessUdpSend(const char *data, size_t dataLen);

@@ -60,6 +60,8 @@ endif
 # WATCHDOG CONFIG
 CFLAGS += -DCONFIG_PERIPH_WDT_WIN_MAX_MS=10000 # 10 seconds watchdog time
 
+CFLAGS += -DDEBUG_ASSERT_VERBOSE
+
 ###########
 
 # Change this to 0 show compiler invocation lines by default:

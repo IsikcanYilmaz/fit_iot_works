@@ -19,16 +19,9 @@
 #include "logger.h"
 
 #include "receiver.h"
+#include "sender.h"
 
-#define IPERF_DEFAULT_PORT 1
-#define IPERF_PAYLOAD_DEFAULT_SIZE_BYTES 32
-#define IPERF_PAYLOAD_MAX_SIZE_BYTES 512
-#define IPERF_DEFAULT_DELAY_US 1000000
-#define IPERF_DEFAULT_PKT_PER_SECOND // TODO
-#define IPERF_DEFAULT_TRANSFER_SIZE_BYTES (IPERF_PAYLOAD_DEFAULT_SIZE_BYTES * 16) // 512 bytes
-#define IPERF_DEFAULT_TRANSFER_TIME_US (IPERF_DEFAULT_DELAY_US * 10) // 10 secs
-
-static IperfConfig_s config = {
+IperfConfig_s config = {
   .payloadSizeBytes = IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
   .delayUs = 10000,
@@ -43,18 +36,16 @@ static volatile bool running = false;
 
 static char receiver_thread_stack[THREAD_STACKSIZE_DEFAULT];
 static char sender_thread_stack[THREAD_STACKSIZE_DEFAULT];
-static uint8_t txBuffer[IPERF_PAYLOAD_MAX_SIZE_BYTES];
 
 static char target_global_ip_addr[25] = "2001::2";
-
-/*static msg_t _msg_queue[RECEIVER_MSG_QUEUE_SIZE];*/
 
 static kernel_pid_t sender_pid = 0;
 static kernel_pid_t receiver_pid = 0;
 
-/*static gnrc_netreg_entry_t server = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);*/
+bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this
+/*uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];*/
 
-bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this?
+uint8_t rxtxBuffer[256];
 
 ///////////////////////////////////
 
@@ -152,7 +143,7 @@ static void printAll(void)
   printf("}\n");
 } 
 
-static void resetResults(void)
+void Iperf_ResetResults(void)
 {
   memset(&results, 0x00, sizeof(IperfResults_s));
   memset(&receivedPktIds, 0x00, IPERF_TOTAL_TRANSMISSION_SIZE_MAX);
@@ -160,101 +151,82 @@ static void resetResults(void)
   loginfo("Results reset\n");
 }
 
-static bool isTransferDone(void)
-{
-  bool ret = false;
-  if (config.mode == IPERF_MODE_SIZE)
-  {
-    ret = (results.numSentBytes >= config.transferSizeBytes);
-  }
-  else if (config.mode == IPERF_MODE_TIMED)
-  {
-    ret = (ztimer_now(ZTIMER_USEC) - results.startTimestamp >= config.transferTimeUs);
-  }
-  return ret;
-}
-
 // SOCKLESS 
 // Yanked out of sys/shell/cmds/gnrc_udp.c
 // takes address and port in _string_ form!
-static int socklessUdpSend(const char *addr_str, const char *port_str, const char *data, size_t dataLen, size_t num, unsigned int delayUs)
+int Iperf_SocklessUdpSend(const char *data, size_t dataLen)
 {
   netif_t *netif;
   uint16_t port;
   ipv6_addr_t addr;
 
   /* parse destination address */
-  if (netutils_get_ipv6(&addr, &netif, addr_str) < 0) {
+  if (netutils_get_ipv6(&addr, &netif, target_global_ip_addr) < 0) {
     loginfo("Error: unable to parse destination address\n");
     return 1;
   }
 
   /* parse port */
-  port = atoi(port_str);
+  port = IPERF_DEFAULT_PORT;
   if (port == 0) {
     loginfo("Error: unable to parse destination port\n");
     return 1;
   }
 
-  while (num--) {
-    gnrc_pktsnip_t *payload, *udp, *ip;
-    unsigned payload_size;
+  gnrc_pktsnip_t *payload, *udp, *ip;
+  unsigned payload_size;
 
-    /* allocate payload */
-    payload = gnrc_pktbuf_add(NULL, data, dataLen, GNRC_NETTYPE_UNDEF);
-    if (payload == NULL) {
-      logerror("Error: unable to copy data to packet buffer\n");
-      return 1;
-    }
+  /* allocate payload */
+  payload = gnrc_pktbuf_add(NULL, data, dataLen, GNRC_NETTYPE_UNDEF);
+  if (payload == NULL) {
+    logerror("Error: unable to copy data to packet buffer\n");
+    return 1;
+  }
 
-    /* store size for output */
-    payload_size = (unsigned)payload->size;
+  /* store size for output */
+  payload_size = (unsigned)payload->size;
 
-    /* allocate UDP header, set source port := destination port */
-    udp = gnrc_udp_hdr_build(payload, port, port);
-    if (udp == NULL) {
-      logerror("Error: unable to allocate UDP header\n");
-      gnrc_pktbuf_release(payload);
-      return 1;
-    }
+  /* allocate UDP header, set source port := destination port */
+  udp = gnrc_udp_hdr_build(payload, port, port);
+  if (udp == NULL) {
+    logerror("Error: unable to allocate UDP header\n");
+    gnrc_pktbuf_release(payload);
+    return 1;
+  }
 
-    /* allocate IPv6 header */
-    ip = gnrc_ipv6_hdr_build(udp, NULL, &addr);
-    if (ip == NULL) {
-      logerror("Error: unable to allocate IPv6 header\n");
-      gnrc_pktbuf_release(udp);
-      return 1;
-    }
+  /* allocate IPv6 header */
+  ip = gnrc_ipv6_hdr_build(udp, NULL, &addr);
+  if (ip == NULL) {
+    logerror("Error: unable to allocate IPv6 header\n");
+    gnrc_pktbuf_release(udp);
+    return 1;
+  }
 
-    /* add netif header, if interface was given */
-    if (netif != NULL) {
-      gnrc_pktsnip_t *netif_hdr = gnrc_netif_hdr_build(NULL, 0, NULL, 0);
-      if (netif_hdr == NULL) {
-        loginfo("Error: unable to allocate netif header\n");
-        gnrc_pktbuf_release(ip);
-        return 1;
-      }
-      gnrc_netif_hdr_set_netif(netif_hdr->data, container_of(netif, gnrc_netif_t, netif));
-      ip = gnrc_pkt_prepend(ip, netif_hdr);
-    }
-
-    /* send packet */
-    if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_UDP,
-                                   GNRC_NETREG_DEMUX_CTX_ALL, ip)) {
-      logerror("Error: unable to locate UDP thread\n");
+  /* add netif header, if interface was given */
+  if (netif != NULL) {
+    gnrc_pktsnip_t *netif_hdr = gnrc_netif_hdr_build(NULL, 0, NULL, 0);
+    if (netif_hdr == NULL) {
+      loginfo("Error: unable to allocate netif header\n");
       gnrc_pktbuf_release(ip);
       return 1;
     }
+    gnrc_netif_hdr_set_netif(netif_hdr->data, container_of(netif, gnrc_netif_t, netif));
+    ip = gnrc_pkt_prepend(ip, netif_hdr);
+  }
 
-    /* access to `payload` was implicitly given up with the send operation
+  /* send packet */
+  if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_UDP,
+                                 GNRC_NETREG_DEMUX_CTX_ALL, ip)) {
+    logerror("Error: unable to locate UDP thread\n");
+    gnrc_pktbuf_release(ip);
+    return 1;
+  }
+
+  /* access to `payload` was implicitly given up with the send operation
      * above
      * => use temporary variable for output */
-    logdebug("Success: sent %u byte(s) to [%s]:%u\n", payload_size, addr_str, port);
-    results.numSentPkts++;
-    if (num) {
-      ztimer_sleep(ZTIMER_USEC, delayUs);
-    }
-  }
+  logdebug("Success: sent %u byte(s) to [%s]:%u\n", payload_size, target_global_ip_addr, port);
+  results.numSentPkts++;
   return 0;
 }
 
@@ -290,7 +262,6 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
           {
             fn(snip->data);
           }
-          /*receiverHandleIperfPayload(snip->data);*/
           break;
         }
       case GNRC_NETTYPE_SIXLOWPAN:
@@ -359,58 +330,59 @@ int Iperf_StopUdpServer(gnrc_netreg_entry_t *server)
     return 1;
   }
   /* stop server */
-  gnrc_netreg_unregister(GNRC_NETTYPE_UDP, &server);
+  gnrc_netreg_unregister(GNRC_NETTYPE_UDP, server);
   server->target.pid = KERNEL_PID_UNDEF;
   loginfo("Success: stopped UDP server\n"); 
   return 0;
 }
 
+#if 0
 static void *Iperf_SenderThread(void *arg)
 {
   loginfo("%s Thread start\n", __FUNCTION__);
-  /*uint16_t pktSize = config.payloadSizeBytes;*/
-  /*memset(&txBuffer, 0x01, pktSize);*/
-  /**/
-  /*iperf_udp_pkt_t *pl = (void *) &txBuffer;*/
-  /**/
-  /*char *plString = "ASDFQWERASDFQWE\0";*/
-  /*strncpy((char *) &pl->payload, plString, strlen(plString));*/
-  /**/
-  /*pl->seq_no = 0;*/
-  /*pl->pl_size = 16;*/
-  /**/
-  /*results.startTimestamp = ztimer_now(ZTIMER_USEC);*/
-  /**/
-  /*while (!isTransferDone())*/
-  /*{*/
-  /*  int sendRet = socklessUdpSend(&target_global_ip_addr, "1", (char *) pl, pktSize, 1, config.delayUs);*/
-  /*  ztimer_sleep(ZTIMER_USEC, config.delayUs);*/
-  /*  pl->seq_no++;*/
-  /*  results.numSentBytes += pktSize;*/
-  /*  results.lastPktSeqNo = pl->seq_no;*/
-  /*}*/
-  /*results.endTimestamp = ztimer_now(ZTIMER_USEC);*/
-  /*Iperf_Deinit();*/
-  /*loginfo("Sender task done\n");*/
-  /*printResults(false);*/
-  /*loginfo("Sender thread exiting\n");*/
+  uint16_t pktSize = config.payloadSizeBytes;
+  memset(&txBuffer, 0x01, pktSize);
+
+  iperf_udp_pkt_t *pl = (void *) &txBuffer;
+
+  char *plString = "ASDFQWERASDFQWE\0";
+  strncpy((char *) &pl->payload, plString, strlen(plString));
+
+  pl->seq_no = 0;
+  pl->pl_size = 16;
+
+  results.startTimestamp = ztimer_now(ZTIMER_USEC);
+
+  while (!isTransferDone())
+  {
+    int sendRet = socklessUdpSend(&target_global_ip_addr, "1", (char *) pl, pktSize, 1, config.delayUs);
+    ztimer_sleep(ZTIMER_USEC, config.delayUs);
+    pl->seq_no++;
+    results.numSentBytes += pktSize;
+    results.lastPktSeqNo = pl->seq_no;
+  }
+  results.endTimestamp = ztimer_now(ZTIMER_USEC);
+  Iperf_Deinit();
+  loginfo("Sender task done\n");
+  printResults(false);
+  loginfo("Sender thread exiting\n");
 }
+#endif
 
 int Iperf_Init(bool iAmSender)
 {
-  /*if (running)*/
-  /*{*/
-  /*  logerror("Already running!\n");*/
-  /*  return 1;*/
-  /*}*/
-  /**/
-  /*resetResults();*/
-  /**/
-  /*config.iAmSender = iAmSender;*/
-  /*config.senderPort = IPERF_DEFAULT_PORT; // TODO make more generic? TODO make address more generic*/
-  /*config.listenerPort = IPERF_DEFAULT_PORT;*/
-  /**/
-  /*running = true;*/
+  if (running)
+  {
+    logerror("Already running!\n");
+    return 1;
+  }
+
+  Iperf_ResetResults();
+
+  config.iAmSender = iAmSender;
+  config.senderPort = IPERF_DEFAULT_PORT; // TODO make more generic? TODO make address more generic
+  config.listenerPort = IPERF_DEFAULT_PORT;
+
   if (!iAmSender)
   {
     receiver_pid = thread_create(receiver_thread_stack, sizeof(receiver_thread_stack), THREAD_PRIORITY_MAIN - 2, 0, Iperf_ReceiverThread, NULL, "iperf_receiver");
@@ -427,7 +399,7 @@ int Iperf_Deinit(void)
 {
   running = false;
   msg_t m;
-  m.type = IPERF_MSG_TYPE_DONE;
+  m.type = IPERF_IPC_MSG_DONE;
   msg_send(&m, receiver_pid);
   receiver_pid = KERNEL_PID_UNDEF;
   loginfo("Deinitialized\n");
@@ -618,7 +590,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       }
       else if (strncmp(argv[2], "reset", 16) == 0)
       {
-        resetResults();
+        Iperf_ResetResults();
       }
     }
     else

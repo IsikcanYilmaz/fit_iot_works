@@ -32,10 +32,6 @@ typedef enum
   SENDER_STOPPED,
   SENDER_SENDING_FILE,
   SENDER_IDLE,
-   
-
-
-
   SENDER_STATE_MAX
 } IperfSenderState_e;
 
@@ -64,9 +60,9 @@ static bool isTransferDone(void)
   return ret;
 }
 
-static int senderHandleIperfMessage(gnrc_pktsnip_t *pkt)
+static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
 {
-  /*iperf_udp_pkt_t *iperfPl = (iperf_udp_pkt_t *) pkt;*/
+  loginfo("%s called\n", __FUNCTION__);
 }
 
 static void initSender(void)
@@ -77,7 +73,7 @@ static void initSender(void)
   payloadPkt->plSize = config.payloadSizeBytes;
   payloadPkt->msgType = IPERF_PAYLOAD;
   payloadPkt->seqNo = 0;
-  /*strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(0), config.payloadSizeBytes);*/
+  strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(0), config.payloadSizeBytes);
   Iperf_StartUdpServer(&udpServer, senderPid);
 }
 
@@ -88,8 +84,8 @@ static void deinitSender(void)
 
 static int sendPayload(void)
 {
-  Iperf_SocklessUdpSend((char *) &txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
-  return 0;
+  logverbose("Sending payload\n");
+  return Iperf_SocklessUdpSend((char *) txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
 }
 
 void *Iperf_SenderThread(void *arg)
@@ -108,7 +104,7 @@ void *Iperf_SenderThread(void *arg)
   senderState = SENDER_SENDING_FILE;
 
   ipcMsg.type = IPERF_IPC_MSG_SEND_PAYLOAD;
-  ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 1000000, &ipcMsg, senderPid);
+  ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 0, &ipcMsg, senderPid); // Start immediately
 
   while (senderState > SENDER_STOPPED) {
     msg_receive(&msg);
@@ -116,11 +112,11 @@ void *Iperf_SenderThread(void *arg)
     switch (msg.type) {
       case GNRC_NETAPI_MSG_TYPE_RCV:
         logdebug("Data received\n");
-        Iperf_PacketHandler(msg.content.ptr, senderHandleIperfMessage);
+        Iperf_PacketHandler(msg.content.ptr, senderHandleIperfPacket);
         break;
       case GNRC_NETAPI_MSG_TYPE_SND:
         logdebug("Data to send");
-        /*Iperf_PacketHandler(msg.content.ptr, senderHandleIperfMessage);*/
+        /*Iperf_PacketHandler(msg.content.ptr, senderHandleIperfPacket);*/
         break;
       case GNRC_NETAPI_MSG_TYPE_GET:
       case GNRC_NETAPI_MSG_TYPE_SET:
@@ -128,7 +124,6 @@ void *Iperf_SenderThread(void *arg)
         break;
       case IPERF_IPC_MSG_SEND_PAYLOAD:
         sendPayload();
-        printf("SENDER\n");
         ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 1000000, &ipcMsg, senderPid);
         break;
       case IPERF_IPC_MSG_DONE:

@@ -30,10 +30,6 @@ typedef enum
 {
   RECEIVER_STOPPED,
   RECEIVER_IDLE,
-   
-
-
-
   RECEIVER_STATE_MAX
 } IperfReceiverState_e;
 
@@ -50,7 +46,7 @@ static kernel_pid_t receiverPid = KERNEL_PID_UNDEF;
 static char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
 
-static int receiverHandleIperfPayload(gnrc_pktsnip_t *pkt)
+static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
 {
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) pkt;
   printf("RECEIVER RECEIVED PKT\n");
@@ -61,37 +57,62 @@ static int receiverHandleIperfPayload(gnrc_pktsnip_t *pkt)
     return 1;
   }
 
-  /*logverbose("Received seq no %d\nPayload %s\nLosses %d\nDups %d\n", iperfPl->seq_no, iperfPl->payload, results.pktLossCounter, results.numDuplicates);*/
+  /*logverbose("Received seq no %d\nPayload %s\nLosses %d\nDups %d\n", iperfPkt->seqNo, iperfPkt->payload, results.pktLossCounter, results.numDuplicates);*/
+  logverbose("Received Iperf Pkt: Type %d\n", iperfPkt->msgType);
+  
+  switch (iperfPkt->msgType)
+  {
+    case IPERF_PAYLOAD:
+      {
+        if (results.lastPktSeqNo == iperfPkt->seqNo - 1)
+        {
+          // NO LOSS 
+          results.lastPktSeqNo = iperfPkt->seqNo;
+          logverbose("RX %d\n", iperfPkt->seqNo);
+        }
+        else if (receivedPktIds[iperfPkt->seqNo])
+        {
+          // Dup
+          results.numDuplicates++;
+          logverbose("DUP %d\n", iperfPkt->seqNo);
+        }
+        else if (results.lastPktSeqNo < iperfPkt->seqNo)
+        {
+          // Loss happened
+          uint16_t lostPkts = (iperfPkt->seqNo - results.lastPktSeqNo);
+          results.pktLossCounter += lostPkts;
+          results.lastPktSeqNo = iperfPkt->seqNo;
+          logverbose("LOSS %d pkts \n", lostPkts);
+        }
 
-  /*if (results.lastPktSeqNo == iperfPl->seq_no - 1)*/
-  /*{*/
-  /*  // NO LOSS */
-  /*  results.lastPktSeqNo = iperfPl->seq_no;*/
-  /*  logverbose("RX %d\n", iperfPl->seq_no);*/
-  /*}*/
-  /*else if (receivedPktIds[iperfPl->seq_no])*/
-  /*{*/
-  /*  // Dup*/
-  /*  results.numDuplicates++;*/
-  /*  logverbose("DUP %d\n", iperfPl->seq_no);*/
-  /*}*/
-  /*else if (results.lastPktSeqNo < iperfPl->seq_no)*/
-  /*{*/
-  /*  // Loss happened*/
-  /*  uint16_t lostPkts = (iperfPl->seq_no - results.lastPktSeqNo);*/
-  /*  results.pktLossCounter += lostPkts;*/
-  /*  results.lastPktSeqNo = iperfPl->seq_no;*/
-  /*  logverbose("LOSS %d pkts \n", lostPkts);*/
-  /*}*/
-  /**/
-  /*receivedPktIds[iperfPl->seq_no] = true;*/
-  /**/
-  /*results.numReceivedPkts++;*/
-  /*results.endTimestamp = ztimer_now(ZTIMER_USEC);*/
-  /*if (results.numReceivedPkts == 1)*/
-  /*{*/
-  /*  results.startTimestamp = results.endTimestamp;*/
-  /*}*/
+        receivedPktIds[iperfPkt->seqNo] = true;
+
+        results.numReceivedPkts++;
+        results.endTimestamp = ztimer_now(ZTIMER_USEC);
+        if (results.numReceivedPkts == 1)
+        {
+          results.startTimestamp = results.endTimestamp;
+        }
+      }
+    case IPERF_PKT_REQ:
+      {
+        break;
+      }
+    case IPERF_ECHO_CALL:
+      {
+        break;
+      }
+    case IPERF_ECHO_RESP:
+      {
+        break;
+      }
+    default:
+      {
+        logerror("Bad iperf packet type %d\n", iperfPkt->msgType);
+        break;
+      }
+  }
+
 }
 
 void *Iperf_ReceiverThread(void *arg)
@@ -110,15 +131,15 @@ void *Iperf_ReceiverThread(void *arg)
 
   while (receiverState > RECEIVER_STOPPED) {
     msg_receive(&msg);
-    logdebug("Received type %d\n", msg.type);
+    logdebug("IPC Message type %d\n", msg.type);
     switch (msg.type) {
       case GNRC_NETAPI_MSG_TYPE_RCV:
         logdebug("Data received\n");
-        Iperf_PacketHandler(msg.content.ptr, receiverHandleIperfPayload);
+        Iperf_PacketHandler(msg.content.ptr, receiverHandleIperfPacket);
         break;
       case GNRC_NETAPI_MSG_TYPE_SND:
-        logdebug("Data to send");
-        Iperf_PacketHandler(msg.content.ptr, receiverHandleIperfPayload);
+        logdebug("Data to send\n");
+        Iperf_PacketHandler(msg.content.ptr, receiverHandleIperfPacket);
         break;
       case GNRC_NETAPI_MSG_TYPE_GET:
       case GNRC_NETAPI_MSG_TYPE_SET:

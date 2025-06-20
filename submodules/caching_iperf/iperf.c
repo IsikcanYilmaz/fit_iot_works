@@ -30,7 +30,7 @@ IperfConfig_s config = {
   .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
 };
 
-static IperfResults_s results;
+IperfResults_s results;
 
 static volatile bool running = false;
 

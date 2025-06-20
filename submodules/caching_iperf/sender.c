@@ -57,6 +57,10 @@ static bool isTransferDone(void)
   {
     ret = (ztimer_now(ZTIMER_USEC) - results.startTimestamp >= config.transferTimeUs);
   }
+  else if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+  {
+    /*ret = (results.lastPktSeqNo )*/ // todo last pkt seq no == expected last pkt seq no
+  }
   return ret;
 }
 
@@ -104,6 +108,7 @@ void *Iperf_SenderThread(void *arg)
   senderState = SENDER_SENDING_FILE;
 
   ipcMsg.type = IPERF_IPC_MSG_SEND_PAYLOAD;
+  results.startTimestamp = ztimer_now(ZTIMER_USEC);
   ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 0, &ipcMsg, senderPid); // Start immediately
 
   while (senderState > SENDER_STOPPED) {
@@ -111,29 +116,44 @@ void *Iperf_SenderThread(void *arg)
     logdebug("Received type %d\n", msg.type);
     switch (msg.type) {
       case GNRC_NETAPI_MSG_TYPE_RCV:
-        logdebug("Data received\n");
-        Iperf_PacketHandler(msg.content.ptr, senderHandleIperfPacket);
-        break;
+        {
+          logdebug("Data received\n");
+          Iperf_PacketHandler(msg.content.ptr, senderHandleIperfPacket);
+          break;
+        }
       case GNRC_NETAPI_MSG_TYPE_SND:
-        logdebug("Data to send");
-        /*Iperf_PacketHandler(msg.content.ptr, senderHandleIperfPacket);*/
-        break;
+        {
+          logdebug("Data to send\n");
+          /*Iperf_PacketHandler(msg.content.ptr, senderHandleIperfPacket);*/
+          break;
+        }
       case GNRC_NETAPI_MSG_TYPE_GET:
       case GNRC_NETAPI_MSG_TYPE_SET:
-        msg_reply(&msg, &reply);
-        break;
+        {
+          msg_reply(&msg, &reply);
+          break;
+        }
       case IPERF_IPC_MSG_SEND_PAYLOAD:
-        sendPayload();
-        ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 1000000, &ipcMsg, senderPid);
-        break;
-      case IPERF_IPC_MSG_DONE:
-        senderState = SENDER_STOPPED;
-        break;
+        {
+          IperfUdpPkt_t *payloadPkt = txBuffer;
+          sendPayload();
+          results.numSentBytes += config.payloadSizeBytes;// + sizeof(IperfUdpPkt_t); // todo should or should not include metadata in our size sum? (4 bytes)
+          results.lastPktSeqNo = payloadPkt->seqNo;
+          payloadPkt->seqNo++;
+          ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 1000000, &ipcMsg, senderPid);
+          break;
+        }
+      case IPERF_IPC_MSG_STOP:
+        {
+          senderState = SENDER_STOPPED;
+          break;
+        }
       default:
         logverbose("received something unexpected");
         break;
     }
   }
+  results.endTimestamp = ztimer_now(ZTIMER_USEC);
   deinitSender();
   loginfo("Sender thread exiting\n");
   return NULL;

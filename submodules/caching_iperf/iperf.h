@@ -15,8 +15,9 @@
 #define IPERF_DEFAULT_TRANSFER_TIME_US (IPERF_DEFAULT_DELAY_US * 10) // 10 secs
 
 // IPERF IPC MESSAGE TYPES
-#define IPERF_IPC_MSG_DONE         (0xfff0)
+#define IPERF_IPC_MSG_START        (0xfff0)
 #define IPERF_IPC_MSG_SEND_PAYLOAD (0xfff1)
+#define IPERF_IPC_MSG_STOP         (0xfff2)
 
 typedef enum
 {
@@ -56,6 +57,7 @@ typedef struct
   uint32_t pktLossCounter;
   uint32_t numReceivedPkts;
   uint32_t numReceivedBytes;
+  uint32_t numReceivedPayloadBytes;
   uint32_t numReceivedGoodBytes;
   uint32_t numDuplicates;
   uint32_t numSentPkts;

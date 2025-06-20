@@ -422,6 +422,11 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   {
     Iperf_Init(false);
   }
+  else if (strncmp(argv[1], "start", 16) == 0)
+  {
+    // TODO do we want this? iperf should IDLE until receiving this command so that 
+    // ECHO commands can still be sent and received
+  }
   else if (strncmp(argv[1], "stop", 16) == 0)
   {
     if (!running)

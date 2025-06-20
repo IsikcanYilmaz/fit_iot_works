@@ -49,7 +49,6 @@ static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DE
 static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
 {
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) pkt;
-  printf("RECEIVER RECEIVED PKT\n");
 
   if (iperfPkt->msgType >= IPERF_CTRL_MSG_MAX)
   {
@@ -145,7 +144,7 @@ void *Iperf_ReceiverThread(void *arg)
       case GNRC_NETAPI_MSG_TYPE_SET:
         msg_reply(&msg, &reply);
         break;
-      case IPERF_IPC_MSG_DONE:
+      case IPERF_IPC_MSG_STOP:
         receiverState = RECEIVER_STOPPED;
         break;
       default:

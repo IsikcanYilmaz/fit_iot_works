@@ -399,7 +399,7 @@ int Iperf_Deinit(void)
 {
   running = false;
   msg_t m;
-  m.type = IPERF_IPC_MSG_DONE;
+  m.type = IPERF_IPC_MSG_STOP;
   msg_send(&m, receiver_pid);
   receiver_pid = KERNEL_PID_UNDEF;
   loginfo("Deinitialized\n");

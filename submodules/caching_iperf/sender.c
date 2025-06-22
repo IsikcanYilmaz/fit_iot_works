@@ -39,8 +39,10 @@ extern IperfResults_s results;
 extern IperfConfig_s config;
 extern uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];
 
-static uint8_t *txBuffer = &rxtxBuffer;
+static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
+static msg_t ipcMsg;
+static ztimer_t intervalTimer;
 
 static IperfSenderState_e senderState = SENDER_STOPPED;
 static kernel_pid_t senderPid = KERNEL_PID_UNDEF;
@@ -59,7 +61,7 @@ static bool isTransferDone(void)
   }
   else if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
   {
-    /*ret = (results.lastPktSeqNo )*/ // todo last pkt seq no == expected last pkt seq no
+    ret = (results.lastPktSeqNo == config.numPktsToTransfer-1);
   }
   return ret;
 }
@@ -73,7 +75,7 @@ static void initSender(void)
 {
   senderPid = thread_getpid();
   memset(txBuffer, 0x01, sizeof(IperfUdpPkt_t) + config.payloadSizeBytes);
-  IperfUdpPkt_t *payloadPkt = txBuffer;
+  IperfUdpPkt_t *payloadPkt = (IperfUdpPkt_t *) txBuffer;
   payloadPkt->plSize = config.payloadSizeBytes;
   payloadPkt->msgType = IPERF_PAYLOAD;
   payloadPkt->seqNo = 0;
@@ -88,15 +90,33 @@ static void deinitSender(void)
 
 static int sendPayload(void)
 {
-  logverbose("Sending payload\n");
+  IperfUdpPkt_t *payloadPkt = (IperfUdpPkt_t *) txBuffer;
+  logverbose("Sending payload. Seq no %d\n", payloadPkt->seqNo);
   return Iperf_SocklessUdpSend((char *) txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
+}
+
+static void handleState(void)
+{
+  IperfUdpPkt_t *payloadPkt = (IperfUdpPkt_t *) txBuffer;
+  sendPayload();
+  results.numSentBytes += config.payloadSizeBytes;// + sizeof(IperfUdpPkt_t); // todo should or should not include metadata in our size sum? (4 bytes)
+  results.lastPktSeqNo = payloadPkt->seqNo;
+  if (isTransferDone())
+  {
+    loginfo("Sender done sending %d packets. Now sitting Idle\n", config.numPktsToTransfer);
+    senderState = SENDER_IDLE;
+  }
+  else
+  {
+    payloadPkt->seqNo++;
+    ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 1000000, &ipcMsg, senderPid);
+  }
 }
 
 void *Iperf_SenderThread(void *arg)
 {
   (void) arg;
-  msg_t msg, reply, ipcMsg;
-  ztimer_t intervalTimer;
+  msg_t msg, reply;
   msg_init_queue(_msg_queue, IPERF_MSG_QUEUE_SIZE);
 
   reply.content.value = (uint32_t)(-ENOTSUP);
@@ -107,7 +127,7 @@ void *Iperf_SenderThread(void *arg)
 
   senderState = SENDER_SENDING_FILE;
 
-  ipcMsg.type = IPERF_IPC_MSG_SEND_PAYLOAD;
+  ipcMsg.type = IPERF_IPC_MSG_HEARTBEAT;
   results.startTimestamp = ztimer_now(ZTIMER_USEC);
   ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 0, &ipcMsg, senderPid); // Start immediately
 
@@ -118,7 +138,7 @@ void *Iperf_SenderThread(void *arg)
       case GNRC_NETAPI_MSG_TYPE_RCV:
         {
           logdebug("Data received\n");
-          Iperf_PacketHandler(msg.content.ptr, senderHandleIperfPacket);
+          Iperf_PacketHandler(msg.content.ptr, (void *) senderHandleIperfPacket);
           break;
         }
       case GNRC_NETAPI_MSG_TYPE_SND:
@@ -133,14 +153,9 @@ void *Iperf_SenderThread(void *arg)
           msg_reply(&msg, &reply);
           break;
         }
-      case IPERF_IPC_MSG_SEND_PAYLOAD:
+      case IPERF_IPC_MSG_HEARTBEAT:
         {
-          IperfUdpPkt_t *payloadPkt = txBuffer;
-          sendPayload();
-          results.numSentBytes += config.payloadSizeBytes;// + sizeof(IperfUdpPkt_t); // todo should or should not include metadata in our size sum? (4 bytes)
-          results.lastPktSeqNo = payloadPkt->seqNo;
-          payloadPkt->seqNo++;
-          ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 1000000, &ipcMsg, senderPid);
+          handleState();
           break;
         }
       case IPERF_IPC_MSG_STOP:

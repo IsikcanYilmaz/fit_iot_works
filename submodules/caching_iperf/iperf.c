@@ -5,6 +5,7 @@
 #include "net/gnrc/udp.h"
 #include "net/sock/tcp.h"
 #include "net/gnrc/nettype.h"
+#include "net/gnrc/ipv6.h"
 #include "net/utils.h"
 #include "sema_inv.h"
 #include "test_utils/benchmark_udp.h"
@@ -34,13 +35,11 @@ IperfResults_s results;
 
 static volatile bool running = false;
 
-static char receiver_thread_stack[THREAD_STACKSIZE_DEFAULT];
-static char sender_thread_stack[THREAD_STACKSIZE_DEFAULT];
+static char threadStack[THREAD_STACKSIZE_DEFAULT];
 
 static char target_global_ip_addr[25] = "2001::2";
 
-static kernel_pid_t sender_pid = 0;
-static kernel_pid_t receiver_pid = 0;
+static kernel_pid_t threadPid = KERNEL_PID_UNDEF;
 
 bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this
 /*uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];*/
@@ -195,7 +194,7 @@ int Iperf_SocklessUdpSend(const char *data, size_t dataLen)
   }
 
   /* allocate IPv6 header */
-  ip = gnrc_ipv6_hdr_build(udp, NULL, &addr);
+  ip = (gnrc_pktsnip_t *) gnrc_ipv6_hdr_build(udp, NULL, &addr);
   if (ip == NULL) {
     logerror("Error: unable to allocate IPv6 header\n");
     gnrc_pktbuf_release(udp);
@@ -256,8 +255,8 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
               char data = * (char *) (snip->data + i);
               printf("%02x(%c) %s", data, data, (i % 8 == 0 && i > 0) ? "\n" : "");
             }
+            printf("\n");
           }
-          logdebug("\n");
           if (fn)
           {
             fn(snip->data);
@@ -336,39 +335,6 @@ int Iperf_StopUdpServer(gnrc_netreg_entry_t *server)
   return 0;
 }
 
-#if 0
-static void *Iperf_SenderThread(void *arg)
-{
-  loginfo("%s Thread start\n", __FUNCTION__);
-  uint16_t pktSize = config.payloadSizeBytes;
-  memset(&txBuffer, 0x01, pktSize);
-
-  iperf_udp_pkt_t *pl = (void *) &txBuffer;
-
-  char *plString = "ASDFQWERASDFQWE\0";
-  strncpy((char *) &pl->payload, plString, strlen(plString));
-
-  pl->seq_no = 0;
-  pl->pl_size = 16;
-
-  results.startTimestamp = ztimer_now(ZTIMER_USEC);
-
-  while (!isTransferDone())
-  {
-    int sendRet = socklessUdpSend(&target_global_ip_addr, "1", (char *) pl, pktSize, 1, config.delayUs);
-    ztimer_sleep(ZTIMER_USEC, config.delayUs);
-    pl->seq_no++;
-    results.numSentBytes += pktSize;
-    results.lastPktSeqNo = pl->seq_no;
-  }
-  results.endTimestamp = ztimer_now(ZTIMER_USEC);
-  Iperf_Deinit();
-  loginfo("Sender task done\n");
-  printResults(false);
-  loginfo("Sender thread exiting\n");
-}
-#endif
-
 int Iperf_Init(bool iAmSender)
 {
   if (running)
@@ -383,13 +349,15 @@ int Iperf_Init(bool iAmSender)
   config.senderPort = IPERF_DEFAULT_PORT; // TODO make more generic? TODO make address more generic
   config.listenerPort = IPERF_DEFAULT_PORT;
 
+  config.numPktsToTransfer = (config.transferSizeBytes / config.payloadSizeBytes);
+
   if (!iAmSender)
   {
-    receiver_pid = thread_create(receiver_thread_stack, sizeof(receiver_thread_stack), THREAD_PRIORITY_MAIN - 2, 0, Iperf_ReceiverThread, NULL, "iperf_receiver");
+    threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 2, 0, Iperf_ReceiverThread, NULL, "iperf_receiver");
   }
   if (iAmSender)
   {
-    sender_pid = thread_create(sender_thread_stack, sizeof(sender_thread_stack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_SenderThread, NULL, "iperf_sender"); 
+    threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_SenderThread, NULL, "iperf_sender"); 
   }
   running = true;
   return 0;
@@ -400,8 +368,8 @@ int Iperf_Deinit(void)
   running = false;
   msg_t m;
   m.type = IPERF_IPC_MSG_STOP;
-  msg_send(&m, receiver_pid);
-  receiver_pid = KERNEL_PID_UNDEF;
+  msg_send(&m, threadPid);
+  threadPid = KERNEL_PID_UNDEF;
   loginfo("Deinitialized\n");
   return 0;
 }
@@ -607,7 +575,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   {
     if (argc > 2)
     {
-      strncpy(&target_global_ip_addr, argv[2], 25);
+      strncpy((char *) &target_global_ip_addr, argv[2], 25);
     }
     loginfo("%s\n", target_global_ip_addr);
   }
@@ -619,7 +587,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|stop|delay|log|config|target|results>\n");
+  logerror("Usage: iperf <sender|receiver|start|stop|delay|log|config|target|results>\n");
   return 1;
 }
 

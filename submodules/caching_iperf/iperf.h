@@ -18,6 +18,7 @@
 #define IPERF_IPC_MSG_START        (0xfff0)
 #define IPERF_IPC_MSG_SEND_PAYLOAD (0xfff1)
 #define IPERF_IPC_MSG_STOP         (0xfff2)
+#define IPERF_IPC_MSG_HEARTBEAT    (0xfff3)
 
 typedef enum
 {
@@ -48,6 +49,8 @@ typedef struct
 
   // SIZE MODE
   uint32_t transferSizeBytes;
+
+  uint16_t numPktsToTransfer;
 
 } IperfConfig_s;
 

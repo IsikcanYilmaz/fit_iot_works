@@ -38,7 +38,7 @@ extern IperfConfig_s config;
 extern uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];
 extern bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 
-static uint8_t *txBuffer = &rxtxBuffer;
+static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
 
 static IperfReceiverState_e receiverState = RECEIVER_STOPPED;
@@ -134,11 +134,11 @@ void *Iperf_ReceiverThread(void *arg)
     switch (msg.type) {
       case GNRC_NETAPI_MSG_TYPE_RCV:
         logdebug("Data received\n");
-        Iperf_PacketHandler(msg.content.ptr, receiverHandleIperfPacket);
+        Iperf_PacketHandler(msg.content.ptr, (void *) receiverHandleIperfPacket);
         break;
       case GNRC_NETAPI_MSG_TYPE_SND:
         logdebug("Data to send\n");
-        Iperf_PacketHandler(msg.content.ptr, receiverHandleIperfPacket);
+        Iperf_PacketHandler(msg.content.ptr, (void *) receiverHandleIperfPacket);
         break;
       case GNRC_NETAPI_MSG_TYPE_GET:
       case GNRC_NETAPI_MSG_TYPE_SET:

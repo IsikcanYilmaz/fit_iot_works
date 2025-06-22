@@ -1,4 +1,5 @@
 #include "logger.h"
+#include <stdio.h>
 
 // TODO eventually make this it's own module since it'll prolly be needed elsewhere
 

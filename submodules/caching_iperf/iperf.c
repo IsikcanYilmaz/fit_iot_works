@@ -38,6 +38,7 @@ static char threadStack[THREAD_STACKSIZE_DEFAULT];
 static char target_global_ip_addr[25] = "2001::2";
 static kernel_pid_t threadPid = KERNEL_PID_UNDEF;
 
+char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this
 /*uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];*/
 
@@ -133,6 +134,31 @@ static void printResults(bool json)
          );
 }
 
+static void printFileTransferStatus(void)
+{
+  printf("Received Pkt Ids:\n");
+  for (int i = 0; i < config.numPktsToTransfer; i++)
+  {
+    char printStr[4];
+    /*printf("%d:%d ", i, receivedPktIds[i]);*/
+    if (receivedPktIds[i])
+    {
+      itoa(i, &printStr, 10);
+    }
+    else
+    {
+      strcpy(&printStr, "_\0");
+    }
+    printf("%3s %s", printStr, ((i+1) % 8 == 0 && i > 0) ? "\n" : "");
+  }
+  printf("\n");
+}
+
+static void printReceivedFileContents(void)
+{
+  printf("%s\n", receiveFileBuffer);
+}
+
 static void printAll(void)
 {
   printf("{\"config\": ");
@@ -146,6 +172,7 @@ void Iperf_ResetResults(void)
 {
   memset(&results, 0x00, sizeof(IperfResults_s));
   memset(&receivedPktIds, 0x00, IPERF_TOTAL_TRANSMISSION_SIZE_MAX);
+  memset(&receiveFileBuffer, 0x00, IPERF_TOTAL_TRANSMISSION_SIZE_MAX);
   resetNetifStats();
   loginfo("Results reset\n");
 }
@@ -248,15 +275,23 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
       case GNRC_NETTYPE_UNDEF:  // APP PAYLOAD HERE
         {
           logdebug("UNDEF\n");
+          
           if (logprintTags[DEBUG])
           {
             for (int i = 0; i < snip->size; i++)
             {
               char data = * (char *) (snip->data + i);
-              printf("%02x(%c) %s", data, data, (i % 8 == 0 && i > 0) ? "\n" : "");
+              printf("%02x %c %s", data, data, (i % 8 == 0 && i > 0) ? "\n" : "");
             }
             printf("\n");
           }
+
+          if (!config.iAmSender && logprintTags[VERBOSE])
+          {
+            printFileTransferStatus();
+            printf("\n");
+          }
+
           if (fn)
           {
             fn(snip->data);
@@ -363,7 +398,7 @@ int Iperf_Init(bool iAmSender)
   return 0;
 }
 
-int Iperf_Deinit(void)
+int Iperf_Deinit(void) // TODO if sender quits on its own you have to call this somehow. until then, do the stop/start manually
 {
   running = false;
   msg_t m;
@@ -576,6 +611,10 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       {
         printAll();
       }
+      else if (strncmp(argv[2], "file", 16) == 0)
+      {
+        printFileTransferStatus();
+      }
       else if (strncmp(argv[2], "reset", 16) == 0)
       {
         Iperf_ResetResults();
@@ -594,6 +633,24 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     }
     loginfo("%s\n", target_global_ip_addr);
   }
+  else if (strncmp(argv[1], "echo", 16) == 0)
+  {
+    char rawPkt[20]; 
+    IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
+    uint8_t plSize = 16;
+    memset(&iperfPkt->payload, 0x00, 16);
+    if (argc <= 2)
+    {
+      strcpy(&iperfPkt->payload, "TEST");
+    }
+    else
+    {
+      strncpy(&iperfPkt->payload, argv[2], 16);
+    }
+    iperfPkt->seqNo = 0;
+    iperfPkt->msgType = IPERF_ECHO_CALL;
+    return Iperf_SocklessUdpSend((char *) &rawPkt, sizeof(rawPkt));
+  }
   else
   {
     goto usage;
@@ -602,7 +659,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|start|stop|delay|log|config|target|results>\n");
+  logerror("Usage: iperf <sender|receiver|start|stop|delay|log|config|target|results|echo>\n");
   return 1;
 }
 

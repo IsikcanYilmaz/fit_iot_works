@@ -37,13 +37,13 @@ extern IperfResults_s results;
 extern IperfConfig_s config;
 extern uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];
 extern bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
+extern char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 
 static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
 
 static IperfReceiverState_e receiverState = RECEIVER_STOPPED;
 static kernel_pid_t receiverPid = KERNEL_PID_UNDEF;
-static char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
 
 static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
@@ -72,7 +72,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         else if (receivedPktIds[iperfPkt->seqNo])
         {
           // Dup
-          results.numDuplicates++;
+          results.numDuplicates++; 
           logverbose("DUP %d\n", iperfPkt->seqNo);
         }
         else if (results.lastPktSeqNo < iperfPkt->seqNo)
@@ -99,6 +99,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
       }
     case IPERF_ECHO_CALL:
       {
+        loginfo("Echo Received %s\n", iperfPkt->payload);
         break;
       }
     case IPERF_ECHO_RESP:
@@ -111,7 +112,6 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         break;
       }
   }
-
 }
 
 void *Iperf_ReceiverThread(void *arg)

@@ -8,6 +8,7 @@ typedef enum {
   IPERF_PKT_REQ,
   IPERF_ECHO_CALL,
   IPERF_ECHO_RESP,
+  IPERF_CONFIG,
   IPERF_CTRL_MSG_MAX
 } IperfMsgType_e;
 

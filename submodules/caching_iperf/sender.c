@@ -100,7 +100,7 @@ static int sendPayload(uint16_t chunkIdx)
 static void handleFileSending(void)
 {
   IperfUdpPkt_t *payloadPkt = (IperfUdpPkt_t *) txBuffer;
-  sendPayload(0);
+  sendPayload(payloadPkt->seqNo);
   results.numSentBytes += config.payloadSizeBytes;// + sizeof(IperfUdpPkt_t); // todo should or should not include metadata in our size sum? (4 bytes)
   results.lastPktSeqNo = payloadPkt->seqNo;
   if (isTransferDone())
@@ -184,7 +184,7 @@ void *Iperf_SenderThread(void *arg)
         logverbose("received something unexpected");
         break;
     }
-  } while (senderState > SENDER_STOPPED)
+  } while (senderState > SENDER_STOPPED);
   results.endTimestamp = ztimer_now(ZTIMER_USEC);
   deinitSender();
   loginfo("Sender thread exiting\n");

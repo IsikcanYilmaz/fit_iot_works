@@ -198,7 +198,7 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
         rxOut += comm.sendSerialCommand(rxDev, "iperf receiver")
         rxOut += comm.sendSerialCommand(rxDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=3)
         txOut += comm.sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=3)
-        txOut += comm.sendSerialCommand(txDev, "iperf sender")
+        txOut += comm.sendSerialCommand(txDev, "iperf sender start")
 
         print("RX:", rxOut)
         print("TX:", txOut)
@@ -234,6 +234,9 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
 
         rxOut += comm.sendSerialCommand(rxDev, "iperf results reset")
 
+        rxOut += comm.sendSerialCommand(rxDev, "iperf stop")
+        txOut += comm.sendSerialCommand(txDev, "iperf stop")
+
         try:
             rxJson = json.loads(rxJsonRaw)
             txJson = json.loads(txJsonRaw)
@@ -268,8 +271,8 @@ def bulkExperiments(resultsDir):
     with open(f"{resultsDir}/config.txt", "w") as f:
         f.write(" ".join(sys.argv))
 
-    delayUsArr = [5000, 10000, 15000, 20000, 25000, 30000]
-    payloadSizeArr = [64, 32, 16, 8]
+    delayUsArr = [10000, 15000, 20000, 25000, 30000]
+    payloadSizeArr = [32, 16, 8]
     transferSizeArr = [4096]
     rounds = 20
     mode = 1

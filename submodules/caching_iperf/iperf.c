@@ -34,11 +34,8 @@ IperfConfig_s config = {
 IperfResults_s results;
 
 static volatile bool running = false;
-
 static char threadStack[THREAD_STACKSIZE_DEFAULT];
-
 static char target_global_ip_addr[25] = "2001::2";
-
 static kernel_pid_t threadPid = KERNEL_PID_UNDEF;
 
 bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this
@@ -98,7 +95,10 @@ static void printConfig(bool json)
 
 static void printResults(bool json)
 {
-  getNetifStats();
+  if (running)
+  {
+    getNetifStats();
+  }
   printf((json) ? \
 
            "{\"iAmSender\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"numSentPkts\":%d, \"numSentBytes\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu, \"l2numReceivedPackets\":%d, \"l2numReceivedBytes\":%d, \"l2numSentPackets\":%d, \"l2numSentBytes\":%d, \"l2numSuccessfulTx\":%d, \"l2numErroredTx\":%d, \"ipv6numReceivedPackets\":%d, \"ipv6numReceivedBytes\":%d, \"ipv6numSentPackets\":%d, \"ipv6numSentBytes\":%d, \"ipv6numSuccessfulTx\":%d, \"ipv6numErroredTx\":%d}\n" : \
@@ -385,6 +385,12 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   {
     loginfo("STARTING IPERF SENDER AT %s\n", target_global_ip_addr);
     Iperf_Init(true);
+    if (argc > 2 && strncmp(argv[2], "start", 16) == 0)
+    {
+      msg_t m;
+      m.type = IPERF_IPC_MSG_START;
+      msg_send(&m, threadPid);
+    }
   }
   else if (strncmp(argv[1], "receiver", 16) == 0)
   {
@@ -392,8 +398,16 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   }
   else if (strncmp(argv[1], "start", 16) == 0)
   {
-    // TODO do we want this? iperf should IDLE until receiving this command so that 
+    // TODO do we want this? sender should IDLE until receiving this command so that 
     // ECHO commands can still be sent and received
+    if (!running)
+    {
+      logerror("First select a role: iperf <sender|receiver>");
+      return 1;
+    }
+    msg_t m;
+    m.type = IPERF_IPC_MSG_START;
+    msg_send(&m, threadPid);
   }
   else if (strncmp(argv[1], "stop", 16) == 0)
   {
@@ -401,6 +415,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     {
       return 1;
     }
+    getNetifStats();
     Iperf_Deinit();
   }
   else if (strncmp(argv[1], "delay", 16) == 0)

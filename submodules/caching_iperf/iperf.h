@@ -15,10 +15,9 @@
 #define IPERF_DEFAULT_TRANSFER_TIME_US (IPERF_DEFAULT_DELAY_US * 10) // 10 secs
 
 // IPERF IPC MESSAGE TYPES
-#define IPERF_IPC_MSG_START        (0xfff0)
-#define IPERF_IPC_MSG_SEND_PAYLOAD (0xfff1)
-#define IPERF_IPC_MSG_STOP         (0xfff2)
-#define IPERF_IPC_MSG_HEARTBEAT    (0xfff3)
+#define IPERF_IPC_MSG_START          (0xfff0)
+#define IPERF_IPC_MSG_SEND_FILE      (0xfff1)
+#define IPERF_IPC_MSG_STOP           (0xfff2)
 
 typedef enum
 {

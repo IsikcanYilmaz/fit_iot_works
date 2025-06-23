@@ -30,8 +30,8 @@
 typedef enum
 {
   SENDER_STOPPED,
-  SENDER_SENDING_FILE,
   SENDER_IDLE,
+  SENDER_SENDING_FILE,
   SENDER_STATE_MAX
 } IperfSenderState_e;
 
@@ -88,28 +88,39 @@ static void deinitSender(void)
   Iperf_StopUdpServer(&udpServer);
 }
 
-static int sendPayload(void)
+static int sendPayload(uint16_t chunkIdx)
 {
   IperfUdpPkt_t *payloadPkt = (IperfUdpPkt_t *) txBuffer;
+  uint16_t charIdx = chunkIdx * config.payloadSizeBytes;
+  strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(charIdx), config.payloadSizeBytes);
   logverbose("Sending payload. Seq no %d\n", payloadPkt->seqNo);
   return Iperf_SocklessUdpSend((char *) txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
 }
 
-static void handleState(void)
+static void handleFileSending(void)
 {
   IperfUdpPkt_t *payloadPkt = (IperfUdpPkt_t *) txBuffer;
-  sendPayload();
+  sendPayload(0);
   results.numSentBytes += config.payloadSizeBytes;// + sizeof(IperfUdpPkt_t); // todo should or should not include metadata in our size sum? (4 bytes)
   results.lastPktSeqNo = payloadPkt->seqNo;
   if (isTransferDone())
   {
-    loginfo("Sender done sending %d packets. Now sitting Idle\n", config.numPktsToTransfer);
-    senderState = SENDER_IDLE;
+    loginfo("Sender done sending %d packets\n", config.numPktsToTransfer);
+    if (config.mode < IPERF_MODE_CACHING_BIDIRECTIONAL)
+    {
+      senderState = SENDER_STOPPED;
+      loginfo("Stopping iperf\n");
+    }
+    else if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+    {
+      senderState = SENDER_IDLE;
+      loginfo("Sitting idle\n");
+    }
   }
   else
   {
     payloadPkt->seqNo++;
-    ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 1000000, &ipcMsg, senderPid);
+    ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipcMsg, senderPid);
   }
 }
 
@@ -123,15 +134,14 @@ void *Iperf_SenderThread(void *arg)
   reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
 
   initSender();
-  loginfo("Starting Sender Thread. Pid %d\n", senderPid);
+  loginfo("Starting Sender Thread. Sitting Idle. Pid %d\n", senderPid);
 
-  senderState = SENDER_SENDING_FILE;
+  senderState = SENDER_IDLE;
 
-  ipcMsg.type = IPERF_IPC_MSG_HEARTBEAT;
+  ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
   results.startTimestamp = ztimer_now(ZTIMER_USEC);
-  ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 0, &ipcMsg, senderPid); // Start immediately
 
-  while (senderState > SENDER_STOPPED) {
+  do {
     msg_receive(&msg);
     logdebug("Received type %d\n", msg.type);
     switch (msg.type) {
@@ -153,9 +163,16 @@ void *Iperf_SenderThread(void *arg)
           msg_reply(&msg, &reply);
           break;
         }
-      case IPERF_IPC_MSG_HEARTBEAT:
+      case IPERF_IPC_MSG_START: // TODO am i adding complexity for no reason? 
         {
-          handleState();
+          loginfo("Sender received START command. Commencing iperf\n");
+          senderState = SENDER_SENDING_FILE;
+          ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 0, &ipcMsg, senderPid); // Start immediately
+          break;
+        }
+      case IPERF_IPC_MSG_SEND_FILE:
+        {
+          handleFileSending();
           break;
         }
       case IPERF_IPC_MSG_STOP:
@@ -167,7 +184,7 @@ void *Iperf_SenderThread(void *arg)
         logverbose("received something unexpected");
         break;
     }
-  }
+  } while (senderState > SENDER_STOPPED)
   results.endTimestamp = ztimer_now(ZTIMER_USEC);
   deinitSender();
   loginfo("Sender thread exiting\n");

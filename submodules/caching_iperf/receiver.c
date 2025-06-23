@@ -29,7 +29,7 @@
 typedef enum
 {
   RECEIVER_STOPPED,
-  RECEIVER_IDLE,
+  RECEIVER_RUNNING,
   RECEIVER_STATE_MAX
 } IperfReceiverState_e;
 
@@ -126,7 +126,7 @@ void *Iperf_ReceiverThread(void *arg)
   receiverPid = thread_getpid();
   Iperf_StartUdpServer(&udpServer, receiverPid);
   loginfo("Starting Receiver Thread. Pid %d\n", receiverPid);
-  receiverState = RECEIVER_IDLE;
+  receiverState = RECEIVER_RUNNING;
 
   while (receiverState > RECEIVER_STOPPED) {
     msg_receive(&msg);

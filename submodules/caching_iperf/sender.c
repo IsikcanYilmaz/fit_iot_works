@@ -94,7 +94,7 @@ static int sendPayload(uint16_t chunkIdx)
   uint16_t charIdx = chunkIdx * config.payloadSizeBytes;
   strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(charIdx), config.payloadSizeBytes);
   logverbose("Sending payload. Seq no %d\n", payloadPkt->seqNo);
-  return Iperf_SocklessUdpSend((char *) txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
+  return Iperf_SocklessUdpSendToDst((char *) txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
 }
 
 static void handleFileSending(void)

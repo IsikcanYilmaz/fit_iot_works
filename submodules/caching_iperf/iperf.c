@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "macros/utils.h"
 #include "net/gnrc.h"
 #include "net/sock/udp.h"
@@ -35,7 +36,8 @@ IperfResults_s results;
 
 static volatile bool running = false;
 static char threadStack[THREAD_STACKSIZE_DEFAULT];
-static char target_global_ip_addr[25] = "2001::2";
+static char dstGlobalIpAddr[25] = "2001::2";
+static char srcGlobalIpAddr[25] = "2001::1"; // TODO better solution
 static kernel_pid_t threadPid = KERNEL_PID_UNDEF;
 
 char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
@@ -140,14 +142,13 @@ static void printFileTransferStatus(void)
   for (int i = 0; i < config.numPktsToTransfer; i++)
   {
     char printStr[4];
-    /*printf("%d:%d ", i, receivedPktIds[i]);*/
     if (receivedPktIds[i])
     {
-      itoa(i, &printStr, 10);
+      sprintf((char *) &printStr, "%d", i);
     }
     else
     {
-      strcpy(&printStr, "_\0");
+      strcpy((char *) &printStr, "_\0");
     }
     printf("%3s %s", printStr, ((i+1) % 8 == 0 && i > 0) ? "\n" : "");
   }
@@ -180,14 +181,14 @@ void Iperf_ResetResults(void)
 // SOCKLESS 
 // Yanked out of sys/shell/cmds/gnrc_udp.c
 // takes address and port in _string_ form!
-int Iperf_SocklessUdpSend(const char *data, size_t dataLen)
+int Iperf_SocklessUdpSend(const char *data, size_t dataLen, char *targetIp)
 {
   netif_t *netif;
   uint16_t port;
   ipv6_addr_t addr;
 
   /* parse destination address */
-  if (netutils_get_ipv6(&addr, &netif, target_global_ip_addr) < 0) {
+  if (netutils_get_ipv6(&addr, &netif, targetIp) < 0) {
     loginfo("Error: unable to parse destination address\n");
     return 1;
   }
@@ -251,9 +252,36 @@ int Iperf_SocklessUdpSend(const char *data, size_t dataLen)
   /* access to `payload` was implicitly given up with the send operation
      * above
      * => use temporary variable for output */
-  logdebug("Success: sent %u byte(s) to [%s]:%u\n", payload_size, target_global_ip_addr, port);
+  logdebug("Success: sent %u byte(s) to [%s]:%u\n", payload_size, targetIp, port);
   results.numSentPkts++;
   return 0;
+}
+
+inline int Iperf_SocklessUdpSendToDst(const char *data, size_t dataLen)
+{
+  return Iperf_SocklessUdpSend(data, dataLen, dstGlobalIpAddr);
+}
+
+inline int Iperf_SocklessUdpSendToSrc(const char *data, size_t dataLen)
+{
+  return Iperf_SocklessUdpSend(data, dataLen, srcGlobalIpAddr);
+}
+
+int Iperf_SendEcho(char *str)
+{
+  char rawPkt[20]; 
+  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
+  uint8_t plSize = 16;
+  memset(&iperfPkt->payload, 0x00, 16);
+  strncpy((char *) &iperfPkt->payload, str, 16);
+  iperfPkt->seqNo = 0;
+  iperfPkt->msgType = IPERF_ECHO_CALL;
+  return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
+}
+
+int Iperf_RespondToEcho(void)
+{
+
 }
 
 int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
@@ -418,7 +446,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
 
   if (strncmp(argv[1], "sender", 16) == 0)
   {
-    loginfo("STARTING IPERF SENDER AT %s\n", target_global_ip_addr);
+    loginfo("STARTING IPERF SENDER AT %s\n", dstGlobalIpAddr);
     Iperf_Init(true);
     if (argc > 2 && strncmp(argv[2], "start", 16) == 0)
     {
@@ -615,6 +643,10 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       {
         printFileTransferStatus();
       }
+      else if (strncmp(argv[2], "contents", 16) == 0)
+      {
+        printReceivedFileContents();
+      }
       else if (strncmp(argv[2], "reset", 16) == 0)
       {
         Iperf_ResetResults();
@@ -629,27 +661,14 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   {
     if (argc > 2)
     {
-      strncpy((char *) &target_global_ip_addr, argv[2], 25);
+      strncpy((char *) &dstGlobalIpAddr, argv[2], 25);
     }
-    loginfo("%s\n", target_global_ip_addr);
+    loginfo("%s\n", dstGlobalIpAddr);
   }
   else if (strncmp(argv[1], "echo", 16) == 0)
   {
-    char rawPkt[20]; 
-    IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
-    uint8_t plSize = 16;
-    memset(&iperfPkt->payload, 0x00, 16);
-    if (argc <= 2)
-    {
-      strcpy(&iperfPkt->payload, "TEST");
-    }
-    else
-    {
-      strncpy(&iperfPkt->payload, argv[2], 16);
-    }
-    iperfPkt->seqNo = 0;
-    iperfPkt->msgType = IPERF_ECHO_CALL;
-    return Iperf_SocklessUdpSend((char *) &rawPkt, sizeof(rawPkt));
+    char *str = (argc >= 2) ? argv[1] : "TEST";
+    return Iperf_SendEcho(str);
   }
   else
   {

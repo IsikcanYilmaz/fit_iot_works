@@ -88,4 +88,6 @@ int Iperf_StopUdpServer(gnrc_netreg_entry_t *server);
 int Iperf_Deinit(void);
 int Iperf_Init(bool iAmSender);
 void Iperf_ResetResults(void);
-int Iperf_SocklessUdpSend(const char *data, size_t dataLen);
+int Iperf_SocklessUdpSend(const char *data, size_t dataLen, char *targetIp);
+int Iperf_SocklessUdpSendToDst(const char *data, size_t dataLen);
+int Iperf_SocklessUdpSendToSrc(const char *data, size_t dataLen);

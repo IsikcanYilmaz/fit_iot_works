@@ -147,6 +147,7 @@ static void handleFileSending(void)
     if (config.mode < IPERF_MODE_CACHING_BIDIRECTIONAL)
     {
       senderState = SENDER_STOPPED;
+      results.endTimestamp = ztimer_now(ZTIMER_USEC);
       loginfo("Stopping iperf\n");
     }
     else if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
@@ -223,7 +224,6 @@ void *Iperf_SenderThread(void *arg)
         break;
     }
   } while (senderState > SENDER_STOPPED);
-  results.endTimestamp = ztimer_now(ZTIMER_USEC);
   deinitSender();
   loginfo("Sender thread exiting\n");
   return NULL;

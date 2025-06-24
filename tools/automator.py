@@ -254,6 +254,7 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
         txOut += txJsonRaw
 
         rxOut += comm.sendSerialCommand(rxDev, "iperf results reset")
+        txOut += comm.sendSerialCommand(txDev, "iperf results reset")
 
         rxOut += comm.sendSerialCommand(rxDev, "iperf stop")
         txOut += comm.sendSerialCommand(txDev, "iperf stop")
@@ -291,7 +292,7 @@ def bulkExperiments(resultsDir):
         f.write(" ".join(sys.argv))
 
     delayUsArr = [5000, 10000, 15000, 20000, 25000, 30000]
-    payloadSizeArr = [64, 32, 16, 8]
+    payloadSizeArr = [32, 16, 8]
     transferSizeArr = [4096]
     rounds = 50
     mode = 1

@@ -117,6 +117,18 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         loginfo("Echo RESP Received %s\n", iperfPkt->payload);
         break;
       }
+    case IPERF_CONFIG_SYNC:
+      {
+        loginfo("Config pkt received\n");
+        IperfConfigPayload_t *configPl = (IperfConfigPayload_t *) iperfPkt->payload;
+        config.mode = configPl->mode;
+        config.payloadSizeBytes = configPl->payloadSizeBytes;
+        config.delayUs = configPl->delayUs;
+        config.transferSizeBytes = configPl->transferSizeBytes;
+        config.numPktsToTransfer = configPl->numPktsToTransfer;
+        Iperf_PrintConfig(false);
+        break;
+      }
     default:
       {
         logerror("Bad iperf packet type %d\n", iperfPkt->msgType);

@@ -8,7 +8,7 @@ typedef enum {
   IPERF_PKT_REQ,
   IPERF_ECHO_CALL,
   IPERF_ECHO_RESP,
-  IPERF_CONFIG,
+  IPERF_CONFIG_SYNC,
   IPERF_CTRL_MSG_MAX
 } IperfMsgType_e;
 
@@ -18,4 +18,14 @@ typedef struct {
   uint16_t seqNo;  // 2
   uint8_t payload[]; // *
 } __attribute__((packed)) IperfUdpPkt_t;
+
+typedef struct {
+  IperfMode_e mode; // 1
+  uint16_t payloadSizeBytes; // 2
+  uint32_t delayUs; // 4
+  uint32_t transferSizeBytes; // 4
+  uint16_t numPktsToTransfer; // 4
+  uint8_t _pad; // 1
+} __attribute__((packed)) IperfConfigPayload_t;
+
 

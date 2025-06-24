@@ -91,3 +91,4 @@ void Iperf_ResetResults(void);
 int Iperf_SocklessUdpSend(const char *data, size_t dataLen, char *targetIp);
 int Iperf_SocklessUdpSendToDst(const char *data, size_t dataLen);
 int Iperf_SocklessUdpSendToSrc(const char *data, size_t dataLen);
+void Iperf_PrintConfig(bool json);

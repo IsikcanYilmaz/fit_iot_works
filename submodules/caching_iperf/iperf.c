@@ -84,19 +84,6 @@ static void resetNetifStats(void)
   }
 }
 
-static void printConfig(bool json)
-{
-  printf((json) ? "{\"iAmSender\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d}\n" : \
-           "iAmSender: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\n", 
-           config.iAmSender, 
-           config.payloadSizeBytes, 
-           config.pktPerSecond, 
-           config.delayUs, 
-           config.mode, 
-           config.transferSizeBytes, 
-           config.transferTimeUs);
-}
-
 static void printResults(bool json)
 {
   if (running)
@@ -164,11 +151,24 @@ static void printReceivedFileContents(void)
 static void printAll(void)
 {
   printf("{\"config\": ");
-  printConfig(true);
+  Iperf_PrintConfig(true);
   printf(",\"results\" : ");
   printResults(true);
   printf("}\n");
-} 
+}
+
+void Iperf_PrintConfig(bool json)
+{
+  printf((json) ? "{\"iAmSender\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d}\n" : \
+           "iAmSender: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\n", 
+           config.iAmSender, 
+           config.payloadSizeBytes, 
+           config.pktPerSecond, 
+           config.delayUs, 
+           config.mode, 
+           config.transferSizeBytes, 
+           config.transferTimeUs);
+}
 
 void Iperf_ResetResults(void)
 {
@@ -268,6 +268,7 @@ inline int Iperf_SocklessUdpSendToSrc(const char *data, size_t dataLen)
   return Iperf_SocklessUdpSend(data, dataLen, srcGlobalIpAddr);
 }
 
+// With the following two fns, we assume the Tx machine is the master the Rx machine is the follower
 int Iperf_SendEcho(char *str)
 {
   char rawPkt[20]; 
@@ -277,6 +278,21 @@ int Iperf_SendEcho(char *str)
   strncpy((char *) iperfPkt->payload, str, 16);
   iperfPkt->seqNo = 0;
   iperfPkt->msgType = IPERF_ECHO_CALL;
+  return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
+}
+
+int Iperf_SendConfig(void)
+{
+  char rawPkt[20];
+  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
+  IperfConfigPayload_t *configPl = (IperfConfigPayload_t *) iperfPkt->payload;
+  memset(&rawPkt, 0x00, 20);
+  iperfPkt->msgType = IPERF_CONFIG_SYNC;
+  configPl->mode = config.mode;
+  configPl->payloadSizeBytes = config.payloadSizeBytes;
+  configPl->delayUs = config.delayUs;
+  configPl->transferSizeBytes = config.transferSizeBytes;
+  configPl->numPktsToTransfer = config.numPktsToTransfer;
   return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
 }
 
@@ -548,13 +564,17 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   {
     if (argc < 3)
     {
-      printConfig(false);
+      Iperf_PrintConfig(false);
       return 0;
     }
     else if (strncmp(argv[2], "json", 16) == 0)
     {
-      printConfig(true);
+      Iperf_PrintConfig(true);
       return 0;
+    }
+    else if (strncmp(argv[2], "sync", 16) == 0)
+    {
+      return Iperf_SendConfig();
     }
     else
     {
@@ -620,7 +640,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
         argIdx++;
       }
 
-      printConfig(false);
+      Iperf_PrintConfig(false);
     }
   }
   else if (strncmp(argv[1], "results", 16) == 0)

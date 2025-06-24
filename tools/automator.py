@@ -262,7 +262,7 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
         roundOverallJson = {"deviceoutput":deviceJson, "results":parseDeviceJsons(deviceJson)}
 
         with open(f"{resultsDir}/{outFilenamePrefix}_round{round}.json", "w") as f:
-            json.dump(roundOverallJson)
+            json.dump(roundOverallJson, f, indent=4)
 
         pprint(roundOverallJson)
         overallJson.append(roundOverallJson)

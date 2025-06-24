@@ -38,6 +38,8 @@ typedef enum
 extern IperfResults_s results;
 extern IperfConfig_s config;
 extern uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];
+extern char dstGlobalIpAddr[25];
+extern char srcGlobalIpAddr[25];
 
 static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
@@ -68,7 +70,43 @@ static bool isTransferDone(void)
 
 static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
 {
-  loginfo("%s called\n", __FUNCTION__);
+  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) pkt;
+  if (iperfPkt->msgType >= IPERF_CTRL_MSG_MAX)
+  {
+    logerror("Sender received bad msg_type %x\n", iperfPkt->msgType);
+    return 1;
+  }
+
+  /*logverbose("Received seq no %d\nPayload %s\nLosses %d\nDups %d\n", iperfPkt->seqNo, iperfPkt->payload, results.pktLossCounter, results.numDuplicates);*/
+  logverbose("Received Iperf Pkt: Type %d\n", iperfPkt->msgType);
+  switch (iperfPkt->msgType)
+  {
+    case IPERF_PAYLOAD:
+      {
+        loginfo("Sender received PAYLOAD packet. Shouldnt have...\n");
+        break;
+      }
+    case IPERF_PKT_REQ:
+      {
+        logverbose("Sender received request for packet\n");
+        break;
+      }
+    case IPERF_ECHO_CALL:
+      {
+        loginfo("Echo CALL Received %s\n", iperfPkt->payload);
+        break;
+      }
+    case IPERF_ECHO_RESP:
+      {
+        loginfo("Echo RESP Received %s\n", iperfPkt->payload);
+        break;
+      }
+    default:
+      {
+        logerror("Bad iperf packet type %d\n", iperfPkt->msgType);
+        break;
+      }
+  }
 }
 
 static void initSender(void)

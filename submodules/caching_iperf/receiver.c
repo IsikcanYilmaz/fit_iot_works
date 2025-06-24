@@ -38,6 +38,8 @@ extern IperfConfig_s config;
 extern uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];
 extern bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 extern char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
+extern char dstGlobalIpAddr[25];
+extern char srcGlobalIpAddr[25];
 
 static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
@@ -99,11 +101,20 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
       }
     case IPERF_ECHO_CALL:
       {
-        loginfo("Echo Received %s\n", iperfPkt->payload);
+        loginfo("Echo CALL Received %s\n", iperfPkt->payload);
+        char rawPkt[20]; 
+        IperfUdpPkt_t *respPkt = (IperfUdpPkt_t *) &rawPkt;
+        uint8_t plSize = 16;
+        memset(&respPkt->payload, 0x00, 16);
+        strncpy((char *) respPkt->payload, iperfPkt->payload, 16);
+        respPkt->seqNo = 0;
+        respPkt->msgType = IPERF_ECHO_RESP;
+        Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
         break;
       }
     case IPERF_ECHO_RESP:
       {
+        loginfo("Echo RESP Received %s\n", iperfPkt->payload);
         break;
       }
     default:

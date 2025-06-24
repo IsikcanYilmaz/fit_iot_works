@@ -36,10 +36,11 @@ IperfResults_s results;
 
 static volatile bool running = false;
 static char threadStack[THREAD_STACKSIZE_DEFAULT];
-static char dstGlobalIpAddr[25] = "2001::2";
-static char srcGlobalIpAddr[25] = "2001::1"; // TODO better solution
 static kernel_pid_t threadPid = KERNEL_PID_UNDEF;
 
+char dstGlobalIpAddr[25] = "2001::2";
+char srcGlobalIpAddr[25] = "2001::1"; // TODO better solution
+//
 char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this
 /*uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];*/
@@ -273,15 +274,10 @@ int Iperf_SendEcho(char *str)
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
   uint8_t plSize = 16;
   memset(&iperfPkt->payload, 0x00, 16);
-  strncpy((char *) &iperfPkt->payload, str, 16);
+  strncpy((char *) iperfPkt->payload, str, 16);
   iperfPkt->seqNo = 0;
   iperfPkt->msgType = IPERF_ECHO_CALL;
   return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
-}
-
-int Iperf_RespondToEcho(void)
-{
-
 }
 
 int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
@@ -667,7 +663,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   }
   else if (strncmp(argv[1], "echo", 16) == 0)
   {
-    char *str = (argc >= 2) ? argv[1] : "TEST";
+    char *str = (argc >= 2) ? argv[2] : "TEST";
     return Iperf_SendEcho(str);
   }
   else

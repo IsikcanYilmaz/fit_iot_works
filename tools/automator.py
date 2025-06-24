@@ -6,6 +6,7 @@ import time
 import sys, os
 import json
 import pdb
+import traceback
 from common import *
 from pprint import pprint
 
@@ -223,11 +224,31 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
             rxOut += rxSer.read(rxSer.in_waiting).decode()
 
         # TODO Hacky parsing below. Could do better formatting on the fw side
-        rxJsonRaw = comm.sendSerialCommand(rxDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
-        txJsonRaw = comm.sendSerialCommand(txDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
+        parsingSuccess = False
+        for i in range(0, 3):
+            rxJsonRaw = comm.sendSerialCommand(rxDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
+            print("<", rxJsonRaw)
+            txJsonRaw = comm.sendSerialCommand(txDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
+            print("<", txJsonRaw)
 
-        rxJsonRaw = " ".join(rxJsonRaw)
-        txJsonRaw = " ".join(txJsonRaw)
+            rxJsonRaw = " ".join(rxJsonRaw)
+            txJsonRaw = " ".join(txJsonRaw)
+
+            try:
+                rxJson = json.loads(rxJsonRaw)
+                txJson = json.loads(txJsonRaw)
+                parsingSuccess = True
+                break # If success, break out of the loop. otherwise, try 3 times
+            except Exception as e:
+                print(traceback.format_exc())
+                print("trying again")
+                flushDevice(rxDev)
+                flushDevice(txDev)
+                time.sleep(1)
+
+        if not parsingSuccess:
+            print("Couldnt parse json results!")
+            return
 
         rxOut += rxJsonRaw
         txOut += txJsonRaw
@@ -236,12 +257,6 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
 
         rxOut += comm.sendSerialCommand(rxDev, "iperf stop")
         txOut += comm.sendSerialCommand(txDev, "iperf stop")
-
-        try:
-            rxJson = json.loads(rxJsonRaw)
-            txJson = json.loads(txJsonRaw)
-        except Exception as e:
-            pdb.set_trace()
 
         deviceJson = {"rx":rxJson["results"], "tx":txJson["results"], "config":txJson["config"]}
         roundOverallJson = {"deviceoutput":deviceJson, "results":parseDeviceJsons(deviceJson)}
@@ -271,10 +286,10 @@ def bulkExperiments(resultsDir):
     with open(f"{resultsDir}/config.txt", "w") as f:
         f.write(" ".join(sys.argv))
 
-    delayUsArr = [10000, 15000, 20000, 25000, 30000]
-    payloadSizeArr = [32, 16, 8]
+    delayUsArr = [5000, 10000, 15000, 20000, 25000, 30000]
+    payloadSizeArr = [64, 32, 16, 8]
     transferSizeArr = [4096]
-    rounds = 20
+    rounds = 50
     mode = 1
 
     with open(f"{resultsDir}/config.txt", "w") as f:

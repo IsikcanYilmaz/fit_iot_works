@@ -242,8 +242,8 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
             except Exception as e:
                 print(traceback.format_exc())
                 print("trying again")
-                flushDevice(rxDev)
-                flushDevice(txDev)
+                comm.flushDevice(rxDev)
+                comm.flushDevice(txDev)
                 time.sleep(1)
 
         if not parsingSuccess:

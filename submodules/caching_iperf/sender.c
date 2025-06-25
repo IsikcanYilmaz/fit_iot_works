@@ -24,6 +24,7 @@
 #include "iperf_pkt.h"
 #include "message.h"
 #include "logger.h"
+#include "simple_queue.h"
 
 #include "receiver.h"
 
@@ -49,6 +50,10 @@ static ztimer_t intervalTimer;
 static IperfSenderState_e senderState = SENDER_STOPPED;
 static kernel_pid_t senderPid = KERNEL_PID_UNDEF;
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
+
+#define PKT_REQ_QUEUE_LEN 128
+static uint16_t pktReqQueueBuffer[PKT_REQ_QUEUE_LEN];
+static SimpleQueue_t pktReqQueue;
 
 static bool isTransferDone(void)
 {
@@ -88,7 +93,9 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
       }
     case IPERF_PKT_REQ:
       {
-        logverbose("Sender received request for packet\n");
+        IperfPacketRequest_t *reqPl = (IperfPacketRequest_t *) iperfPkt->payload;
+        loginfo("Sender received PKT_REQ for packet seq no %d\n", reqPl->seqNo);
+        SimpleQueue_Push(&pktReqQueue, reqPl->seqNo);
         break;
       }
     case IPERF_ECHO_CALL:
@@ -119,6 +126,8 @@ static void initSender(void)
   payloadPkt->seqNo = 0;
   strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(0), config.payloadSizeBytes);
   Iperf_StartUdpServer(&udpServer, senderPid);
+  
+  SimpleQueue_Init(&pktReqQueue, &pktReqQueueBuffer, PKT_REQ_QUEUE_LEN);
 }
 
 static void deinitSender(void)

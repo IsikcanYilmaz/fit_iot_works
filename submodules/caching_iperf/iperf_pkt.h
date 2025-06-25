@@ -6,6 +6,7 @@
 typedef enum {
   IPERF_PAYLOAD,
   IPERF_PKT_REQ,
+  IPERF_PKT_RESP,
   IPERF_ECHO_CALL,
   IPERF_ECHO_RESP,
   IPERF_CONFIG_SYNC,
@@ -28,4 +29,7 @@ typedef struct {
   uint8_t _pad; // 1
 } __attribute__((packed)) IperfConfigPayload_t;
 
+typedef struct { // TODO
+  uint16_t seqNo; 
+} __attribute__((packed)) IperfPacketRequest_t;
 

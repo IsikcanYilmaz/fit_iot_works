@@ -29,6 +29,7 @@
 typedef enum
 {
   RECEIVER_STOPPED,
+  RECEIVER_IDLE,
   RECEIVER_RUNNING,
   RECEIVER_STATE_MAX
 } IperfReceiverState_e;
@@ -48,6 +49,17 @@ static IperfReceiverState_e receiverState = RECEIVER_STOPPED;
 static kernel_pid_t receiverPid = KERNEL_PID_UNDEF;
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
 
+static int requestPacket(uint16_t seqNo)
+{
+  char rawPkt[20];
+  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
+  IperfPacketRequest_t *pktReqPl = (IperfPacketRequest_t *) iperfPkt->payload;
+  memset(&rawPkt, 0x00, sizeof(rawPkt));
+  iperfPkt->msgType = IPERF_PKT_REQ;
+  pktReqPl->seqNo = seqNo;
+  return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
+}
+
 static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
 {
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) pkt;
@@ -65,6 +77,14 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
   {
     case IPERF_PAYLOAD:
       {
+        // If it's the first payload packet we receive, 
+        if (receiverState == RECEIVER_IDLE)
+        {
+          logverbose("Received first packet. State RECEIVER_RUNNING\n");
+          receiverState = RECEIVER_RUNNING; // TODO see if this logic is needed
+        }
+        
+        // handle packet seq no
         if (results.lastPktSeqNo == iperfPkt->seqNo - 1)
         {
           // NO LOSS 
@@ -73,19 +93,20 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         }
         else if (receivedPktIds[iperfPkt->seqNo])
         {
-          // Dup
+          // DUP 
           results.numDuplicates++; 
           logverbose("DUP %d\n", iperfPkt->seqNo);
         }
         else if (results.lastPktSeqNo < iperfPkt->seqNo)
         {
-          // Loss happened
+          // LOSS 
           uint16_t lostPkts = (iperfPkt->seqNo - results.lastPktSeqNo);
           results.pktLossCounter += lostPkts;
           results.lastPktSeqNo = iperfPkt->seqNo;
           logverbose("LOSS %d pkts. Current Last Pkt %d \n", lostPkts, iperfPkt->seqNo);
         }
 
+        // Tally
         if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX)
         {
           receivedPktIds[iperfPkt->seqNo] = true;
@@ -103,6 +124,10 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         }
       }
     case IPERF_PKT_REQ:
+      {
+        break;
+      }
+    case IPERF_PKT_RESP:
       {
         break;
       }
@@ -156,7 +181,7 @@ void *Iperf_ReceiverThread(void *arg)
   receiverPid = thread_getpid();
   Iperf_StartUdpServer(&udpServer, receiverPid);
   loginfo("Starting Receiver Thread. Pid %d\n", receiverPid);
-  receiverState = RECEIVER_RUNNING;
+  receiverState = RECEIVER_IDLE;
 
   while (receiverState > RECEIVER_STOPPED) {
     msg_receive(&msg);

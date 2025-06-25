@@ -1,2 +1,0 @@
-./automator.py /dev/ttyACM0 /dev/ttyACM1 --rpl --experiment --results_dir new_iperf_test
-delayUsArr:[10000, 15000, 20000, 25000, 30000], payloadSizeArr:[32, 16, 8], transferSizeArr:[4096], rounds:20

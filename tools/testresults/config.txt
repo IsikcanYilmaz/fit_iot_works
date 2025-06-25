@@ -1,2 +1,0 @@
-./automator.py /dev/ttyACM0 /dev/ttyACM2 -r /dev/ttyACM1 --experiment --results_dir testresults
-delayUsArr:[5000, 10000, 15000, 20000, 25000, 30000], payloadSizeArr:[64, 32, 16, 8], transferSizeArr:[4096], rounds:50

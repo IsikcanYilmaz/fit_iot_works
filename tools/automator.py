@@ -184,7 +184,17 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
 
     outFilenamePrefix = f"m{mode}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
     overallJson = []
+
+    averagesFilename = f"{resultsDir}/{outFilenamePrefix}_averages.json"
+    experimentFilename = f"{resultsDir}/{outFilenamePrefix}.json"
+
     for round in range(0, rounds):
+        roundFilename = f"{resultsDir}/{outFilenamePrefix}_round{round}.json"
+
+        # The experiment may have been run before and bombed. 
+        # Check if the experiment was run before. if so, simply load up that round json
+        # if ()
+
         txOut = ""
         rxOut = ""
 
@@ -263,23 +273,24 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
         deviceJson = {"rx":rxJson["results"], "tx":txJson["results"], "config":txJson["config"]}
         roundOverallJson = {"deviceoutput":deviceJson, "results":parseDeviceJsons(deviceJson)}
 
-        with open(f"{resultsDir}/{outFilenamePrefix}_round{round}.json", "w") as f:
+        with open(roundFilename, "w") as f:
             json.dump(roundOverallJson, f, indent=4)
 
         pprint(roundOverallJson)
         overallJson.append(roundOverallJson)
 
-    with open(f"{resultsDir}/{outFilenamePrefix}.json", "w") as f:
+    with open(experimentFilename, "w") as f:
         json.dump(overallJson, f, indent=4)
 
     overallAveragesJson = averageRoundsJsons(overallJson)
-    with open(f"{resultsDir}/{outFilenamePrefix}_averages.json", "w") as f:
+    with open(averagesFilename, "w") as f:
         json.dump(overallAveragesJson, f, indent=4)
 
     print(f"Results written to {resultsDir}")
     print("----------------")
 
 def bulkExperiments(resultsDir):
+    # Create directory if needed
     if (not os.path.isdir(resultsDir)):
         print(f"{resultsDir} not found! Creating")
         try:
@@ -289,15 +300,13 @@ def bulkExperiments(resultsDir):
             print(f"Exception while creating results dir {resultsDir}. Will use . as resultsDir")
             resultsDir = "./"
 
-    with open(f"{resultsDir}/config.txt", "w") as f:
-        f.write(" ".join(sys.argv))
-
     delayUsArr = [5000, 10000, 15000, 20000, 25000, 30000]
     payloadSizeArr = [32, 16, 8]
     transferSizeArr = [4096]
     rounds = 50
     mode = 1
 
+    # Write down the config
     with open(f"{resultsDir}/config.txt", "w") as f:
         f.write(" ".join(sys.argv))
         f.write(f"\ndelayUsArr:{delayUsArr}, payloadSizeArr:{payloadSizeArr}, transferSizeArr:{transferSizeArr}, rounds:{rounds}")

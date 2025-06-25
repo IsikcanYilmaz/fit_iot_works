@@ -159,15 +159,16 @@ static void printAll(void)
 
 void Iperf_PrintConfig(bool json)
 {
-  printf((json) ? "{\"iAmSender\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d}\n" : \
-           "iAmSender: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\n", 
+  printf((json) ? "{\"iAmSender\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d, \"numPktsToTransfer\":%d}\n" : \
+           "iAmSender: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\nnumPktsToTransfer: %d\n", 
            config.iAmSender, 
            config.payloadSizeBytes, 
            config.pktPerSecond, 
            config.delayUs, 
            config.mode, 
            config.transferSizeBytes, 
-           config.transferTimeUs);
+           config.transferTimeUs, 
+           config.numPktsToTransfer);
 }
 
 void Iperf_ResetResults(void)
@@ -326,11 +327,11 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
             printf("\n");
           }
 
-          if (!config.iAmSender && logprintTags[VERBOSE])
-          {
-            printFileTransferStatus();
-            printf("\n");
-          }
+          /*if (!config.iAmSender && logprintTags[VERBOSE])*/
+          /*{*/
+            /*printFileTransferStatus();*/
+            /*printf("\n");*/
+          /*}*/
 
           if (fn)
           {
@@ -428,7 +429,7 @@ int Iperf_Init(bool iAmSender)
 
   if (!iAmSender)
   {
-    threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 2, 0, Iperf_ReceiverThread, NULL, "iperf_receiver");
+    threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_ReceiverThread, NULL, "iperf_receiver");
   }
   if (iAmSender)
   {
@@ -580,7 +581,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     {
       if (running)
       {
-        logerror("Stop iperf first!");
+        logerror("Stop iperf first!\n");
         return 1;
       }
       uint8_t argIdx = 2;
@@ -589,6 +590,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
         if (strncmp(argv[argIdx], "payloadsizebytes", 16) == 0)
         {
           config.payloadSizeBytes = atoi(argv[argIdx+1]);
+          config.numPktsToTransfer = (config.transferSizeBytes / config.payloadSizeBytes);
           loginfo("Set payloadSizeBytes to %d\n", config.payloadSizeBytes);
           argIdx+=2;
           continue;
@@ -617,6 +619,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
         else if (strncmp(argv[argIdx], "transfersizebytes", 16) == 0)
         {
           config.transferSizeBytes = atoi(argv[argIdx+1]);
+          config.numPktsToTransfer = (config.transferSizeBytes / config.payloadSizeBytes);
           loginfo("Set transferSizeBytes to %d\n", config.transferSizeBytes);
           argIdx+=2;
           continue;

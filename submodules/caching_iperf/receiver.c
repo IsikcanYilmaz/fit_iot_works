@@ -83,10 +83,17 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           uint16_t lostPkts = (iperfPkt->seqNo - results.lastPktSeqNo);
           results.pktLossCounter += lostPkts;
           results.lastPktSeqNo = iperfPkt->seqNo;
-          logverbose("LOSS %d pkts \n", lostPkts);
+          logverbose("LOSS %d pkts. Current Last Pkt %d \n", lostPkts, iperfPkt->seqNo);
         }
 
-        receivedPktIds[iperfPkt->seqNo] = true;
+        if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX)
+        {
+          receivedPktIds[iperfPkt->seqNo] = true;
+        }
+        else
+        {
+          logerror("Out of bounds sequence number!! %d\n", iperfPkt->seqNo);
+        }
 
         results.numReceivedPkts++;
         results.endTimestamp = ztimer_now(ZTIMER_USEC);
@@ -125,7 +132,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         config.payloadSizeBytes = configPl->payloadSizeBytes;
         config.delayUs = configPl->delayUs;
         config.transferSizeBytes = configPl->transferSizeBytes;
-        config.numPktsToTransfer = configPl->numPktsToTransfer;
+        config.numPktsToTransfer = config.transferSizeBytes / config.payloadSizeBytes;
         Iperf_PrintConfig(false);
         break;
       }

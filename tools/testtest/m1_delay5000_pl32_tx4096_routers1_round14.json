@@ -1,0 +1,70 @@
+{
+    "deviceoutput": {
+        "rx": {
+            "iAmSender": 0,
+            "lastPktSeqNo": 92,
+            "pktLossCounter": 92,
+            "numReceivedPkts": 5,
+            "numReceivedBytes": 540,
+            "numDuplicates": 0,
+            "numSentPkts": 0,
+            "numSentBytes": 0,
+            "startTimestamp": 621489244,
+            "endTimestamp": 621773129,
+            "timeDiff": 283885,
+            "l2numReceivedPackets": 5,
+            "l2numReceivedBytes": 495,
+            "l2numSentPackets": 0,
+            "l2numSentBytes": 0,
+            "l2numSuccessfulTx": 0,
+            "l2numErroredTx": 0,
+            "ipv6numReceivedPackets": 5,
+            "ipv6numReceivedBytes": 460,
+            "ipv6numSentPackets": 0,
+            "ipv6numSentBytes": 0,
+            "ipv6numSuccessfulTx": 0,
+            "ipv6numErroredTx": 0
+        },
+        "tx": {
+            "iAmSender": 1,
+            "lastPktSeqNo": 127,
+            "pktLossCounter": 0,
+            "numReceivedPkts": 0,
+            "numReceivedBytes": 0,
+            "numDuplicates": 0,
+            "numSentPkts": 128,
+            "numSentBytes": 4096,
+            "startTimestamp": 629997393,
+            "endTimestamp": 630701646,
+            "timeDiff": 704253,
+            "l2numReceivedPackets": 0,
+            "l2numReceivedBytes": 0,
+            "l2numSentPackets": 104,
+            "l2numSentBytes": 0,
+            "l2numSuccessfulTx": 0,
+            "l2numErroredTx": 0,
+            "ipv6numReceivedPackets": 0,
+            "ipv6numReceivedBytes": 0,
+            "ipv6numSentPackets": 128,
+            "ipv6numSentBytes": 10752,
+            "ipv6numSuccessfulTx": 128,
+            "ipv6numErroredTx": 0
+        },
+        "config": {
+            "iAmSender": 1,
+            "payloadSizeBytes": 32,
+            "pktPerSecond": 0,
+            "delayUs": 5000,
+            "mode": 1,
+            "transferSizeBytes": 4096,
+            "transferTimeUs": 10000000
+        }
+    },
+    "results": {
+        "timeDiffSecs": 0.704253,
+        "numLostPackets": 123,
+        "lossPercent": 96.09375,
+        "sendRate": 5816.091660241419,
+        "receiveRate": 227.19108047818042
+    }
+}

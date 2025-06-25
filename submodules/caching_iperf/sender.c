@@ -126,8 +126,7 @@ static void initSender(void)
   payloadPkt->seqNo = 0;
   strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(0), config.payloadSizeBytes);
   Iperf_StartUdpServer(&udpServer, senderPid);
-  
-  SimpleQueue_Init(&pktReqQueue, &pktReqQueueBuffer, PKT_REQ_QUEUE_LEN);
+  SimpleQueue_Init(&pktReqQueue, (uint16_t *) &pktReqQueueBuffer, PKT_REQ_QUEUE_LEN);
 }
 
 static void deinitSender(void)

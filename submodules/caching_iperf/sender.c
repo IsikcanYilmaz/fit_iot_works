@@ -96,6 +96,11 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
         IperfPacketRequest_t *reqPl = (IperfPacketRequest_t *) iperfPkt->payload;
         loginfo("Sender received PKT_REQ for packet seq no %d\n", reqPl->seqNo);
         SimpleQueue_Push(&pktReqQueue, reqPl->seqNo);
+        if (senderState == SENDER_IDLE)
+        {
+          ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
+          ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 0, &ipcMsg, senderPid); // Start immediately
+        }
         break;
       }
     case IPERF_ECHO_CALL:
@@ -134,7 +139,7 @@ static void deinitSender(void)
   Iperf_StopUdpServer(&udpServer);
 }
 
-static int sendPayload(uint16_t chunkIdx)
+static int sendPayload(uint16_t chunkIdx, bool serveRequest)
 {
   IperfUdpPkt_t *payloadPkt = (IperfUdpPkt_t *) txBuffer;
   uint16_t charIdx = chunkIdx * config.payloadSizeBytes;
@@ -146,9 +151,32 @@ static int sendPayload(uint16_t chunkIdx)
 static void handleFileSending(void)
 {
   IperfUdpPkt_t *payloadPkt = (IperfUdpPkt_t *) txBuffer;
-  sendPayload(payloadPkt->seqNo);
+
+  if (SimpleQueue_IsEmpty(&pktReqQueue)) // If nothing in the request queue, send off the next chunk in our file transfer
+  {
+    payloadPkt->msgType = IPERF_PAYLOAD;
+    payloadPkt->seqNo = results.lastPktSeqNo + 1;
+    payloadPkt->plSize = config.payloadSizeBytes;
+    uint16_t charIdx = payloadPkt->seqNo * config.payloadSizeBytes;
+    strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(charIdx), config.payloadSizeBytes);
+    logverbose("Sending payload. Seq no %d\n", payloadPkt->seqNo);
+    Iperf_SocklessUdpSendToDst((char *) txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
+    results.lastPktSeqNo = payloadPkt->seqNo;
+  }
+  else // If there's something in the req queue, send that now
+  {
+    uint16_t reqSeq = 0;
+    int ret = SimpleQueue_Pop(&pktReqQueue, &reqSeq);
+    payloadPkt->msgType = IPERF_PKT_RESP;
+    payloadPkt->seqNo = reqSeq;
+    payloadPkt->plSize = config.payloadSizeBytes;
+    uint16_t charIdx = payloadPkt->seqNo * config.payloadSizeBytes;
+    strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(charIdx), config.payloadSizeBytes);
+    loginfo("Serving request. Seq no %d\n", payloadPkt->seqNo);
+    Iperf_SocklessUdpSendToDst((char *) txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
+  }
+
   results.numSentBytes += config.payloadSizeBytes;// + sizeof(IperfUdpPkt_t); // todo should or should not include metadata in our size sum? (4 bytes)
-  results.lastPktSeqNo = payloadPkt->seqNo;
   if (isTransferDone())
   {
     loginfo("Sender done sending %d packets\n", config.numPktsToTransfer);
@@ -166,7 +194,7 @@ static void handleFileSending(void)
   }
   else
   {
-    payloadPkt->seqNo++;
+    /*payloadPkt->seqNo++;*/
     ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipcMsg, senderPid);
   }
 }

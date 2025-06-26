@@ -183,6 +183,7 @@ void Iperf_PrintConfig(bool json)
 void Iperf_ResetResults(void)
 {
   memset(&results, 0x00, sizeof(IperfResults_s));
+  results.lastPktSeqNo = -1;
   memset(&receivedPktIds, 0x00, IPERF_TOTAL_TRANSMISSION_SIZE_MAX);
   memset(&receiveFileBuffer, 0x00, IPERF_TOTAL_TRANSMISSION_SIZE_MAX);
   resetNetifStats();

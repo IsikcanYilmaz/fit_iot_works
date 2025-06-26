@@ -56,7 +56,7 @@ typedef struct
 
 typedef struct
 {
-  uint32_t lastPktSeqNo;
+  int32_t lastPktSeqNo;
   uint32_t pktLossCounter;
   uint32_t numReceivedPkts;
   uint32_t numReceivedBytes;

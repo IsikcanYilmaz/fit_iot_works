@@ -148,6 +148,15 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
       }
     case IPERF_PKT_RESP:
       {
+        loginfo("PKT_RESP %d received\n", iperfPkt->seqNo);
+        if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX)
+        {
+          receivedPktIds[iperfPkt->seqNo] = true;
+        }
+        else
+        {
+          logerror("Out of bounds sequence number!! %d\n", iperfPkt->seqNo);
+        }
         break;
       }
     case IPERF_ECHO_CALL:

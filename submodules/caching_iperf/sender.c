@@ -99,7 +99,7 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
         if (senderState == SENDER_IDLE)
         {
           ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
-          ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 0, &ipcMsg, senderPid); // Start immediately
+          ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipcMsg, senderPid); // Start immediately
         }
         break;
       }

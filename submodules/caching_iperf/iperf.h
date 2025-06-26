@@ -17,7 +17,8 @@
 // IPERF IPC MESSAGE TYPES
 #define IPERF_IPC_MSG_START          (0xfff0)
 #define IPERF_IPC_MSG_SEND_FILE      (0xfff1)
-#define IPERF_IPC_MSG_STOP           (0xfff2)
+#define IPERF_IPC_MSG_SEND_REQ       (0xfff2)
+#define IPERF_IPC_MSG_STOP           (0xfff3)
 
 typedef enum
 {

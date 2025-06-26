@@ -23,6 +23,7 @@
 #include "iperf_pkt.h"
 #include "message.h"
 #include "logger.h"
+#include "simple_queue.h"
 
 #include "receiver.h"
 
@@ -41,6 +42,11 @@ extern bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 extern char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 extern char dstGlobalIpAddr[25];
 extern char srcGlobalIpAddr[25];
+extern msg_t ipcMsg;
+extern ztimer_t intervalTimer;
+
+extern uint16_t pktReqQueueBuffer[];
+extern SimpleQueue_t pktReqQueue;
 
 static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
@@ -53,7 +59,7 @@ static int requestPacket(uint16_t seqNo)
 {
   char rawPkt[20];
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
-  IperfPacketRequest_t *pktReqPl = (IperfPacketRequest_t *) iperfPkt->payload;
+  IperfPacketRequest_t *pktReqPl = (IperfPacketRequest_t *) &iperfPkt->payload;
   memset(&rawPkt, 0x00, sizeof(rawPkt));
   iperfPkt->msgType = IPERF_PKT_REQ;
   pktReqPl->seqNo = seqNo;
@@ -101,6 +107,19 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         {
           // LOSS 
           uint16_t lostPkts = (iperfPkt->seqNo - results.lastPktSeqNo);
+          if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+          {
+            for (uint16_t i = results.lastPktSeqNo + 1; i < iperfPkt->seqNo; i++)
+            {
+              loginfo("Lost packet %d adding to request queue\n", i);
+              SimpleQueue_Push(&pktReqQueue, i);
+            }
+            if (!ztimer_is_set(ZTIMER_USEC, &intervalTimer))
+            {
+              ipcMsg.type = IPERF_IPC_MSG_SEND_REQ;
+              ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 1000000, &ipcMsg, receiverPid);
+            }
+          }
           results.pktLossCounter += lostPkts;
           results.lastPktSeqNo = iperfPkt->seqNo;
           logverbose("LOSS %d pkts. Current Last Pkt %d \n", lostPkts, iperfPkt->seqNo);
@@ -188,20 +207,41 @@ void *Iperf_ReceiverThread(void *arg)
     logdebug("IPC Message type %d\n", msg.type);
     switch (msg.type) {
       case GNRC_NETAPI_MSG_TYPE_RCV:
-        logdebug("Data received\n");
-        Iperf_PacketHandler(msg.content.ptr, (void *) receiverHandleIperfPacket);
-        break;
+        {
+          logdebug("Data received\n");
+          Iperf_PacketHandler(msg.content.ptr, (void *) receiverHandleIperfPacket);
+          break;
+        }
       case GNRC_NETAPI_MSG_TYPE_SND:
-        logdebug("Data to send\n");
-        Iperf_PacketHandler(msg.content.ptr, (void *) receiverHandleIperfPacket);
-        break;
+        {
+          logdebug("Data to send\n");
+          Iperf_PacketHandler(msg.content.ptr, (void *) receiverHandleIperfPacket);
+          break;
+        }
       case GNRC_NETAPI_MSG_TYPE_GET:
       case GNRC_NETAPI_MSG_TYPE_SET:
-        msg_reply(&msg, &reply);
-        break;
+        {
+          msg_reply(&msg, &reply);
+          break;
+        }
+      case IPERF_IPC_MSG_SEND_REQ:
+        {
+          uint16_t seqNo = 0;
+          int qret = SimpleQueue_Pop(&pktReqQueue, &seqNo);
+          loginfo("Send Req for seq no %d\n", seqNo);
+          requestPacket(seqNo);
+          if (!SimpleQueue_IsEmpty(&pktReqQueue))
+          {
+            ipcMsg.type = IPERF_IPC_MSG_SEND_REQ;
+            ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 1000000, &ipcMsg, receiverPid);
+          }
+          break;
+        }
       case IPERF_IPC_MSG_STOP:
-        receiverState = RECEIVER_STOPPED;
-        break;
+        {
+          receiverState = RECEIVER_STOPPED;
+          break;
+        }
       default:
         /*loginfo("received something unexpected");*/
         break;

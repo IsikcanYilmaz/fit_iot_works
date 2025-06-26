@@ -41,19 +41,19 @@ extern IperfConfig_s config;
 extern uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];
 extern char dstGlobalIpAddr[25];
 extern char srcGlobalIpAddr[25];
+extern msg_t ipcMsg;
+extern ztimer_t intervalTimer;
+
+extern uint16_t pktReqQueueBuffer[];
+extern SimpleQueue_t pktReqQueue;
 
 static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
-static msg_t ipcMsg;
-static ztimer_t intervalTimer;
 
 static IperfSenderState_e senderState = SENDER_STOPPED;
 static kernel_pid_t senderPid = KERNEL_PID_UNDEF;
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
 
-#define PKT_REQ_QUEUE_LEN 128
-static uint16_t pktReqQueueBuffer[PKT_REQ_QUEUE_LEN];
-static SimpleQueue_t pktReqQueue;
 
 static bool isTransferDone(void)
 {
@@ -68,7 +68,7 @@ static bool isTransferDone(void)
   }
   else if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
   {
-    ret = (results.lastPktSeqNo == config.numPktsToTransfer-1);
+    ret = (results.lastPktSeqNo == config.numPktsToTransfer-1) && (SimpleQueue_IsEmpty(&pktReqQueue));
   }
   return ret;
 }
@@ -114,6 +114,7 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
         break;
       }
   }
+  return 0;
 }
 
 static void initSender(void)
@@ -126,7 +127,6 @@ static void initSender(void)
   payloadPkt->seqNo = 0;
   strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(0), config.payloadSizeBytes);
   Iperf_StartUdpServer(&udpServer, senderPid);
-  SimpleQueue_Init(&pktReqQueue, (uint16_t *) &pktReqQueueBuffer, PKT_REQ_QUEUE_LEN);
 }
 
 static void deinitSender(void)

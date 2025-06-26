@@ -4,7 +4,7 @@
 #include <string.h>
 
 /*
-* I need a queue to hold u16s. This code does that
+* I need a queue type thing to hold u16s. This does that
 */
 
 void SimpleQueue_Init(SimpleQueue_t *q, uint16_t *buffer, uint16_t size)
@@ -68,6 +68,16 @@ void SimpleQueue_PrintQueue(SimpleQueue_t *q)
     SimpleQueue_Seek(q, i, &data);
     printf("%d:%d\n", i, data);
   }
+}
+
+bool SimpleQueue_IsEmpty(SimpleQueue_t *q)
+{
+  return q->currLen == 0;
+}
+
+bool SimpleQueue_IsFull(SimpleQueue_t *q)
+{
+  return q->currLen == q->maxLen;
 }
 
 #if 0 // TESTER

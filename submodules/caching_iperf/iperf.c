@@ -19,6 +19,7 @@
 #include "iperf_pkt.h"
 #include "message.h"
 #include "logger.h"
+#include "simple_queue.h"
 
 #include "receiver.h"
 #include "sender.h"
@@ -46,6 +47,14 @@ bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this
 /*uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];*/
 
 uint8_t rxtxBuffer[256];
+
+// Both roles will use this queue
+#define PKT_REQ_QUEUE_LEN 128
+uint16_t pktReqQueueBuffer[PKT_REQ_QUEUE_LEN];
+SimpleQueue_t pktReqQueue;
+
+msg_t ipcMsg;
+ztimer_t intervalTimer;
 
 ///////////////////////////////////
 
@@ -426,6 +435,8 @@ int Iperf_Init(bool iAmSender)
   config.listenerPort = IPERF_DEFAULT_PORT;
 
   config.numPktsToTransfer = (config.transferSizeBytes / config.payloadSizeBytes);
+
+  SimpleQueue_Init(&pktReqQueue, (uint16_t *) &pktReqQueueBuffer, PKT_REQ_QUEUE_LEN);
 
   if (!iAmSender)
   {

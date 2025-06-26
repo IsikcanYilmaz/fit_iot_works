@@ -52,7 +52,7 @@ ifndef CONFIG_GNRC_PKTBUF_SIZE
 endif
 
 # 802154 CONFIG # Found in sys/include/net/ieee802154.h
-CFLAGS += -DCONFIG_IEEE802154_DEFAULT_MAX_FRAME_RETRANS=0 # 0 to disable L2 retransmissions
+# CFLAGS += -DCONFIG_IEEE802154_DEFAULT_MAX_FRAME_RETRANS=0 # 0 to disable L2 retransmissions
 # ifeq ("seeedstudio-xiao-nrf52840", $(BOARD))
 # CFLAGS += -DJON_802154_MAX_RETRANS=4
 # endif

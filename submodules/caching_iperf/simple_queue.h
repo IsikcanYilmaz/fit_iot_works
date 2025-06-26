@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct 
 {
@@ -13,4 +14,5 @@ void SimpleQueue_Init(SimpleQueue_t *q, uint16_t *buffer, uint16_t size);
 void SimpleQueue_Deinit(SimpleQueue_t *q);
 int SimpleQueue_Push(SimpleQueue_t *q, uint16_t data);
 int SimpleQueue_Pop(SimpleQueue_t *q, uint16_t *data);
-
+bool SimpleQueue_IsEmpty(SimpleQueue_t *q);
+bool SimpleQueue_IsFull(SimpleQueue_t *q);

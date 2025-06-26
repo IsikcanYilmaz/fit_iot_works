@@ -431,6 +431,7 @@ def main():
         experiment()
     elif (args.experiment):
         bulkExperiments(resultsDir=(args.results_dir if args.results_dir else DEFAULT_RESULTS_DIR))
+    print("DONE")
     
 
 if __name__ == "__main__":

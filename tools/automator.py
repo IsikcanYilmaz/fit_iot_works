@@ -155,10 +155,10 @@ def setRetrans(dev, retrans):
     global comm, args
     outStrRaw = ""
     if (args.fitiot):
-        outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} set csma_retries {retrans}", cooldownS=0.5)
-        outStrRaw += comm.sendSerialCommand(dev, f"ifconfig {ifaceId} set retrans {retrans}", cooldownS=0.5)
+        outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} set csma_retries {retrans}")
+        outStrRaw += comm.sendSerialCommand(dev, f"ifconfig {ifaceId} set retrans {retrans}")
     else:
-        outStrRaw = comm.sendSerialCommand(dev, f"setretrans {retrans}", cooldownS=0.5)
+        outStrRaw = comm.sendSerialCommand(dev, f"setretrans {retrans}")
     print("<", outStrRaw)
 
 def parseDeviceJsons(j):

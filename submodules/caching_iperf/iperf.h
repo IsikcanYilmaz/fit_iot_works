@@ -15,10 +15,24 @@
 #define IPERF_DEFAULT_TRANSFER_TIME_US (IPERF_DEFAULT_DELAY_US * 10) // 10 secs
 
 // IPERF IPC MESSAGE TYPES
-#define IPERF_IPC_MSG_START          (0xfff0)
-#define IPERF_IPC_MSG_SEND_FILE      (0xfff1)
-#define IPERF_IPC_MSG_SEND_REQ       (0xfff2)
-#define IPERF_IPC_MSG_STOP           (0xfff3)
+/*#define IPERF_IPC_MSG_START          (0xfff0)*/
+/*#define IPERF_IPC_MSG_SEND_FILE      (0xfff1)*/
+/*#define IPERF_IPC_MSG_SEND_REQ       (0xfff2)*/
+/*#define IPERF_IPC_MSG_STOP           (0xfff3)*/
+/**/
+
+typedef enum
+{
+  IPERF_IPC_MSG_START = 0xfff0,
+  IPERF_IPC_MSG_SEND_FILE,
+  IPERF_IPC_MSG_SEND_REQ,
+  IPERF_IPC_MSG_STOP, // OLD
+
+  IPERF_IPC_MSG_EXPECTATION_TIMEOUT,
+  IPERF_IPC_MSG_INTEREST_TIMER_TIMEOUT,
+
+  IPERF_IPC_MAX,
+} IperfIPC_e;
 
 typedef enum
 {
@@ -65,6 +79,7 @@ typedef struct
   uint32_t numDuplicates;
   uint32_t numSentPkts;
   uint32_t numSentBytes;
+  uint16_t receivedUniqueChunks;
   uint32_t startTimestamp;
   uint32_t endTimestamp;
 
@@ -93,3 +108,4 @@ int Iperf_SocklessUdpSend(const char *data, size_t dataLen, char *targetIp);
 int Iperf_SocklessUdpSendToDst(const char *data, size_t dataLen);
 int Iperf_SocklessUdpSendToSrc(const char *data, size_t dataLen);
 void Iperf_PrintConfig(bool json);
+void Iperf_PrintFileTransferStatus(void);

@@ -32,7 +32,7 @@ typedef enum
 {
   SENDER_STOPPED,
   SENDER_IDLE,
-  SENDER_SENDING_FILE,
+  SENDER_SENDING,
   SENDER_STATE_MAX
 } IperfSenderState_e;
 
@@ -241,7 +241,7 @@ void *Iperf_SenderThread(void *arg)
       case IPERF_IPC_MSG_START: // TODO am i adding complexity for no reason? 
         {
           loginfo("Sender received START command. Commencing iperf\n");
-          senderState = SENDER_SENDING_FILE;
+          senderState = SENDER_SENDING;
           ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 0, &ipcMsg, senderPid); // Start immediately
           break;
         }

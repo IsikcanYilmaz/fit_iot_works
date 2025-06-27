@@ -31,9 +31,11 @@ typedef enum
 {
   RECEIVER_STOPPED,
   RECEIVER_IDLE,
-  RECEIVER_RUNNING,
+  RECEIVER_RECEIVING,
   RECEIVER_STATE_MAX
 } IperfReceiverState_e;
+
+// TODO clean all this. there'll be a version 3 deffo
 
 extern IperfResults_s results;
 extern IperfConfig_s config;
@@ -44,6 +46,11 @@ extern char dstGlobalIpAddr[25];
 extern char srcGlobalIpAddr[25];
 extern msg_t ipcMsg;
 extern ztimer_t intervalTimer;
+
+static msg_t expectationMsg;
+static msg_t interestMsg;
+static ztimer_t expectationTimer;
+static ztimer_t interestTimer;
 
 extern uint16_t pktReqQueueBuffer[];
 extern SimpleQueue_t pktReqQueue;
@@ -66,6 +73,70 @@ static int requestPacket(uint16_t seqNo)
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
 }
 
+static bool isTransferDone(void)
+{
+  return (config.numPktsToTransfer == results.receivedUniqueChunks);
+}
+
+// TODO below functions can be macros or consolidated
+static void startExpectationTimer(uint32_t timeoutUs)
+{
+  if (ztimer_is_set(ZTIMER_USEC, &expectationTimer))
+  {
+    logdebug("Expectation timer already set\n");
+    return;
+  }
+  expectationMsg.type = IPERF_IPC_MSG_EXPECTATION_TIMEOUT;
+  ztimer_set_msg(ZTIMER_USEC, &expectationTimer, timeoutUs, &expectationMsg, receiverPid);
+}
+
+static void stopExpectationTimer(void)
+{
+  if (ztimer_is_set(ZTIMER_USEC, &expectationTimer))
+  {
+    ztimer_remove(ZTIMER_USEC, &expectationTimer);
+  }
+}
+
+static void startInterestTimer(uint32_t timeoutUs)
+{
+  if (ztimer_is_set(ZTIMER_USEC, &interestTimer))
+  {
+    logdebug("Interest timer already set\n");
+    return;
+  }
+  interestMsg.type = IPERF_IPC_MSG_INTEREST_TIMER_TIMEOUT;
+  ztimer_set_msg(ZTIMER_USEC, &interestTimer, timeoutUs, &interestMsg, receiverPid);
+}
+
+static void stopInterestTimer(void)
+{
+  if (ztimer_is_set(ZTIMER_USEC, &interestTimer))
+  {
+    ztimer_remove(ZTIMER_USEC, &interestTimer);
+  }
+}
+//
+
+static bool checkForCompletionAndTransition(void)
+{
+  loginfo("Receiver checking for completion. Expecting %d Received %d packets\n", \
+          config.numPktsToTransfer, results.receivedUniqueChunks);
+  if (config.numPktsToTransfer == results.receivedUniqueChunks)
+  {
+    // We're done. send done message
+    msg_t m;
+    m.type = IPERF_IPC_MSG_STOP;
+    msg_send(&m, receiverPid);
+    return true;
+  }
+  else
+  {
+    // We're not done
+    return false;
+  }
+}
+
 static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
 {
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) pkt;
@@ -83,29 +154,33 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
   {
     case IPERF_PAYLOAD:
       {
-        // If it's the first payload packet we receive, 
+        // If it's the first payload packet we receive, ////
         if (receiverState == RECEIVER_IDLE)
         {
-          logverbose("Received first packet. State RECEIVER_RUNNING\n");
-          receiverState = RECEIVER_RUNNING; // TODO see if this logic is needed
+          logverbose("Received first packet. State RECEIVER_RECEIVING\n");
+          receiverState = RECEIVER_RECEIVING; // TODO see if this logic is needed
+          
+          // Start our expectation timer
+          startExpectationTimer(1000000);
         }
         
         // handle packet seq no
         if (results.lastPktSeqNo == iperfPkt->seqNo - 1)
         {
-          // NO LOSS 
+          // GOOD RX //////////////////////////////////////
           results.lastPktSeqNo = iperfPkt->seqNo;
           logverbose("RX %d\n", iperfPkt->seqNo);
+          results.receivedUniqueChunks++;
         }
         else if (receivedPktIds[iperfPkt->seqNo])
         {
-          // DUP 
+          // DUPLICATE PKT ////////////////////////////////
           results.numDuplicates++; 
           logverbose("DUP %d\n", iperfPkt->seqNo);
         }
         else if (results.lastPktSeqNo < iperfPkt->seqNo)
         {
-          // LOSS 
+          // OUT OF ORDER (LOSS) //////////////////////////
           uint16_t lostPkts = (iperfPkt->seqNo - results.lastPktSeqNo);
           if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
           {
@@ -114,14 +189,11 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
               loginfo("Lost packet %d adding to request queue\n", i);
               SimpleQueue_Push(&pktReqQueue, i);
             }
-            if (!ztimer_is_set(ZTIMER_USEC, &intervalTimer))
-            {
-              ipcMsg.type = IPERF_IPC_MSG_SEND_REQ;
-              ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 1000000, &ipcMsg, receiverPid);
-            }
+            startInterestTimer(1000000);
           }
           results.pktLossCounter += lostPkts;
           results.lastPktSeqNo = iperfPkt->seqNo;
+          results.receivedUniqueChunks++;
           logverbose("LOSS %d pkts. Current Last Pkt %d \n", lostPkts, iperfPkt->seqNo);
         }
 
@@ -141,9 +213,13 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         {
           results.startTimestamp = results.endTimestamp;
         }
+
+        checkForCompletionAndTransition();
+        break;
       }
     case IPERF_PKT_REQ:
       {
+        logerror("PKT_REQ %d received. Wrong role!\n", iperfPkt->seqNo);
         break;
       }
     case IPERF_PKT_RESP:
@@ -152,11 +228,14 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX)
         {
           receivedPktIds[iperfPkt->seqNo] = true;
+          results.receivedUniqueChunks++;
+          Iperf_PrintFileTransferStatus();
         }
         else
         {
           logerror("Out of bounds sequence number!! %d\n", iperfPkt->seqNo);
         }
+        checkForCompletionAndTransition();
         break;
       }
     case IPERF_ECHO_CALL:
@@ -233,7 +312,7 @@ void *Iperf_ReceiverThread(void *arg)
           msg_reply(&msg, &reply);
           break;
         }
-      case IPERF_IPC_MSG_SEND_REQ:
+      case IPERF_IPC_MSG_INTEREST_TIMER_TIMEOUT:
         {
           uint16_t seqNo = 0;
           int qret = SimpleQueue_Pop(&pktReqQueue, &seqNo);
@@ -241,14 +320,27 @@ void *Iperf_ReceiverThread(void *arg)
           requestPacket(seqNo);
           if (!SimpleQueue_IsEmpty(&pktReqQueue))
           {
-            ipcMsg.type = IPERF_IPC_MSG_SEND_REQ;
-            ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 1000000, &ipcMsg, receiverPid);
+          /*  ipcMsg.type = IPERF_INTEREST_TIMER_TIMEOUT;*/
+          /*  ztimer_set_msg(ZTIMER_USEC, &interestTimer, 1000000, &ipcMsg, receiverPid);*/
+            startInterestTimer(1000000);
+          }
+          break;
+        }
+      case IPERF_IPC_MSG_EXPECTATION_TIMEOUT:
+        {
+          loginfo("Expectation timeout\n");
+          if (!checkForCompletionAndTransition())
+          {
+            startExpectationTimer(1000000);
           }
           break;
         }
       case IPERF_IPC_MSG_STOP:
         {
+          loginfo("Receiver stopping\n");
           receiverState = RECEIVER_STOPPED;
+          stopExpectationTimer();
+          stopInterestTimer();
           break;
         }
       default:

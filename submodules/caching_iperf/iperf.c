@@ -133,7 +133,7 @@ static void printResults(bool json)
          );
 }
 
-static void printFileTransferStatus(void)
+void Iperf_PrintFileTransferStatus(void)
 {
   printf("Received Pkt Ids:\n");
   for (int i = 0; i < config.numPktsToTransfer; i++)
@@ -471,7 +471,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
 
   if (strncmp(argv[1], "sender", 16) == 0)
   {
-    loginfo("STARTING IPERF SENDER AT %s\n", dstGlobalIpAddr);
+    loginfo("STARTING IPERF SENDER. RX IP: %s\n", dstGlobalIpAddr);
     Iperf_Init(true);
     if (argc > 2 && strncmp(argv[2], "start", 16) == 0)
     {
@@ -490,7 +490,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     // ECHO commands can still be sent and received
     if (!running)
     {
-      logerror("First select a role: iperf <sender|receiver>");
+      logerror("First select a role: iperf <sender|receiver>\n");
       return 1;
     }
     msg_t m;
@@ -672,7 +672,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       }
       else if (strncmp(argv[2], "file", 16) == 0)
       {
-        printFileTransferStatus();
+        Iperf_PrintFileTransferStatus();
       }
       else if (strncmp(argv[2], "contents", 16) == 0)
       {

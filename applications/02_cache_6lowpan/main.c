@@ -19,6 +19,7 @@
 #include "demo_throttlers.h"
 
 #include "iperf.h"
+#include "gnrc_ipv6_cache.h"
 
 /* main thread's message queue */
 #define MAIN_QUEUE_SIZE (32)
@@ -62,6 +63,8 @@ int main(void)
   /*kernel_pid_t neopixelThreadId = Neopixel_Init(experimentThreadId);*/
   OnboardLeds_Init();
   Throttler_Init();
+
+  	//gnrc_ipv6_cache_init();
 
 	char line_buf[SHELL_DEFAULT_BUFSIZE];
 	shell_run(NULL, line_buf, SHELL_DEFAULT_BUFSIZE);

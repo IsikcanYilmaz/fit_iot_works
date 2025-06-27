@@ -10,16 +10,26 @@
 #include "gnrc_ipv6_cache.h"
 
 
-#define MSG_QUEUE_SIZE 64
+#define MSG_QUEUE_SIZE 8
 
-static void ipv6_cache_thread(void *arg)
+static char stack[THREAD_STACKSIZE_MAIN];
+static msg_t msg_q[MSG_QUEUE_SIZE];
+
+
+static void cache_event_loop (void *args)
 {
     msg_t msg;
-    (void)arg;
-    //static msg_t _msg_q[MSG_QUEUE_SIZE];
-    //msg_init_queue(_msg_q, MSG_QUEUE_SIZE);
+    (void)args;
 
+    msg_init_queue(msg_q, MSG_QUEUE_SIZE);
+
+    // Register for a gnrc_nettype   https://doc.riot-os.org/group__net__gnrc.html
+    gnrc_netreg_entry_t reg_enrty = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, thread_getpid());
+    gnrc_netreg_register(GNRC_NETTYPE_IPV6, &reg_enrty);
+
+    // start the event loop
     while (1) {
+        printf("ipv6 cache module: waiting for message.\n");
         msg_receive(&msg);
 
         switch (msg.type) {
@@ -36,19 +46,13 @@ static void ipv6_cache_thread(void *arg)
     return NULL;
 }
 
-void gnrc_ipv6_cache_init(void)
+void gnrc_ipv6_cache_init (void)
 {
-    static char stack[THREAD_STACKSIZE_MAIN];
-
     kernel_pid_t pid = thread_create(
         stack, sizeof(stack),       // stack pointer and stack size
         THREAD_PRIORITY_MAIN - 1,   // thread priority (the lower, the more important)
-        NULL,                       // thread configuration flag
-        ipv6_cache_thread,          // handler function defined above
+        0,                          // thread configuration flag
+        cache_event_loop,           // handler function defined above
         NULL,                       // arguument for the thread handler function
         "gnrc_ipv6_cache");         // name of the thread
-
-    // Register for a gnrc_nettype   https://doc.riot-os.org/group__net__gnrc.html
-    gnrc_netreg_entry_t reg_enrty = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, pid);
-    gnrc_netreg_register(GNRC_NETTYPE_IPV6);
 }

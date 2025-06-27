@@ -161,6 +161,15 @@ def setRetrans(dev, retrans):
         outStrRaw = comm.sendSerialCommand(dev, f"setretrans {retrans}")
     print("<", outStrRaw)
 
+def setAllDevicesRetrans(retrans):
+    global args, devices
+    if (args.retrans != None):
+        print(f"Setting L2 retransmissions to {args.retrans}")
+        setRetrans(devices["sender"], args.retrans)
+        setRetrans(devices["receiver"], args.retrans)
+        for dev in devices["routers"]:
+            setRetrans(dev, args.retrans)
+
 def parseDeviceJsons(j):
     global args
     # Expects {"rx":{}, "tx":{}, "config":{}}
@@ -214,6 +223,8 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
         comm.flushDevice(txDev)
 
         resetAllDevicesNetstats()
+
+        setAllDevicesRetrans(args.retrans)
         
         rxOut += comm.sendSerialCommand(rxDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=3)
         txOut += comm.sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=3)
@@ -379,13 +390,6 @@ def main():
         setTxPower(devices["receiver"], args.txpower)
         for dev in devices["routers"]:
             setTxPower(dev, args.txpower)
-
-    if (args.retrans != None):
-        print(f"Setting L2 retransmissions to {args.retrans}")
-        setRetrans(devices["sender"], args.retrans)
-        setRetrans(devices["receiver"], args.retrans)
-        for dev in devices["routers"]:
-            setRetrans(dev, args.retrans)
 
     unsetRpl(devices["receiver"])
     unsetRpl(devices["sender"])

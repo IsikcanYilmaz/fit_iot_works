@@ -224,7 +224,7 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
 
         resetAllDevicesNetstats()
 
-        setAllDevicesRetrans(args.retrans)
+        # setAllDevicesRetrans(args.retrans)
         
         rxOut += comm.sendSerialCommand(rxDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=3)
         txOut += comm.sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=3)
@@ -384,8 +384,6 @@ def main():
     getAddresses(devices["sender"])
     getAddresses(devices["receiver"])
 
-    setAllDevicesRetrans(args.retrans)
-
     if (args.txpower != None):
         print(f"Setting txpowers to {args.txpower}")
         setTxPower(devices["sender"], args.txpower)
@@ -422,6 +420,8 @@ def main():
     getAddresses(devices["sender"])
     setGlobalAddress(devices["receiver"])
     getAddresses(devices["receiver"]) # may not be needed? 
+
+    setAllDevicesRetrans(args.retrans)
 
     if (args.rpl):
         setRplRoot(devices["sender"])

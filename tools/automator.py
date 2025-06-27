@@ -384,6 +384,8 @@ def main():
     getAddresses(devices["sender"])
     getAddresses(devices["receiver"])
 
+    setAllDevicesRetrans(args.retrans)
+
     if (args.txpower != None):
         print(f"Setting txpowers to {args.txpower}")
         setTxPower(devices["sender"], args.txpower)

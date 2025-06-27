@@ -312,7 +312,7 @@ def bulkExperiments(resultsDir):
     delayUsArr = [5000, 10000, 15000, 20000, 25000, 30000]
     payloadSizeArr = [32, 16, 8]
     transferSizeArr = [4096]
-    rounds = 50
+    rounds = 20
     mode = 1
 
     # Write down the config
@@ -370,6 +370,9 @@ def main():
     comm.flushDevice(devices["sender"])
     comm.flushDevice(devices["receiver"])
 
+    getAddresses(devices["sender"])
+    getAddresses(devices["receiver"])
+
     if (args.txpower != None):
         print(f"Setting txpowers to {args.txpower}")
         setTxPower(devices["sender"], args.txpower)
@@ -383,9 +386,6 @@ def main():
         setRetrans(devices["receiver"], args.retrans)
         for dev in devices["routers"]:
             setRetrans(dev, args.retrans)
-
-    getAddresses(devices["sender"])
-    getAddresses(devices["receiver"])
 
     unsetRpl(devices["receiver"])
     unsetRpl(devices["sender"])

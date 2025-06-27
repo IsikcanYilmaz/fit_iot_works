@@ -7,17 +7,21 @@ import sys, os
 import json
 import pdb
 import traceback
+import threading
 from common import *
 from pprint import pprint
 
 DEFAULT_RESULTS_DIR = "./results/"
 SERIAL_TIMEOUT_S = 10
 EXPERIMENT_TIMEOUT_S = 60*10
+MULTITHREADED = True
 
 devices = {'sender':None, 'receiver':None, 'routers':[]}
 ifaceId = None # We assume this is the same number for all devices
 args = None
 comm = None
+
+threads = []
 
 """
 Example usage: ./automator.py /dev/ttyACM0 /dev/ttyACM1 --rpl --experiment --results_dir ../results/
@@ -148,8 +152,13 @@ def setTxPower(dev, txpower):
     print("<", outStrRaw)
 
 def setRetrans(dev, retrans):
-    global comm
-    outStrRaw = comm.sendSerialCommand(dev, f"setretrans {retrans}")
+    global comm, args
+    outStrRaw = ""
+    if (args.fitiot):
+        outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} set csma_retries {retrans}", cooldownS=0.5)
+        outStrRaw += comm.sendSerialCommand(dev, f"ifconfig {ifaceId} set retrans {retrans}", cooldownS=0.5)
+    else:
+        outStrRaw = comm.sendSerialCommand(dev, f"setretrans {retrans}", cooldownS=0.5)
     print("<", outStrRaw)
 
 def parseDeviceJsons(j):

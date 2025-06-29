@@ -2,6 +2,7 @@
 
 #include "net/gnrc.h"
 #include "net/gnrc/nettype.h"
+#include "iperf_pkt.h"
 
 #define IPERF_TOTAL_TRANSMISSION_SIZE_MAX (4096)
 #define IPERF_BUFFER_SIZE_BYTES 256
@@ -14,19 +15,12 @@
 #define IPERF_DEFAULT_TRANSFER_SIZE_BYTES (IPERF_PAYLOAD_DEFAULT_SIZE_BYTES * 16) // 512 bytes
 #define IPERF_DEFAULT_TRANSFER_TIME_US (IPERF_DEFAULT_DELAY_US * 10) // 10 secs
 
-// IPERF IPC MESSAGE TYPES
-/*#define IPERF_IPC_MSG_START          (0xfff0)*/
-/*#define IPERF_IPC_MSG_SEND_FILE      (0xfff1)*/
-/*#define IPERF_IPC_MSG_SEND_REQ       (0xfff2)*/
-/*#define IPERF_IPC_MSG_STOP           (0xfff3)*/
-/**/
-
 typedef enum
 {
   IPERF_IPC_MSG_START = 0xfff0,
   IPERF_IPC_MSG_SEND_FILE,
   IPERF_IPC_MSG_SEND_REQ,
-  IPERF_IPC_MSG_STOP, // OLD
+  IPERF_IPC_MSG_STOP, // OLD 
 
   IPERF_IPC_MSG_EXPECTATION_TIMEOUT,
   IPERF_IPC_MSG_INTEREST_TIMER_TIMEOUT,
@@ -55,6 +49,8 @@ typedef struct
   uint16_t payloadSizeBytes;
   uint16_t pktPerSecond;
   uint32_t delayUs;
+  uint32_t interestDelayUs;
+  uint32_t expectationDelayUs;
 
   IperfMode_e mode;
 
@@ -109,3 +105,4 @@ int Iperf_SocklessUdpSendToDst(const char *data, size_t dataLen);
 int Iperf_SocklessUdpSendToSrc(const char *data, size_t dataLen);
 void Iperf_PrintConfig(bool json);
 void Iperf_PrintFileTransferStatus(void);
+void Iperf_HandleConfigSync(IperfUdpPkt_t *p);

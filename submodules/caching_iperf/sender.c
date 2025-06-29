@@ -113,6 +113,11 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
         loginfo("Echo RESP Received %s\n", iperfPkt->payload);
         break;
       }
+    case IPERF_CONFIG_SYNC:
+      {
+        /*Iperf_HandleConfigSync(iperfPkt);*/
+        break;
+      }
     default:
       {
         logerror("Bad iperf packet type %d\n", iperfPkt->msgType);
@@ -214,7 +219,6 @@ void *Iperf_SenderThread(void *arg)
   senderState = SENDER_IDLE;
 
   ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
-  results.startTimestamp = ztimer_now(ZTIMER_USEC);
 
   do {
     msg_receive(&msg);
@@ -242,6 +246,7 @@ void *Iperf_SenderThread(void *arg)
         {
           loginfo("Sender received START command. Commencing iperf\n");
           senderState = SENDER_SENDING;
+          results.startTimestamp = ztimer_now(ZTIMER_USEC);
           ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 0, &ipcMsg, senderPid); // Start immediately
           break;
         }
@@ -252,6 +257,7 @@ void *Iperf_SenderThread(void *arg)
         }
       case IPERF_IPC_MSG_STOP:
         {
+          results.endTimestamp = ztimer_now(ZTIMER_USEC);
           senderState = SENDER_STOPPED;
           break;
         }

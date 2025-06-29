@@ -53,7 +53,7 @@ static ztimer_t expectationTimer;
 static ztimer_t interestTimer;
 
 extern uint16_t pktReqQueueBuffer[];
-extern SimpleQueue_t pktReqQueue;
+extern SimpleQueue_t pktReqQueue; // TODO perhaps this is unnecessary. could simply go thru the unacquired packets list and send requests?
 
 static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
@@ -161,7 +161,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           receiverState = RECEIVER_RECEIVING; // TODO see if this logic is needed
           
           // Start our expectation timer
-          startExpectationTimer(1000000);
+          startExpectationTimer(config.expectationDelayUs);
         }
         
         // handle packet seq no
@@ -189,7 +189,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
               loginfo("Lost packet %d adding to request queue\n", i);
               SimpleQueue_Push(&pktReqQueue, i);
             }
-            startInterestTimer(1000000);
+            startInterestTimer(config.interestDelayUs);
           }
           results.pktLossCounter += lostPkts;
           results.lastPktSeqNo = iperfPkt->seqNo;
@@ -225,7 +225,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
     case IPERF_PKT_RESP:
       {
         loginfo("PKT_RESP %d received\n", iperfPkt->seqNo);
-        if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX)
+        if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX && !receivedPktIds[iperfPkt->seqNo])
         {
           receivedPktIds[iperfPkt->seqNo] = true;
           results.receivedUniqueChunks++;
@@ -258,14 +258,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
       }
     case IPERF_CONFIG_SYNC:
       {
-        loginfo("Config pkt received\n");
-        IperfConfigPayload_t *configPl = (IperfConfigPayload_t *) iperfPkt->payload;
-        config.mode = configPl->mode;
-        config.payloadSizeBytes = configPl->payloadSizeBytes;
-        config.delayUs = configPl->delayUs;
-        config.transferSizeBytes = configPl->transferSizeBytes;
-        config.numPktsToTransfer = config.transferSizeBytes / config.payloadSizeBytes;
-        Iperf_PrintConfig(false);
+        Iperf_HandleConfigSync(iperfPkt);
         break;
       }
     default:
@@ -320,9 +313,7 @@ void *Iperf_ReceiverThread(void *arg)
           requestPacket(seqNo);
           if (!SimpleQueue_IsEmpty(&pktReqQueue))
           {
-          /*  ipcMsg.type = IPERF_INTEREST_TIMER_TIMEOUT;*/
-          /*  ztimer_set_msg(ZTIMER_USEC, &interestTimer, 1000000, &ipcMsg, receiverPid);*/
-            startInterestTimer(1000000);
+            startInterestTimer(config.interestDelayUs);
           }
           break;
         }
@@ -331,7 +322,7 @@ void *Iperf_ReceiverThread(void *arg)
           loginfo("Expectation timeout\n");
           if (!checkForCompletionAndTransition())
           {
-            startExpectationTimer(1000000);
+            startExpectationTimer(config.expectationDelayUs);
           }
           break;
         }

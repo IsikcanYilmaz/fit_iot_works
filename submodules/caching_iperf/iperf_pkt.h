@@ -1,3 +1,5 @@
+#ifndef IPERF_PKT_H
+#define IPERF_PKT_H
 
 // Dunno if any of whats below is really needed but lets see how it goe
 #define IPERF_CTRL_MAGIC_NUM (0x10)
@@ -21,7 +23,7 @@ typedef struct {
 } __attribute__((packed)) IperfUdpPkt_t;
 
 typedef struct {
-  IperfMode_e mode; // 1
+  uint8_t mode; // 1
   uint16_t payloadSizeBytes; // 2
   uint32_t delayUs; // 4
   uint32_t transferSizeBytes; // 4
@@ -33,3 +35,4 @@ typedef struct { // TODO
   uint16_t seqNo; 
 } __attribute__((packed)) IperfPacketRequest_t;
 
+#endif

@@ -28,6 +28,8 @@ IperfConfig_s config = {
   .payloadSizeBytes = IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
   .delayUs = 10000,
+  .interestDelayUs = 10000,
+  .expectationDelayUs = 1000000,
   .transferSizeBytes = IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
@@ -154,7 +156,11 @@ void Iperf_PrintFileTransferStatus(void)
 
 static void printReceivedFileContents(void)
 {
-  printf("%s\n", receiveFileBuffer);
+  for (int i = 0; i < config.transferSizeBytes; i++)
+  {
+    printf("%c", receiveFileBuffer[i]);
+  }
+  printf("\n");
 }
 
 static void printAll(void)
@@ -168,12 +174,14 @@ static void printAll(void)
 
 void Iperf_PrintConfig(bool json)
 {
-  printf((json) ? "{\"iAmSender\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d, \"numPktsToTransfer\":%d}\n" : \
-           "iAmSender: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\nnumPktsToTransfer: %d\n", 
+  printf((json) ? "{\"iAmSender\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"interestDelayUs\":%d, \"expectationDelayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d, \"numPktsToTransfer\":%d}\n" : \
+           "iAmSender: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\ninterestDelayUs: %d\nexpectationDelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\nnumPktsToTransfer: %d\n", 
            config.iAmSender, 
            config.payloadSizeBytes, 
            config.pktPerSecond, 
            config.delayUs, 
+           config.interestDelayUs,
+           config.expectationDelayUs,
            config.mode, 
            config.transferSizeBytes, 
            config.transferTimeUs, 
@@ -279,6 +287,19 @@ inline int Iperf_SocklessUdpSendToSrc(const char *data, size_t dataLen)
   return Iperf_SocklessUdpSend(data, dataLen, srcGlobalIpAddr);
 }
 
+void Iperf_HandleEcho(IperfUdpPkt_t *iperfPkt)
+{
+  loginfo("Echo CALL Received %s\n", iperfPkt->payload);
+  char rawPkt[20]; 
+  IperfUdpPkt_t *respPkt = (IperfUdpPkt_t *) &rawPkt;
+  uint8_t plSize = 16;
+  memset(&respPkt->payload, 0x00, 16);
+  strncpy((char *) respPkt->payload, iperfPkt->payload, 16);
+  respPkt->seqNo = 0;
+  respPkt->msgType = IPERF_ECHO_RESP;
+  Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
+}
+
 // With the following two fns, we assume the Tx machine is the master the Rx machine is the follower
 int Iperf_SendEcho(char *str)
 {
@@ -290,6 +311,18 @@ int Iperf_SendEcho(char *str)
   iperfPkt->seqNo = 0;
   iperfPkt->msgType = IPERF_ECHO_CALL;
   return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
+}
+
+void Iperf_HandleConfigSync(IperfUdpPkt_t *p)
+{
+  loginfo("Config pkt received\n");
+  IperfConfigPayload_t *configPl = (IperfConfigPayload_t *) p->payload;
+  config.mode = configPl->mode;
+  config.payloadSizeBytes = configPl->payloadSizeBytes;
+  config.delayUs = configPl->delayUs;
+  config.transferSizeBytes = configPl->transferSizeBytes;
+  config.numPktsToTransfer = config.transferSizeBytes / config.payloadSizeBytes;
+  Iperf_PrintConfig(false);
 }
 
 int Iperf_SendConfig(void)
@@ -304,7 +337,14 @@ int Iperf_SendConfig(void)
   configPl->delayUs = config.delayUs;
   configPl->transferSizeBytes = config.transferSizeBytes;
   configPl->numPktsToTransfer = config.numPktsToTransfer;
-  return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
+  if (config.iAmSender)
+  {
+    return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
+  }
+  else 
+  {
+    return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
+  }
 }
 
 int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))

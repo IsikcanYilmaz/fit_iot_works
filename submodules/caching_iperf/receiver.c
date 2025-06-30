@@ -27,14 +27,6 @@
 
 #include "receiver.h"
 
-typedef enum
-{
-  RECEIVER_STOPPED,
-  RECEIVER_IDLE,
-  RECEIVER_RECEIVING,
-  RECEIVER_STATE_MAX
-} IperfReceiverState_e;
-
 // TODO clean all this. there'll be a version 3 deffo
 
 extern IperfResults_s results;
@@ -46,11 +38,13 @@ extern char dstGlobalIpAddr[25];
 extern char srcGlobalIpAddr[25];
 extern msg_t ipcMsg;
 extern ztimer_t intervalTimer;
+extern IperfThreadState_e iperfState;
 
 static msg_t expectationMsg;
 static msg_t interestMsg;
 static ztimer_t expectationTimer;
 static ztimer_t interestTimer;
+static uint16_t expectationSeqNo = 0;
 
 extern uint16_t pktReqQueueBuffer[];
 extern SimpleQueue_t pktReqQueue; // TODO perhaps this is unnecessary. could simply go thru the unacquired packets list and send requests?
@@ -58,7 +52,6 @@ extern SimpleQueue_t pktReqQueue; // TODO perhaps this is unnecessary. could sim
 static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
 
-static IperfReceiverState_e receiverState = RECEIVER_STOPPED;
 static kernel_pid_t receiverPid = KERNEL_PID_UNDEF;
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
 
@@ -116,7 +109,16 @@ static void stopInterestTimer(void)
     ztimer_remove(ZTIMER_USEC, &interestTimer);
   }
 }
-//
+
+static int copyPayloadString(IperfUdpPkt_t *pl)
+{
+  // The text is divided into $numPktsToTransfer chunks. This is chunk no $seqNo
+  /*uint16_t offset = pl->seqNo * config.payloadSizeBytes;*/
+  /*strncpy(&receiveFileBuffer[offset], pl->payload, config.payloadSizeBytes);*/
+  /*loginfo("Payload seqno: %d , offset: %d\n", pl->seqNo, config.payloadSizeBytes);*/
+  /*Iperf_PrintFileContents();*/
+  return 0;
+}
 
 static bool checkForCompletionAndTransition(void)
 {
@@ -155,10 +157,10 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
     case IPERF_PAYLOAD:
       {
         // If it's the first payload packet we receive, ////
-        if (receiverState == RECEIVER_IDLE)
+        if (iperfState == IPERF_STATE_IDLE)
         {
-          logverbose("Received first packet. State RECEIVER_RECEIVING\n");
-          receiverState = RECEIVER_RECEIVING; // TODO see if this logic is needed
+          logverbose("Received first packet. State IPERF_STATE_RECEIVING\n");
+          iperfState = IPERF_STATE_RECEIVING; // TODO see if this logic is needed
           
           // Start our expectation timer
           startExpectationTimer(config.expectationDelayUs);
@@ -171,6 +173,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           results.lastPktSeqNo = iperfPkt->seqNo;
           logverbose("RX %d\n", iperfPkt->seqNo);
           results.receivedUniqueChunks++;
+          copyPayloadString(iperfPkt);
         }
         else if (receivedPktIds[iperfPkt->seqNo])
         {
@@ -194,6 +197,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           results.pktLossCounter += lostPkts;
           results.lastPktSeqNo = iperfPkt->seqNo;
           results.receivedUniqueChunks++;
+          copyPayloadString(iperfPkt);
           logverbose("LOSS %d pkts. Current Last Pkt %d \n", lostPkts, iperfPkt->seqNo);
         }
 
@@ -229,6 +233,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         {
           receivedPktIds[iperfPkt->seqNo] = true;
           results.receivedUniqueChunks++;
+          copyPayloadString(iperfPkt);
           Iperf_PrintFileTransferStatus();
         }
         else
@@ -281,11 +286,11 @@ void *Iperf_ReceiverThread(void *arg)
   receiverPid = thread_getpid();
   Iperf_StartUdpServer(&udpServer, receiverPid);
   loginfo("Starting Receiver Thread. Pid %d\n", receiverPid);
-  receiverState = RECEIVER_IDLE;
+  iperfState = IPERF_STATE_IDLE;
 
-  while (receiverState > RECEIVER_STOPPED) {
+  while (iperfState > IPERF_STATE_STOPPED) {
     msg_receive(&msg);
-    logdebug("IPC Message type %d\n", msg.type);
+    logdebug("IPC Message type %x\n", msg.type);
     switch (msg.type) {
       case GNRC_NETAPI_MSG_TYPE_RCV:
         {
@@ -307,6 +312,11 @@ void *Iperf_ReceiverThread(void *arg)
         }
       case IPERF_IPC_MSG_INTEREST_TIMER_TIMEOUT:
         {
+          if (SimpleQueue_IsEmpty(&pktReqQueue))
+          {
+            logerror("Interest timer time out but queue is empty!\n");
+            break;
+          }
           uint16_t seqNo = 0;
           int qret = SimpleQueue_Pop(&pktReqQueue, &seqNo);
           loginfo("Send Req for seq no %d\n", seqNo);
@@ -329,7 +339,7 @@ void *Iperf_ReceiverThread(void *arg)
       case IPERF_IPC_MSG_STOP:
         {
           loginfo("Receiver stopping\n");
-          receiverState = RECEIVER_STOPPED;
+          iperfState = IPERF_STATE_STOPPED;
           stopExpectationTimer();
           stopInterestTimer();
           break;

@@ -37,6 +37,31 @@ typedef enum
   IPERF_MODE_MAX
 } IperfMode_e;
 
+typedef enum
+{
+  RECEIVER_STOPPED,
+  RECEIVER_IDLE,
+  RECEIVER_RECEIVING,
+  RECEIVER_STATE_MAX
+} IperfReceiverState_e;
+
+typedef enum
+{
+  SENDER_STOPPED,
+  SENDER_IDLE,
+  SENDER_SENDING,
+  SENDER_STATE_MAX
+} IperfSenderState_e;
+
+typedef enum
+{
+  IPERF_STATE_STOPPED,
+  IPERF_STATE_IDLE,
+  IPERF_STATE_SENDING,
+  IPERF_STATE_RECEIVING,
+  IPERF_STATE_THREAD_STATE_MAX
+} IperfThreadState_e;
+
 typedef struct 
 {
   bool iAmSender; // If false we're the listener 
@@ -105,4 +130,5 @@ int Iperf_SocklessUdpSendToDst(const char *data, size_t dataLen);
 int Iperf_SocklessUdpSendToSrc(const char *data, size_t dataLen);
 void Iperf_PrintConfig(bool json);
 void Iperf_PrintFileTransferStatus(void);
+void Iperf_PrintFileContents(void);
 void Iperf_HandleConfigSync(IperfUdpPkt_t *p);

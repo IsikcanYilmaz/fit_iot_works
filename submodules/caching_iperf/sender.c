@@ -28,14 +28,6 @@
 
 #include "receiver.h"
 
-typedef enum
-{
-  SENDER_STOPPED,
-  SENDER_IDLE,
-  SENDER_SENDING,
-  SENDER_STATE_MAX
-} IperfSenderState_e;
-
 extern IperfResults_s results;
 extern IperfConfig_s config;
 extern uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];
@@ -43,6 +35,7 @@ extern char dstGlobalIpAddr[25];
 extern char srcGlobalIpAddr[25];
 extern msg_t ipcMsg;
 extern ztimer_t intervalTimer;
+extern IperfThreadState_e iperfState;
 
 extern uint16_t pktReqQueueBuffer[];
 extern SimpleQueue_t pktReqQueue;
@@ -50,7 +43,6 @@ extern SimpleQueue_t pktReqQueue;
 static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
 
-static IperfSenderState_e senderState = SENDER_STOPPED;
 static kernel_pid_t senderPid = KERNEL_PID_UNDEF;
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
 
@@ -96,7 +88,7 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
         IperfPacketRequest_t *reqPl = (IperfPacketRequest_t *) iperfPkt->payload;
         loginfo("Sender received PKT_REQ for packet seq no %d\n", reqPl->seqNo);
         SimpleQueue_Push(&pktReqQueue, reqPl->seqNo);
-        if (senderState == SENDER_IDLE)
+        if (iperfState == IPERF_STATE_IDLE)
         {
           ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
           ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipcMsg, senderPid); // Start immediately
@@ -187,13 +179,13 @@ static void handleFileSending(void)
     loginfo("Sender done sending %d packets\n", config.numPktsToTransfer);
     if (config.mode < IPERF_MODE_CACHING_BIDIRECTIONAL)
     {
-      senderState = SENDER_STOPPED;
+      iperfState = IPERF_STATE_STOPPED;
       results.endTimestamp = ztimer_now(ZTIMER_USEC);
       loginfo("Stopping iperf\n");
     }
     else if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
     {
-      senderState = SENDER_IDLE;
+      iperfState = IPERF_STATE_IDLE;
       loginfo("Sitting idle\n");
     }
   }
@@ -216,13 +208,13 @@ void *Iperf_SenderThread(void *arg)
   initSender();
   loginfo("Starting Sender Thread. Sitting Idle. Pid %d\n", senderPid);
 
-  senderState = SENDER_IDLE;
+  iperfState = IPERF_STATE_IDLE;
 
   ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
 
   do {
     msg_receive(&msg);
-    logdebug("Received type %d\n", msg.type);
+    logdebug("IPC Message type %x\n", msg.type);
     switch (msg.type) {
       case GNRC_NETAPI_MSG_TYPE_RCV:
         {
@@ -245,7 +237,7 @@ void *Iperf_SenderThread(void *arg)
       case IPERF_IPC_MSG_START: // TODO am i adding complexity for no reason? 
         {
           loginfo("Sender received START command. Commencing iperf\n");
-          senderState = SENDER_SENDING;
+          iperfState = IPERF_STATE_SENDING;
           results.startTimestamp = ztimer_now(ZTIMER_USEC);
           ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 0, &ipcMsg, senderPid); // Start immediately
           break;
@@ -258,14 +250,14 @@ void *Iperf_SenderThread(void *arg)
       case IPERF_IPC_MSG_STOP:
         {
           results.endTimestamp = ztimer_now(ZTIMER_USEC);
-          senderState = SENDER_STOPPED;
+          iperfState = IPERF_STATE_STOPPED;
           break;
         }
       default:
         logverbose("received something unexpected");
         break;
     }
-  } while (senderState > SENDER_STOPPED);
+  } while (iperfState > IPERF_STATE_STOPPED);
   deinitSender();
   loginfo("Sender thread exiting\n");
   return NULL;

@@ -25,12 +25,12 @@
 #include "sender.h"
 
 IperfConfig_s config = {
-  .payloadSizeBytes = IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
+  .payloadSizeBytes = 8, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 10000,
+  .delayUs = 100000,
   .interestDelayUs = 10000,
   .expectationDelayUs = 1000000,
-  .transferSizeBytes = IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
+  .transferSizeBytes = 1024,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
 };
@@ -40,6 +40,8 @@ IperfResults_s results;
 static volatile bool running = false;
 static char threadStack[THREAD_STACKSIZE_DEFAULT];
 static kernel_pid_t threadPid = KERNEL_PID_UNDEF;
+
+IperfThreadState_e iperfState = IPERF_STATE_STOPPED;
 
 char dstGlobalIpAddr[25] = "2001::2";
 char srcGlobalIpAddr[25] = "2001::1"; // TODO better solution
@@ -154,7 +156,7 @@ void Iperf_PrintFileTransferStatus(void)
   printf("\n");
 }
 
-static void printReceivedFileContents(void)
+void Iperf_PrintFileContents(void)
 {
   for (int i = 0; i < config.transferSizeBytes; i++)
   {
@@ -352,7 +354,7 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
   int snips = 0;
   int size = 0;
   gnrc_pktsnip_t *snip = pkt;
-  logdebug("Handle packet\n");
+  logdebug("Handle packet----------------------\n");
   while(snip != NULL)
   {
     /*loginfo("SNIP %d. %d bytes. type: %d ", snips, snip->size, snip->type);*/
@@ -420,14 +422,13 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
           break;
         }
     }
-    logdebug("\n");
     size += snip->size;
     snip = snip->next;
     snips++;
   }
 
   results.numReceivedBytes += size;
-  logdebug("\n");
+  logdebug("-----------------------------------\n");
 
   gnrc_pktbuf_release(pkt);
   return 1;
@@ -500,6 +501,11 @@ int Iperf_Deinit(void) // TODO if sender quits on its own you have to call this 
   threadPid = KERNEL_PID_UNDEF;
   loginfo("Deinitialized\n");
   return 0;
+}
+
+IperfThreadState_e Iperf_GetState(void)
+{
+  return iperfState;
 }
 
 int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to own file
@@ -631,7 +637,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     }
     else
     {
-      if (running)
+      if (Iperf_GetState() > IPERF_STATE_IDLE)
       {
         logerror("Stop iperf first!\n");
         return 1;
@@ -639,7 +645,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       uint8_t argIdx = 2;
       while (argIdx < argc)
       {
-        if (strncmp(argv[argIdx], "payloadsizebytes", 16) == 0)
+        if (strncmp(argv[argIdx], "payloadsizebytes", 20) == 0)
         {
           config.payloadSizeBytes = atoi(argv[argIdx+1]);
           config.numPktsToTransfer = (config.transferSizeBytes / config.payloadSizeBytes);
@@ -647,32 +653,54 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
           argIdx+=2;
           continue;
         }
-        else if (strncmp(argv[argIdx], "pktpersecond", 16) == 0)
+        else if (strncmp(argv[argIdx], "pktpersecond", 20) == 0)
         {
           config.pktPerSecond = atoi(argv[argIdx+1]);
           loginfo("Set pktpersecond to %d\n", config.pktPerSecond);
           argIdx+=2;
           continue;
         }
-        else if (strncmp(argv[argIdx], "delayus", 16) == 0)
+        else if (strncmp(argv[argIdx], "delayus", 20) == 0)
         {
           config.delayUs = atoi(argv[argIdx+1]);
           loginfo("Set delayus to %d\n", config.delayUs);
           argIdx+=2;
           continue;
         }
-        else if (strncmp(argv[argIdx], "transfertimeus", 16) == 0)
+        else if (strncmp(argv[argIdx], "transfertimeus", 20) == 0)
         {
           config.transferTimeUs = atoi(argv[argIdx+1]);
           loginfo("Set transferTimeUs to %d\n", config.transferTimeUs);
           argIdx+=2;
           continue;
         }
-        else if (strncmp(argv[argIdx], "transfersizebytes", 16) == 0)
+        else if (strncmp(argv[argIdx], "transfersizebytes", 20) == 0)
         {
           config.transferSizeBytes = atoi(argv[argIdx+1]);
           config.numPktsToTransfer = (config.transferSizeBytes / config.payloadSizeBytes);
           loginfo("Set transferSizeBytes to %d\n", config.transferSizeBytes);
+          argIdx+=2;
+          continue;
+        }
+        else if (strncmp(argv[argIdx], "interestdelayus", 20) == 0)
+        {
+          config.interestDelayUs = atoi(argv[argIdx+1]);
+          loginfo("Set interestDelayUs to %d\n", config.interestDelayUs);
+          argIdx+=2;
+          continue;
+        }
+        else if (strncmp(argv[argIdx], "expectationdelayus", 20) == 0)
+        {
+          config.expectationDelayUs = atoi(argv[argIdx+1]);
+          loginfo("Set expectationDelayUs to %d\n", config.expectationDelayUs);
+          argIdx+=2;
+          continue;
+        }
+        else if (strncmp(argv[argIdx], "numpktstotransfer", 20) == 0)
+        {
+          config.numPktsToTransfer = atoi(argv[argIdx+1]);
+          config.transferSizeBytes = config.numPktsToTransfer * config.payloadSizeBytes;
+          loginfo("Set numPktsToTransfer to %d\n", config.numPktsToTransfer);
           argIdx+=2;
           continue;
         }
@@ -716,7 +744,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       }
       else if (strncmp(argv[2], "contents", 16) == 0)
       {
-        printReceivedFileContents();
+        Iperf_PrintFileContents();
       }
       else if (strncmp(argv[2], "reset", 16) == 0)
       {

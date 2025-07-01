@@ -40,14 +40,15 @@ extern msg_t ipcMsg;
 extern ztimer_t intervalTimer;
 extern IperfThreadState_e iperfState;
 
-static msg_t expectationMsg;
-static msg_t interestMsg;
-static ztimer_t expectationTimer;
-static ztimer_t interestTimer;
-static uint16_t expectationSeqNo = 0;
-
 extern uint16_t pktReqQueueBuffer[];
 extern SimpleQueue_t pktReqQueue; // TODO perhaps this is unnecessary. could simply go thru the unacquired packets list and send requests?
+
+static msg_t expectationMsg; // TODO may not need all these tbh
+static msg_t interestMsg;  // TODO try these without a message object for each object
+static ztimer_t expectationTimer;
+static ztimer_t interestTimer;
+static uint16_t numExpectedPkts = 0;
+/*static uint16_t expectationSeqNo = 0;*/
 
 static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
@@ -55,16 +56,16 @@ static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
 static kernel_pid_t receiverPid = KERNEL_PID_UNDEF;
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
 
-static int requestPacket(uint16_t seqNo)
-{
-  char rawPkt[20];
-  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
-  IperfPacketRequest_t *pktReqPl = (IperfPacketRequest_t *) &iperfPkt->payload;
-  memset(&rawPkt, 0x00, sizeof(rawPkt));
-  iperfPkt->msgType = IPERF_PKT_REQ;
-  pktReqPl->seqNo = seqNo;
-  return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
-}
+/*static int Iperf_SendInterest(uint16_t seqNo)*/
+/*{*/
+/*  char rawPkt[20];*/
+/*  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;*/
+/*  IperfPacketRequest_t *pktReqPl = (IperfPacketRequest_t *) &iperfPkt->payload;*/
+/*  memset(&rawPkt, 0x00, sizeof(rawPkt));*/
+/*  iperfPkt->msgType = IPERF_PKT_REQ;*/
+/*  pktReqPl->seqNo = seqNo;*/
+/*  return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));*/
+/*}*/
 
 static bool isTransferDone(void)
 {
@@ -89,6 +90,12 @@ static void stopExpectationTimer(void)
   {
     ztimer_remove(ZTIMER_USEC, &expectationTimer);
   }
+}
+
+static inline void restartExpectationTimer(void)
+{
+  stopExpectationTimer();
+  startExpectationTimer(config.expectationDelayUs);
 }
 
 static void startInterestTimer(uint32_t timeoutUs)
@@ -174,6 +181,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           logverbose("RX %d\n", iperfPkt->seqNo);
           results.receivedUniqueChunks++;
           copyPayloadString(iperfPkt);
+          restartExpectationTimer();
         }
         else if (receivedPktIds[iperfPkt->seqNo])
         {
@@ -198,6 +206,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           results.lastPktSeqNo = iperfPkt->seqNo;
           results.receivedUniqueChunks++;
           copyPayloadString(iperfPkt);
+          restartExpectationTimer();
           logverbose("LOSS %d pkts. Current Last Pkt %d \n", lostPkts, iperfPkt->seqNo);
         }
 
@@ -229,6 +238,11 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
     case IPERF_PKT_RESP:
       {
         loginfo("PKT_RESP %d received\n", iperfPkt->seqNo);
+        if (iperfState != IPERF_STATE_RECEIVING) // This could be a test interest service
+        {
+          break;
+        }
+        
         if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX && !receivedPktIds[iperfPkt->seqNo])
         {
           receivedPktIds[iperfPkt->seqNo] = true;
@@ -320,7 +334,7 @@ void *Iperf_ReceiverThread(void *arg)
           uint16_t seqNo = 0;
           int qret = SimpleQueue_Pop(&pktReqQueue, &seqNo);
           loginfo("Send Req for seq no %d\n", seqNo);
-          requestPacket(seqNo);
+          Iperf_SendInterest(seqNo);
           if (!SimpleQueue_IsEmpty(&pktReqQueue))
           {
             startInterestTimer(config.interestDelayUs);
@@ -330,6 +344,23 @@ void *Iperf_ReceiverThread(void *arg)
       case IPERF_IPC_MSG_EXPECTATION_TIMEOUT:
         {
           loginfo("Expectation timeout\n");
+          /*
+           *
+           *
+           *
+           */
+          printf("Expecting: ");
+          for (int i = 0; i < results.lastPktSeqNo + 1; i++)
+          {
+            if (receivedPktIds[i])
+            {
+              continue;
+            }
+            printf("%d ", i);
+          }
+          printf("\n");
+
+
           if (!checkForCompletionAndTransition())
           {
             startExpectationTimer(config.expectationDelayUs);

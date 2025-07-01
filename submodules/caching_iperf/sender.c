@@ -85,10 +85,10 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
       }
     case IPERF_PKT_REQ:
       {
-        IperfPacketRequest_t *reqPl = (IperfPacketRequest_t *) iperfPkt->payload;
+        IperfInterest_t *reqPl = (IperfInterest_t *) iperfPkt->payload;
         loginfo("Sender received PKT_REQ for packet seq no %d\n", reqPl->seqNo);
         SimpleQueue_Push(&pktReqQueue, reqPl->seqNo);
-        if (iperfState == IPERF_STATE_IDLE)
+        if (iperfState == IPERF_STATE_WAITING_FOR_INTERESTS)
         {
           ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
           ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipcMsg, senderPid); // Start immediately
@@ -173,6 +173,12 @@ static void handleFileSending(void)
     Iperf_SocklessUdpSendToDst((char *) txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
   }
 
+  /*// TODO kinda ugly. this is so that if we got an interest pkt thru a user cmd, we dont keep running the timer*/
+  /*if (iperfState == IPERF_STATE_IDLE)*/
+  /*{*/
+  /*  return;*/
+  /*}*/
+
   results.numSentBytes += config.payloadSizeBytes;// + sizeof(IperfUdpPkt_t); // todo should or should not include metadata in our size sum? (4 bytes)
   if (isTransferDone())
   {
@@ -185,7 +191,7 @@ static void handleFileSending(void)
     }
     else if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
     {
-      iperfState = IPERF_STATE_IDLE;
+      iperfState = IPERF_STATE_WAITING_FOR_INTERESTS;
       loginfo("Sitting idle\n");
     }
   }

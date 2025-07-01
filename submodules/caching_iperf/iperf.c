@@ -289,6 +289,22 @@ inline int Iperf_SocklessUdpSendToSrc(const char *data, size_t dataLen)
   return Iperf_SocklessUdpSend(data, dataLen, srcGlobalIpAddr);
 }
 
+int Iperf_SendInterest(uint16_t seqNo)
+{
+  char rawPkt[20];
+  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
+  IperfInterest_t *pktReqPl = (IperfInterest_t *) &iperfPkt->payload;
+  memset(&rawPkt, 0x00, sizeof(rawPkt));
+  iperfPkt->msgType = IPERF_PKT_REQ;
+  pktReqPl->seqNo = seqNo;
+  return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
+}
+
+int Iperf_SendBulkInterest(uint16_t *interestArr, uint16_t len)
+{
+
+}
+
 void Iperf_HandleEcho(IperfUdpPkt_t *iperfPkt)
 {
   loginfo("Echo CALL Received %s\n", iperfPkt->payload);
@@ -769,6 +785,20 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     char *str = (argc >= 2) ? argv[2] : "TEST";
     return Iperf_SendEcho(str);
   }
+  else if (strncmp(argv[1], "interest", 16) == 0)
+  {
+    if (config.iAmSender)
+    {
+      logerror("You are not the receiver!\n");
+      return 1;
+    }
+    uint16_t seqNo = 0;
+    if (argc > 2)
+    {
+      seqNo = atoi(argv[2]);
+    }
+    return Iperf_SendInterest(seqNo);
+  }
   else
   {
     goto usage;
@@ -777,7 +807,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|start|stop|delay|log|config|target|results|echo>\n");
+  logerror("Usage: iperf <sender|receiver|start|stop|delay|log|config|target|results|echo|interest>\n");
   return 1;
 }
 

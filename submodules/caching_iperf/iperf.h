@@ -58,6 +58,7 @@ typedef enum
   IPERF_STATE_STOPPED,
   IPERF_STATE_IDLE,
   IPERF_STATE_SENDING,
+  IPERF_STATE_WAITING_FOR_INTERESTS,
   IPERF_STATE_RECEIVING,
   IPERF_STATE_THREAD_STATE_MAX
 } IperfThreadState_e;
@@ -132,3 +133,4 @@ void Iperf_PrintConfig(bool json);
 void Iperf_PrintFileTransferStatus(void);
 void Iperf_PrintFileContents(void);
 void Iperf_HandleConfigSync(IperfUdpPkt_t *p);
+int Iperf_SendInterest(uint16_t seqNo);

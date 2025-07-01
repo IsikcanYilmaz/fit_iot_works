@@ -1,13 +1,12 @@
 #ifndef IPERF_PKT_H
 #define IPERF_PKT_H
 
-// Dunno if any of whats below is really needed but lets see how it goe
-#define IPERF_CTRL_MAGIC_NUM (0x10)
-#define IPERF_PAYLOAD_MAGIC_NUM (0xf0)
+#define IPERF_MAX_PKTS_IN_ONE_REQ 8
 
 typedef enum {
   IPERF_PAYLOAD,
   IPERF_PKT_REQ,
+  IPERF_PKT_BULK_REQ,
   IPERF_PKT_RESP,
   IPERF_ECHO_CALL,
   IPERF_ECHO_RESP,
@@ -32,7 +31,12 @@ typedef struct {
 } __attribute__((packed)) IperfConfigPayload_t;
 
 typedef struct { // TODO
-  uint16_t seqNo; 
-} __attribute__((packed)) IperfPacketRequest_t;
+  uint16_t seqNo;  // 2
+} __attribute__((packed)) IperfInterest_t;
+
+typedef struct {
+  uint16_t len; // 2
+  uint16_t arr[]; // *
+} __attribute__((packed)) IperfBulkInterest_t;
 
 #endif

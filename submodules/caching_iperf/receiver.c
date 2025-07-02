@@ -383,5 +383,5 @@ void *Iperf_ReceiverThread(void *arg)
     }
   }
   Iperf_StopUdpServer(&udpServer);
-  loginfo("Receiver thread exiting\n");
+  loginfo("Receiver thread exiting. Transfer complete in %l seconds\n", (results.endTimestamp - results.startTimestamp)/1000000);
 }

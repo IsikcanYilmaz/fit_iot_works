@@ -48,24 +48,13 @@ static msg_t interestMsg;  // TODO try these without a message object for each o
 static ztimer_t expectationTimer;
 static ztimer_t interestTimer;
 static uint16_t numExpectedPkts = 0;
-/*static uint16_t expectationSeqNo = 0;*/
+static uint16_t expectationSeqNo = 0;
 
 static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
 
 static kernel_pid_t receiverPid = KERNEL_PID_UNDEF;
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
-
-/*static int Iperf_SendInterest(uint16_t seqNo)*/
-/*{*/
-/*  char rawPkt[20];*/
-/*  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;*/
-/*  IperfPacketRequest_t *pktReqPl = (IperfPacketRequest_t *) &iperfPkt->payload;*/
-/*  memset(&rawPkt, 0x00, sizeof(rawPkt));*/
-/*  iperfPkt->msgType = IPERF_PKT_REQ;*/
-/*  pktReqPl->seqNo = seqNo;*/
-/*  return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));*/
-/*}*/
 
 static bool isTransferDone(void)
 {
@@ -117,19 +106,19 @@ static void stopInterestTimer(void)
   }
 }
 
-static int copyPayloadString(IperfUdpPkt_t *pl)
+static int copyPayloadString(IperfUdpPkt_t *pkt)
 {
   // The text is divided into $numPktsToTransfer chunks. This is chunk no $seqNo
-  /*uint16_t offset = pl->seqNo * config.payloadSizeBytes;*/
-  /*strncpy(&receiveFileBuffer[offset], pl->payload, config.payloadSizeBytes);*/
-  /*loginfo("Payload seqno: %d , offset: %d\n", pl->seqNo, config.payloadSizeBytes);*/
+  uint16_t offset = pkt->seqNo * pkt->plSize;
+  strncpy(&receiveFileBuffer[offset], pkt->payload, pkt->plSize);
+  logdebug("Copying contents seqno: %d, offset: %d\n", pkt->seqNo, offset);
   /*Iperf_PrintFileContents();*/
   return 0;
 }
 
 static bool checkForCompletionAndTransition(void)
 {
-  loginfo("Receiver checking for completion. Expecting %d Received %d packets\n", \
+  logdebug("Receiver checking for completion. Expecting %d Received %d packets\n", \
           config.numPktsToTransfer, results.receivedUniqueChunks);
   if (config.numPktsToTransfer == results.receivedUniqueChunks)
   {
@@ -201,6 +190,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
             {
               loginfo("Lost packet %d adding to request queue\n", i);
               SimpleQueue_Push(&pktReqQueue, i);
+              receivedPktIds[i] = REQUESTED;
             }
             startInterestTimer(config.interestDelayUs);
           }
@@ -219,7 +209,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         }
         else
         {
-          logerror("Out of bounds sequence number!! %d\n", iperfPkt->seqNo);
+          logerror("%s:%d Out of bounds sequence number!! %d\n", __FUNCTION__, __LINE__, iperfPkt->seqNo);
         }
 
         results.numReceivedPkts++;
@@ -239,22 +229,26 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
       }
     case IPERF_PKT_RESP:
       {
-        loginfo("PKT_RESP %d received\n", iperfPkt->seqNo);
         if (iperfState != IPERF_STATE_RECEIVING) // This could be a test interest service
         {
+          loginfo("PKT_RESP %d received\n", iperfPkt->seqNo);
           break;
         }
         
-        if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX && receivedPktIds[iperfPkt->seqNo] == NOT_RECEIVED)
+        if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX && receivedPktIds[iperfPkt->seqNo] != RECEIVED)
         {
+          loginfo("PKT_RESP %d received\n", iperfPkt->seqNo);
           receivedPktIds[iperfPkt->seqNo] = RECEIVED;
           results.receivedUniqueChunks++;
+          results.numReceivedPkts++;
+          results.endTimestamp = ztimer_now(ZTIMER_USEC);
           copyPayloadString(iperfPkt);
+          restartExpectationTimer();
           Iperf_PrintFileTransferStatus();
         }
         else
         {
-          logerror("Out of bounds sequence number!! %d\n", iperfPkt->seqNo);
+          logerror("%s:%d Out of bounds sequence number!! %d\n", __FUNCTION__, __LINE__, iperfPkt->seqNo);
         }
         checkForCompletionAndTransition();
         break;
@@ -301,7 +295,7 @@ void *Iperf_ReceiverThread(void *arg)
 
   receiverPid = thread_getpid();
   Iperf_StartUdpServer(&udpServer, receiverPid);
-  loginfo("Starting Receiver Thread. Pid %d\n", receiverPid);
+  loginfo("Starting Receiver Thread. Sitting Idle. Pid %d\n", receiverPid);
   iperfState = IPERF_STATE_IDLE;
 
   while (iperfState > IPERF_STATE_STOPPED) {
@@ -346,22 +340,30 @@ void *Iperf_ReceiverThread(void *arg)
       case IPERF_IPC_MSG_EXPECTATION_TIMEOUT:
         {
           loginfo("Expectation timeout\n");
-          /*
-           *
-           *
-           *
-           */
-          printf("Expecting: ");
-          for (int i = 0; i < results.lastPktSeqNo + 1; i++)
+          if (expectationSeqNo < results.lastPktSeqNo)
+          {
+            expectationSeqNo = results.lastPktSeqNo+1;
+          }
+          else if (expectationSeqNo < config.numPktsToTransfer)
+          {
+            expectationSeqNo++;
+          }
+
+          printf("Expecting up to %d: ", expectationSeqNo);
+          uint16_t expectArr[IPERF_MAX_PKTS_IN_ONE_BULK_REQ];
+          uint8_t expectArrIdx = 0;
+          for (int i = 0; i < expectationSeqNo; i++)
           {
             if (receivedPktIds[i] == RECEIVED)
             {
               continue;
             }
             printf("%d ", i);
+            expectArr[expectArrIdx] = i;
+            expectArrIdx++;
           }
           printf("\n");
-
+          Iperf_SendBulkInterest((uint16_t *) &expectArr, expectArrIdx);
 
           if (!checkForCompletionAndTransition())
           {
@@ -383,5 +385,6 @@ void *Iperf_ReceiverThread(void *arg)
     }
   }
   Iperf_StopUdpServer(&udpServer);
-  loginfo("Receiver thread exiting. Transfer complete in %l seconds\n", (results.endTimestamp - results.startTimestamp)/1000000);
+  float secs = (float) (results.endTimestamp - results.startTimestamp) / 1000000;
+  printf("Receiver thread exiting. Transfer complete in %f seconds\n", secs);
 }

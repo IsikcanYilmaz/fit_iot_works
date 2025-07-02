@@ -25,10 +25,10 @@
 #include "sender.h"
 
 IperfConfig_s config = {
-  .payloadSizeBytes = 8, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
+  .payloadSizeBytes = IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 100000,
-  .interestDelayUs = 10000,
+  .delayUs = 10000,
+  .interestDelayUs = 50000,
   .expectationDelayUs = 1000000,
   .transferSizeBytes = 1024,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
@@ -314,7 +314,6 @@ int Iperf_SendInterest(uint16_t seqNo)
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
   IperfInterest_t *pktReqPl = (IperfInterest_t *) &iperfPkt->payload;
   memset(&rawPkt, 0x00, sizeof(rawPkt));
-  
   iperfPkt->msgType = IPERF_PKT_REQ;
   pktReqPl->seqNo = seqNo;
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
@@ -852,7 +851,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       printf("%d ", requests[i]);
     }
     printf("\n");
-    Iperf_SendBulkInterest(&requests, argc-2);
+    Iperf_SendBulkInterest((uint16_t *) &requests, argc-2);
   }
   else
   {
@@ -862,7 +861,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|start|stop|delay|log|config|target|results|echo|interest>\n");
+  logerror("Usage: iperf <sender|receiver|start|stop|delay|log|config|target|results|echo|interest|bulk>\n");
   return 1;
 }
 

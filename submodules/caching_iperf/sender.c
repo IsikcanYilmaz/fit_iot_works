@@ -46,6 +46,8 @@ static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
 static kernel_pid_t senderPid = KERNEL_PID_UNDEF;
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
 
+#define TEST_FAKE_PACKET_DROP 1
+
 
 static bool isTransferDone(void)
 {
@@ -171,8 +173,20 @@ static void handleFileSending(void)
     uint16_t charIdx = payloadPkt->seqNo * config.payloadSizeBytes;
     strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(charIdx), config.payloadSizeBytes);
     logverbose("Sending payload. Seq no %d\n", payloadPkt->seqNo);
-    Iperf_SocklessUdpSendToDst((char *) txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
     results.lastPktSeqNo = payloadPkt->seqNo;
+
+    #if TEST_FAKE_PACKET_DROP
+    if ((results.lastPktSeqNo > 10 && results.lastPktSeqNo < 15) || (results.lastPktSeqNo > config.numPktsToTransfer - 10))
+    {
+      loginfo("TEST_FAKE_PACKET_DROP FAKE DROPPING PACKET %d\n", results.lastPktSeqNo);
+    }
+    else 
+    {
+      Iperf_SocklessUdpSendToDst((char *) txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
+    }
+    #else
+    Iperf_SocklessUdpSendToDst((char *) txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
+    #endif
   }
   else // If there's something in the req queue, send that now
   {

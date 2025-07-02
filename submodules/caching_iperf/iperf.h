@@ -144,3 +144,5 @@ void Iperf_PrintFileTransferStatus(void);
 void Iperf_PrintFileContents(void);
 void Iperf_HandleConfigSync(IperfUdpPkt_t *p);
 int Iperf_SendInterest(uint16_t seqNo);
+int Iperf_SendLastReceivedPacket(uint16_t lastSeqNo);
+int Iperf_SendBulkInterest(uint16_t *interestArr, uint16_t len);

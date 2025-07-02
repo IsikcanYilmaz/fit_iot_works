@@ -63,6 +63,15 @@ typedef enum
   IPERF_STATE_THREAD_STATE_MAX
 } IperfThreadState_e;
 
+typedef enum
+{
+  NOT_RECEIVED,
+  REQUESTED,
+  EXPECTED,
+  RECEIVED,
+  CHUNK_STATUS_MAX
+} IperfChunkStatus_e;
+
 typedef struct 
 {
   bool iAmSender; // If false we're the listener 
@@ -119,6 +128,7 @@ typedef struct
   uint32_t ipv6numSuccessfulTx;
   uint32_t ipv6numErroredTx;
 } IperfResults_s;
+
 
 int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt));
 int Iperf_StartUdpServer(gnrc_netreg_entry_t *server, kernel_pid_t pid);

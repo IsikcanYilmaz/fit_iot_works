@@ -47,7 +47,7 @@ char dstGlobalIpAddr[25] = "2001::2";
 char srcGlobalIpAddr[25] = "2001::1"; // TODO better solution
 //
 char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
-bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this
+IperfChunkStatus_e receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this
 /*uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];*/
 
 uint8_t rxtxBuffer[256];
@@ -143,13 +143,32 @@ void Iperf_PrintFileTransferStatus(void)
   for (int i = 0; i < config.numPktsToTransfer; i++)
   {
     char printStr[4];
-    if (receivedPktIds[i])
+    switch(receivedPktIds[i])
     {
-      sprintf((char *) &printStr, "%d", i);
-    }
-    else
-    {
-      strcpy((char *) &printStr, "_\0");
+      case NOT_RECEIVED:
+        {
+          strcpy((char *) &printStr, "_\0");
+          break;
+        }
+      case REQUESTED:
+        {
+          strcpy((char *) &printStr, "R\0");
+          break;
+        }
+      case EXPECTED:
+        {
+          strcpy((char *) &printStr, "E\0");
+          break;
+        }
+      case RECEIVED:
+        {
+          sprintf((char *) &printStr, "%d", i);
+          break;
+        }
+      default:
+        {
+
+        }
     }
     printf("%3s %s", printStr, ((i+1) % 8 == 0 && i > 0) ? "\n" : "");
   }

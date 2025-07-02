@@ -32,7 +32,7 @@
 extern IperfResults_s results;
 extern IperfConfig_s config;
 extern uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];
-extern bool receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
+extern IperfChunkStatus_e receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 extern char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 extern char dstGlobalIpAddr[25];
 extern char srcGlobalIpAddr[25];
@@ -167,6 +167,8 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         if (iperfState == IPERF_STATE_IDLE)
         {
           logverbose("Received first packet. State IPERF_STATE_RECEIVING\n");
+
+          Iperf_ResetResults();
           iperfState = IPERF_STATE_RECEIVING; // TODO see if this logic is needed
           
           // Start our expectation timer
@@ -183,7 +185,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           copyPayloadString(iperfPkt);
           restartExpectationTimer();
         }
-        else if (receivedPktIds[iperfPkt->seqNo])
+        else if (receivedPktIds[iperfPkt->seqNo] == RECEIVED)
         {
           // DUPLICATE PKT ////////////////////////////////
           results.numDuplicates++; 
@@ -213,7 +215,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         // Tally
         if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX)
         {
-          receivedPktIds[iperfPkt->seqNo] = true;
+          receivedPktIds[iperfPkt->seqNo] = RECEIVED;
         }
         else
         {
@@ -243,9 +245,9 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           break;
         }
         
-        if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX && !receivedPktIds[iperfPkt->seqNo])
+        if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX && receivedPktIds[iperfPkt->seqNo] == NOT_RECEIVED)
         {
-          receivedPktIds[iperfPkt->seqNo] = true;
+          receivedPktIds[iperfPkt->seqNo] = RECEIVED;
           results.receivedUniqueChunks++;
           copyPayloadString(iperfPkt);
           Iperf_PrintFileTransferStatus();
@@ -352,7 +354,7 @@ void *Iperf_ReceiverThread(void *arg)
           printf("Expecting: ");
           for (int i = 0; i < results.lastPktSeqNo + 1; i++)
           {
-            if (receivedPktIds[i])
+            if (receivedPktIds[i] == RECEIVED)
             {
               continue;
             }

@@ -262,6 +262,7 @@ void *Iperf_SenderThread(void *arg)
         {
           loginfo("Sender received START command. Commencing iperf\n");
           iperfState = IPERF_STATE_SENDING;
+          Iperf_ResetResults();
           results.startTimestamp = ztimer_now(ZTIMER_USEC);
           ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 0, &ipcMsg, senderPid); // Start immediately
           break;

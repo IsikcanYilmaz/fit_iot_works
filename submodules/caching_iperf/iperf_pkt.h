@@ -1,7 +1,7 @@
 #ifndef IPERF_PKT_H
 #define IPERF_PKT_H
 
-#define IPERF_MAX_PKTS_IN_ONE_REQ 8
+#define IPERF_MAX_PKTS_IN_ONE_BULK_REQ 15
 
 typedef enum {
   IPERF_PAYLOAD,
@@ -26,8 +26,7 @@ typedef struct {
   uint16_t payloadSizeBytes; // 2
   uint32_t delayUs; // 4
   uint32_t transferSizeBytes; // 4
-  uint16_t numPktsToTransfer; // 4
-  uint8_t _pad; // 1
+  uint16_t numPktsToTransfer; // 2
 } __attribute__((packed)) IperfConfigPayload_t;
 
 typedef struct { // TODO

@@ -291,10 +291,11 @@ inline int Iperf_SocklessUdpSendToSrc(const char *data, size_t dataLen)
 
 int Iperf_SendInterest(uint16_t seqNo)
 {
-  char rawPkt[20];
+  char rawPkt[sizeof(IperfUdpPkt_t) + sizeof(IperfInterest_t)];
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
   IperfInterest_t *pktReqPl = (IperfInterest_t *) &iperfPkt->payload;
   memset(&rawPkt, 0x00, sizeof(rawPkt));
+  
   iperfPkt->msgType = IPERF_PKT_REQ;
   pktReqPl->seqNo = seqNo;
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
@@ -302,30 +303,48 @@ int Iperf_SendInterest(uint16_t seqNo)
 
 int Iperf_SendBulkInterest(uint16_t *interestArr, uint16_t len)
 {
+  if (len > IPERF_MAX_PKTS_IN_ONE_BULK_REQ)
+  {
+    logerror("Overflowing bulk interest %d. Max: %d\n", len, IPERF_MAX_PKTS_IN_ONE_BULK_REQ);
+  }
+  char rawPkt[32]; // [4][2][...]
+  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
+  IperfBulkInterest_t *bulkReqPl = (IperfBulkInterest_t *) &iperfPkt->payload;
+  memset(&rawPkt, 0x00, sizeof(rawPkt));
 
+  iperfPkt->msgType = IPERF_PKT_BULK_REQ;
+  iperfPkt->plSize = sizeof(IperfBulkInterest_t) + (sizeof(uint16_t) * len);
+  iperfPkt->seqNo = 0;
+
+  bulkReqPl->len = len;
+  for (int i = 0; i < len; i++) // TODO memcpy this
+  {
+    bulkReqPl->arr[i] = interestArr[i];
+  }
+  return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
 }
 
-void Iperf_HandleEcho(IperfUdpPkt_t *iperfPkt)
+int Iperf_HandleEcho(IperfUdpPkt_t *iperfPkt)
 {
   loginfo("Echo CALL Received %s\n", iperfPkt->payload);
-  char rawPkt[20]; 
+  char rawPkt[sizeof(IperfUdpPkt_t) + 16]; 
   IperfUdpPkt_t *respPkt = (IperfUdpPkt_t *) &rawPkt;
   uint8_t plSize = 16;
   memset(&respPkt->payload, 0x00, 16);
-  strncpy((char *) respPkt->payload, iperfPkt->payload, 16);
+  strncpy((char *) respPkt->payload, iperfPkt->payload, 15);
   respPkt->seqNo = 0;
   respPkt->msgType = IPERF_ECHO_RESP;
-  Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
+  return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
 }
 
 // With the following two fns, we assume the Tx machine is the master the Rx machine is the follower
 int Iperf_SendEcho(char *str)
 {
-  char rawPkt[20]; 
+  char rawPkt[sizeof(IperfUdpPkt_t) + 16]; 
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
   uint8_t plSize = 16;
   memset(&iperfPkt->payload, 0x00, 16);
-  strncpy((char *) iperfPkt->payload, str, 16);
+  strncpy((char *) iperfPkt->payload, str, 15);
   iperfPkt->seqNo = 0;
   iperfPkt->msgType = IPERF_ECHO_CALL;
   return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
@@ -345,7 +364,7 @@ void Iperf_HandleConfigSync(IperfUdpPkt_t *p)
 
 int Iperf_SendConfig(void)
 {
-  char rawPkt[20];
+  char rawPkt[sizeof(IperfUdpPkt_t) + sizeof(IperfConfigPayload_t)];
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
   IperfConfigPayload_t *configPl = (IperfConfigPayload_t *) iperfPkt->payload;
   memset(&rawPkt, 0x00, 20);
@@ -798,6 +817,23 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       seqNo = atoi(argv[2]);
     }
     return Iperf_SendInterest(seqNo);
+  }
+  else if (strncmp(argv[1], "bulk", 16) == 0)
+  {
+    if (argc < 3)
+    {
+      logerror("Bad args!\n");
+      return 1;
+    }
+    uint16_t requests[argc-2];
+    loginfo("Bulk interest: ");
+    for (int i = 0; i < argc-2; i++)
+    {
+      requests[i] = atoi(argv[2+i]);
+      printf("%d ", requests[i]);
+    }
+    printf("\n");
+    Iperf_SendBulkInterest(&requests, argc-2);
   }
   else
   {

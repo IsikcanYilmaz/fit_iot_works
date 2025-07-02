@@ -88,11 +88,25 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
         IperfInterest_t *reqPl = (IperfInterest_t *) iperfPkt->payload;
         loginfo("Sender received PKT_REQ for packet seq no %d\n", reqPl->seqNo);
         SimpleQueue_Push(&pktReqQueue, reqPl->seqNo);
-        if (iperfState == IPERF_STATE_WAITING_FOR_INTERESTS)
-        {
+        /*if (iperfState == IPERF_STATE_WAITING_FOR_INTERESTS)*/
+        /*{*/
           ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
           ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipcMsg, senderPid); // Start immediately
+        /*}*/
+        break;
+      }
+    case IPERF_PKT_BULK_REQ:
+      {
+        IperfBulkInterest_t *bulkPl = (IperfBulkInterest_t *) iperfPkt->payload;
+        loginfo("Sender received PKT_BULK_REQ for ");
+        for (int i = 0; i < bulkPl->len; i++)
+        {
+          SimpleQueue_Push(&pktReqQueue, bulkPl->arr[i]);
+          printf("%d ", bulkPl->arr[i]);
         }
+        printf("\n");
+        ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
+        ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipcMsg, senderPid); // Start immediately
         break;
       }
     case IPERF_ECHO_CALL:
@@ -174,10 +188,14 @@ static void handleFileSending(void)
   }
 
   /*// TODO kinda ugly. this is so that if we got an interest pkt thru a user cmd, we dont keep running the timer*/
-  /*if (iperfState == IPERF_STATE_IDLE)*/
-  /*{*/
-  /*  return;*/
-  /*}*/
+  if (iperfState == IPERF_STATE_IDLE)
+  {
+    if (!SimpleQueue_IsEmpty(&pktReqQueue))
+    {
+      ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipcMsg, senderPid);
+    }
+    return;
+  }
 
   results.numSentBytes += config.payloadSizeBytes;// + sizeof(IperfUdpPkt_t); // todo should or should not include metadata in our size sum? (4 bytes)
   if (isTransferDone())

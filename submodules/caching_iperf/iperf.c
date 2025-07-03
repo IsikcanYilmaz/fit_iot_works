@@ -25,11 +25,11 @@
 #include "sender.h"
 
 IperfConfig_s config = {
-  .payloadSizeBytes = IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
+  .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 10000,
-  .interestDelayUs = 50000,
-  .expectationDelayUs = 1000000,
+  .delayUs = 500000,
+  .interestDelayUs = 1000000,
+  .expectationDelayUs = 2500000,
   .transferSizeBytes = 1024,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
@@ -105,9 +105,9 @@ static void printResults(bool json)
   }
   printf((json) ? \
 
-           "{\"iAmSender\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"numSentPkts\":%d, \"numSentBytes\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu, \"l2numReceivedPackets\":%d, \"l2numReceivedBytes\":%d, \"l2numSentPackets\":%d, \"l2numSentBytes\":%d, \"l2numSuccessfulTx\":%d, \"l2numErroredTx\":%d, \"ipv6numReceivedPackets\":%d, \"ipv6numReceivedBytes\":%d, \"ipv6numSentPackets\":%d, \"ipv6numSentBytes\":%d, \"ipv6numSuccessfulTx\":%d, \"ipv6numErroredTx\":%d}\n" : \
+           "{\"iAmSender\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"numSentPkts\":%d, \"numSentBytes\":%d, \"numInterestsSent\":%d, \"numInterestsServed\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu, \"l2numReceivedPackets\":%d, \"l2numReceivedBytes\":%d, \"l2numSentPackets\":%d, \"l2numSentBytes\":%d, \"l2numSuccessfulTx\":%d, \"l2numErroredTx\":%d, \"ipv6numReceivedPackets\":%d, \"ipv6numReceivedBytes\":%d, \"ipv6numSentPackets\":%d, \"ipv6numSentBytes\":%d, \"ipv6numSuccessfulTx\":%d, \"ipv6numErroredTx\":%d}\n" : \
 
-           "Results\niAmSender           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nnumSentPkts         :%d\nnumSentBytes        :%d\nstartTimestamp      :%lu\nendTimestamp        :%lu\ntimeDiff            :%lu\nl2numRxPkts         :%d\nl2numRxBytes        :%d\nl2numTxPkts         :%d\nl2numTxBytes        :%d\nl2numSuccessTx      :%d\nl2numErroredTx      :%d\nipv6numRxPkts       :%d\nipv6numRxBytes      :%d\nipv6numTxPkts       :%d\nipv6numTxBytes      :%d\nipv6numSuccessTx    :%d\nipv6numErroredTx    :%d\n", \
+           "Results\niAmSender           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nnumSentPkts         :%d\nnumSentBytes        :%d\nnumInterestsSent    :%d\nnumInterestsServed  :%d\nstartTimestamp      :%lu\nendTimestamp        :%lu\ntimeDiff            :%lu\nl2numRxPkts         :%d\nl2numRxBytes        :%d\nl2numTxPkts         :%d\nl2numTxBytes        :%d\nl2numSuccessTx      :%d\nl2numErroredTx      :%d\nipv6numRxPkts       :%d\nipv6numRxBytes      :%d\nipv6numTxPkts       :%d\nipv6numTxBytes      :%d\nipv6numSuccessTx    :%d\nipv6numErroredTx    :%d\n", \
 
            config.iAmSender, \
            results.lastPktSeqNo, \
@@ -117,6 +117,8 @@ static void printResults(bool json)
            results.numDuplicates, \
            results.numSentPkts, \
            results.numSentBytes, \
+           results.numInterestsSent, \
+           results.numInterestsServed, \
            results.startTimestamp, \
            results.endTimestamp, \
            results.endTimestamp - results.startTimestamp, \
@@ -316,6 +318,7 @@ int Iperf_SendInterest(uint16_t seqNo)
   memset(&rawPkt, 0x00, sizeof(rawPkt));
   iperfPkt->msgType = IPERF_PKT_REQ;
   pktReqPl->seqNo = seqNo;
+  results.numInterestsSent++;
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
 }
 
@@ -339,6 +342,7 @@ int Iperf_SendBulkInterest(uint16_t *interestArr, uint16_t len)
   {
     bulkReqPl->arr[i] = interestArr[i];
   }
+  results.numInterestsSent++;
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
 }
 
@@ -605,6 +609,15 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     getNetifStats();
     Iperf_Deinit();
   }
+  else if (strncmp(argv[1], "restart", 16) == 0)
+  {
+    bool wasISender = config.iAmSender;
+    Iperf_Deinit();
+    Iperf_Init(wasISender);
+    msg_t m;
+    m.type = IPERF_IPC_MSG_START;
+    msg_send(&m, threadPid);
+  }
   else if (strncmp(argv[1], "delay", 16) == 0)
   {
     if (argc < 3)
@@ -695,6 +708,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
         logerror("Stop iperf first!\n");
         return 1;
       }
+      bool syncAtTheEnd = false;
       uint8_t argIdx = 2;
       while (argIdx < argc)
       {
@@ -768,6 +782,12 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
             continue;
           }
         }
+        else if (strncmp(argv[argIdx], "sync", 16) == 0)
+        {
+          syncAtTheEnd = true;
+          argIdx += 1;
+          continue;
+        }
         else
         {
           logerror("Wrong config parameter %s. Available options:\npayloadsize, pktpersecond, delayus, transfertimeus, transfersizebytes, mode\n", argv[argIdx]);
@@ -775,7 +795,10 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
         }
         argIdx++;
       }
-
+      if (syncAtTheEnd)
+      {
+        Iperf_SendConfig();
+      }
       Iperf_PrintConfig(false);
     }
   }
@@ -861,7 +884,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|start|stop|delay|log|config|target|results|echo|interest|bulk>\n");
+  logerror("Usage: iperf <sender|receiver|start|stop|restart|delay|log|config|target|results|echo|interest|bulk>\n");
   return 1;
 }
 

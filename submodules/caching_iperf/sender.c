@@ -48,7 +48,6 @@ static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DE
 
 #define TEST_FAKE_PACKET_DROP 1
 
-
 static bool isTransferDone(void)
 {
   bool ret = false;
@@ -176,7 +175,7 @@ static void handleFileSending(void)
     results.lastPktSeqNo = payloadPkt->seqNo;
 
     #if TEST_FAKE_PACKET_DROP
-    if ((results.lastPktSeqNo > 10 && results.lastPktSeqNo < 15) || (results.lastPktSeqNo > config.numPktsToTransfer - 10))
+    if ((results.lastPktSeqNo > 10 && results.lastPktSeqNo < 25))
     {
       loginfo("TEST_FAKE_PACKET_DROP FAKE DROPPING PACKET %d\n", results.lastPktSeqNo);
     }
@@ -195,6 +194,7 @@ static void handleFileSending(void)
     payloadPkt->msgType = IPERF_PKT_RESP;
     payloadPkt->seqNo = reqSeq;
     payloadPkt->plSize = config.payloadSizeBytes;
+    results.numInterestsServed++;
     uint16_t charIdx = payloadPkt->seqNo * config.payloadSizeBytes;
     strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(charIdx), config.payloadSizeBytes);
     loginfo("Serving request. Seq no %d\n", payloadPkt->seqNo);
@@ -285,6 +285,11 @@ void *Iperf_SenderThread(void *arg)
         {
           handleFileSending();
           break;
+        }
+      case IPERF_IPC_MSG_IDLE:
+        {
+          results.endTimestamp = ztimer_now(ZTIMER_USEC);
+          iperfState = IPERF_STATE_IDLE;
         }
       case IPERF_IPC_MSG_STOP:
         {

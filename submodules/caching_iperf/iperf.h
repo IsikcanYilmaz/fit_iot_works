@@ -20,6 +20,7 @@ typedef enum
   IPERF_IPC_MSG_START = 0xfff0,
   IPERF_IPC_MSG_SEND_FILE,
   IPERF_IPC_MSG_SEND_REQ,
+  IPERF_IPC_MSG_IDLE,
   IPERF_IPC_MSG_STOP, // OLD 
 
   IPERF_IPC_MSG_EXPECTATION_TIMEOUT,
@@ -110,6 +111,8 @@ typedef struct
   uint32_t numDuplicates;
   uint32_t numSentPkts;
   uint32_t numSentBytes;
+  uint32_t numInterestsSent;
+  uint32_t numInterestsServed;
   uint16_t receivedUniqueChunks;
   uint32_t startTimestamp;
   uint32_t endTimestamp;

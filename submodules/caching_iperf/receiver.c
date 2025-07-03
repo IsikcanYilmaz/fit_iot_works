@@ -106,6 +106,12 @@ static void stopInterestTimer(void)
   }
 }
 
+static inline void restartInterestTimer(void)
+{
+  stopInterestTimer();
+  startInterestTimer(config.interestDelayUs);
+}
+
 static int copyPayloadString(IperfUdpPkt_t *pkt)
 {
   // The text is divided into $numPktsToTransfer chunks. This is chunk no $seqNo
@@ -184,16 +190,17 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         {
           // OUT OF ORDER (LOSS) //////////////////////////
           uint16_t lostPkts = (iperfPkt->seqNo - results.lastPktSeqNo);
-          if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
-          {
-            for (uint16_t i = results.lastPktSeqNo + 1; i < iperfPkt->seqNo; i++)
-            {
-              loginfo("Lost packet %d adding to request queue\n", i);
-              SimpleQueue_Push(&pktReqQueue, i);
-              receivedPktIds[i] = REQUESTED;
-            }
-            startInterestTimer(config.interestDelayUs);
-          }
+          // Should we send an interest as soon as we detect a loss? 
+          /*if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)*/
+          /*{*/
+          /*  for (uint16_t i = results.lastPktSeqNo + 1; i < iperfPkt->seqNo; i++)*/
+          /*  {*/
+          /*    loginfo("Lost packet %d adding to request queue\n", i);*/
+          /*    SimpleQueue_Push(&pktReqQueue, i);*/
+          /*    receivedPktIds[i] = REQUESTED;*/
+          /*  }*/
+          /*  startInterestTimer(config.interestDelayUs);*/
+          /*}*/
           results.pktLossCounter += lostPkts;
           results.lastPktSeqNo = iperfPkt->seqNo;
           results.receivedUniqueChunks++;
@@ -244,7 +251,14 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           results.endTimestamp = ztimer_now(ZTIMER_USEC);
           copyPayloadString(iperfPkt);
           restartExpectationTimer();
-          Iperf_PrintFileTransferStatus();
+          //Iperf_PrintFileTransferStatus();
+        }
+        else if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX && receivedPktIds[iperfPkt->seqNo] == RECEIVED)
+        {
+          results.numDuplicates++;
+          results.numReceivedPkts++;
+          results.endTimestamp = ztimer_now(ZTIMER_USEC);
+          restartExpectationTimer();
         }
         else
         {
@@ -282,6 +296,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         break;
       }
   }
+  return 0;
 }
 
 void *Iperf_ReceiverThread(void *arg)
@@ -322,15 +337,31 @@ void *Iperf_ReceiverThread(void *arg)
         }
       case IPERF_IPC_MSG_INTEREST_TIMER_TIMEOUT:
         {
+          // Interest timeouts fire out bulk interests to queued up interested packets
+          // Queueing is done by the expectation timeouts
+          
           if (SimpleQueue_IsEmpty(&pktReqQueue))
           {
             logerror("Interest timer time out but queue is empty!\n");
             break;
           }
-          uint16_t seqNo = 0;
-          int qret = SimpleQueue_Pop(&pktReqQueue, &seqNo);
-          loginfo("Send Req for seq no %d\n", seqNo);
-          Iperf_SendInterest(seqNo);
+          
+          uint16_t expectArr[IPERF_MAX_PKTS_IN_ONE_BULK_REQ];
+          uint16_t expectArrIdx = 0;
+
+          printf("Send Req for :");
+          for (expectArrIdx = 0; expectArrIdx < IPERF_MAX_PKTS_IN_ONE_BULK_REQ; expectArrIdx++)
+          {
+            if (SimpleQueue_IsEmpty(&pktReqQueue))
+            {
+              break;
+            }
+            int ret = SimpleQueue_Pop(&pktReqQueue, &(expectArr[expectArrIdx]));
+            printf("%d ", expectArr[expectArrIdx]);
+          }
+          printf("\n");
+          Iperf_SendBulkInterest((uint16_t *) &expectArr, expectArrIdx);
+
           if (!SimpleQueue_IsEmpty(&pktReqQueue))
           {
             startInterestTimer(config.interestDelayUs);
@@ -339,6 +370,9 @@ void *Iperf_ReceiverThread(void *arg)
         }
       case IPERF_IPC_MSG_EXPECTATION_TIMEOUT:
         {
+          // Expectation timeouts fill up our Interest queue
+          // and starts the interest timer
+
           loginfo("Expectation timeout\n");
           if (expectationSeqNo < results.lastPktSeqNo)
           {
@@ -350,20 +384,21 @@ void *Iperf_ReceiverThread(void *arg)
           }
 
           printf("Expecting up to %d: ", expectationSeqNo);
-          uint16_t expectArr[IPERF_MAX_PKTS_IN_ONE_BULK_REQ];
-          uint8_t expectArrIdx = 0;
-          for (int i = 0; i < expectationSeqNo; i++)
+          for (uint16_t i = 0; i < expectationSeqNo; i++)
           {
             if (receivedPktIds[i] == RECEIVED)
             {
               continue;
             }
             printf("%d ", i);
-            expectArr[expectArrIdx] = i;
-            expectArrIdx++;
+            SimpleQueue_Push(&pktReqQueue, i);
           }
           printf("\n");
-          Iperf_SendBulkInterest((uint16_t *) &expectArr, expectArrIdx);
+          
+          if (!SimpleQueue_IsEmpty(&pktReqQueue))
+          {
+            startInterestTimer(config.interestDelayUs);
+          }
 
           if (!checkForCompletionAndTransition())
           {
@@ -384,7 +419,9 @@ void *Iperf_ReceiverThread(void *arg)
         break;
     }
   }
+
+  expectationSeqNo = 0; // TODO put this in a cleanup function
   Iperf_StopUdpServer(&udpServer);
-  float secs = (float) (results.endTimestamp - results.startTimestamp) / 1000000;
-  printf("Receiver thread exiting. Transfer complete in %f seconds\n", secs);
+  uint32_t usecs = (float) (results.endTimestamp - results.startTimestamp);
+  printf("Receiver thread exiting. Transfer complete in %d seconds\n", usecs);
 }

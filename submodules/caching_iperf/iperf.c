@@ -27,10 +27,10 @@
 IperfConfig_s config = {
   .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 500000,
-  .interestDelayUs = 1000000,
-  .expectationDelayUs = 2500000,
-  .transferSizeBytes = 1024,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
+  .delayUs = 10000,
+  .interestDelayUs = 25000,
+  .expectationDelayUs = 15000,
+  .transferSizeBytes = 2048,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
 };
@@ -218,7 +218,7 @@ void Iperf_ResetResults(void)
   memset(&receivedPktIds, 0x00, IPERF_TOTAL_TRANSMISSION_SIZE_MAX);
   memset(&receiveFileBuffer, 0x00, IPERF_TOTAL_TRANSMISSION_SIZE_MAX);
   resetNetifStats();
-  loginfo("Results reset\n");
+  logdebug("Results reset\n");
 }
 
 // SOCKLESS 
@@ -614,9 +614,9 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     bool wasISender = config.iAmSender;
     Iperf_Deinit();
     Iperf_Init(wasISender);
-    msg_t m;
-    m.type = IPERF_IPC_MSG_START;
-    msg_send(&m, threadPid);
+    /*msg_t m;*/
+    /*m.type = IPERF_IPC_MSG_START;*/
+    /*msg_send(&m, threadPid);*/
   }
   else if (strncmp(argv[1], "delay", 16) == 0)
   {

@@ -59,6 +59,18 @@ int SimpleQueue_Seek(SimpleQueue_t *q, uint16_t idx, uint16_t *data)
   return 0;
 }
 
+bool SimpleQueue_IsEnqueued(SimpleQueue_t *q, uint16_t data)
+{
+  for (int i = 0; i < q->currLen; i++)
+  {
+    if (q->buf[i] == data)
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
 void SimpleQueue_PrintQueue(SimpleQueue_t *q)
 {
   printf("Head Idx %d, Tail Idx %d, curr len %d, max len %d\n", q->headIdx, q->tailIdx, q->currLen, q->maxLen);

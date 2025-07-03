@@ -238,13 +238,13 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
       {
         if (iperfState != IPERF_STATE_RECEIVING) // This could be a test interest service
         {
-          loginfo("PKT_RESP %d received\n", iperfPkt->seqNo);
+          logdebug("PKT_RESP %d received\n", iperfPkt->seqNo);
           break;
         }
         
         if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX && receivedPktIds[iperfPkt->seqNo] != RECEIVED)
         {
-          loginfo("PKT_RESP %d received\n", iperfPkt->seqNo);
+          logdebug("PKT_RESP %d received\n", iperfPkt->seqNo);
           receivedPktIds[iperfPkt->seqNo] = RECEIVED;
           results.receivedUniqueChunks++;
           results.numReceivedPkts++;
@@ -349,7 +349,7 @@ void *Iperf_ReceiverThread(void *arg)
           uint16_t expectArr[IPERF_MAX_PKTS_IN_ONE_BULK_REQ];
           uint16_t expectArrIdx = 0;
 
-          printf("Send Req for :");
+          logdebug("Send Req for :");
           for (expectArrIdx = 0; expectArrIdx < IPERF_MAX_PKTS_IN_ONE_BULK_REQ; expectArrIdx++)
           {
             if (SimpleQueue_IsEmpty(&pktReqQueue))
@@ -357,9 +357,9 @@ void *Iperf_ReceiverThread(void *arg)
               break;
             }
             int ret = SimpleQueue_Pop(&pktReqQueue, &(expectArr[expectArrIdx]));
-            printf("%d ", expectArr[expectArrIdx]);
+            if (logprintTags[DEBUG]) printf("%d ", expectArr[expectArrIdx]);
           }
-          printf("\n");
+          if (logprintTags[DEBUG]) printf("\n");
           Iperf_SendBulkInterest((uint16_t *) &expectArr, expectArrIdx);
 
           if (!SimpleQueue_IsEmpty(&pktReqQueue))
@@ -373,7 +373,7 @@ void *Iperf_ReceiverThread(void *arg)
           // Expectation timeouts fill up our Interest queue
           // and starts the interest timer
 
-          loginfo("Expectation timeout\n");
+          logdebug("Expectation timeout\n");
           if (expectationSeqNo < results.lastPktSeqNo)
           {
             expectationSeqNo = results.lastPktSeqNo+1;
@@ -383,17 +383,21 @@ void *Iperf_ReceiverThread(void *arg)
             expectationSeqNo++;
           }
 
-          printf("Expecting up to %d: ", expectationSeqNo);
+          logdebug("Expecting up to %d\n", expectationSeqNo);
           for (uint16_t i = 0; i < expectationSeqNo; i++)
           {
             if (receivedPktIds[i] == RECEIVED)
             {
               continue;
             }
-            printf("%d ", i);
+            /*if (SimpleQueue_IsEnqueued(&pktReqQueue, i))*/ // TODO
+            /*{*/
+            /*  continue;*/
+            /*}*/
+            if (logprintTags[DEBUG]) printf("%d ", i);
             SimpleQueue_Push(&pktReqQueue, i);
           }
-          printf("\n");
+          if (logprintTags[DEBUG]) printf("\n");
           
           if (!SimpleQueue_IsEmpty(&pktReqQueue))
           {
@@ -422,6 +426,6 @@ void *Iperf_ReceiverThread(void *arg)
 
   expectationSeqNo = 0; // TODO put this in a cleanup function
   Iperf_StopUdpServer(&udpServer);
-  uint32_t usecs = (float) (results.endTimestamp - results.startTimestamp);
-  printf("Receiver thread exiting. Transfer complete in %d seconds\n", usecs);
+  uint32_t usecs = (results.endTimestamp - results.startTimestamp);
+  printf("Receiver thread exiting. Transfer complete in %d useconds\n", usecs);
 }

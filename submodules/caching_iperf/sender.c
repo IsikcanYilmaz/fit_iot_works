@@ -46,7 +46,7 @@ static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
 static kernel_pid_t senderPid = KERNEL_PID_UNDEF;
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF);
 
-#define TEST_FAKE_PACKET_DROP 1
+#define TEST_FAKE_PACKET_DROP 0
 
 static bool isTransferDone(void)
 {
@@ -99,13 +99,13 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
     case IPERF_PKT_BULK_REQ:
       {
         IperfBulkInterest_t *bulkPl = (IperfBulkInterest_t *) iperfPkt->payload;
-        loginfo("Sender received PKT_BULK_REQ for ");
+        logdebug("Sender received PKT_BULK_REQ for ");
         for (int i = 0; i < bulkPl->len; i++)
         {
           SimpleQueue_Push(&pktReqQueue, bulkPl->arr[i]);
-          printf("%d ", bulkPl->arr[i]);
+          if (logprintTags[DEBUG]) printf("%d ", bulkPl->arr[i]);
         }
-        printf("\n");
+        if (logprintTags[DEBUG]) printf("\n");
         ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
         ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipcMsg, senderPid); // Start immediately
         break;
@@ -197,7 +197,7 @@ static void handleFileSending(void)
     results.numInterestsServed++;
     uint16_t charIdx = payloadPkt->seqNo * config.payloadSizeBytes;
     strncpy((char *) &payloadPkt->payload, IperfMessage_GetPointer(charIdx), config.payloadSizeBytes);
-    loginfo("Serving request. Seq no %d\n", payloadPkt->seqNo);
+    logdebug("Serving request. Seq no %d\n", payloadPkt->seqNo);
     Iperf_SocklessUdpSendToDst((char *) txBuffer, config.payloadSizeBytes + sizeof(IperfUdpPkt_t));
   }
 

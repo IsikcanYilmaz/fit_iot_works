@@ -16,3 +16,4 @@ int SimpleQueue_Push(SimpleQueue_t *q, uint16_t data);
 int SimpleQueue_Pop(SimpleQueue_t *q, uint16_t *data);
 bool SimpleQueue_IsEmpty(SimpleQueue_t *q);
 bool SimpleQueue_IsFull(SimpleQueue_t *q);
+bool SimpleQueue_IsEnqueued(SimpleQueue_t *q, uint16_t data);

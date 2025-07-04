@@ -151,17 +151,18 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
     return 1;
   }
 
-  /*logverbose("Received seq no %d\nPayload %s\nLosses %d\nDups %d\n", iperfPkt->seqNo, iperfPkt->payload, results.pktLossCounter, results.numDuplicates);*/
-  logverbose("Received Iperf Pkt: Type %d\n", iperfPkt->msgType);
+  logdebug("Received Iperf Pkt: Type %d\n", iperfPkt->msgType);
   
   switch (iperfPkt->msgType)
   {
     case IPERF_PAYLOAD:
       {
+        logdebug("[IPERF_PAYLOAD] %d received\n", iperfPkt->seqNo);
+
         // If it's the first payload packet we receive, ////
         if (iperfState == IPERF_STATE_IDLE)
         {
-          logverbose("Received first packet. State IPERF_STATE_RECEIVING\n");
+          logdebug("Received first packet. State IPERF_STATE_RECEIVING\n");
 
           Iperf_ResetResults();
           iperfState = IPERF_STATE_RECEIVING; // TODO see if this logic is needed
@@ -175,7 +176,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         {
           // GOOD RX //////////////////////////////////////
           results.lastPktSeqNo = iperfPkt->seqNo;
-          logverbose("RX %d\n", iperfPkt->seqNo);
+          logdebug("RX %d\n", iperfPkt->seqNo);
           results.receivedUniqueChunks++;
           copyPayloadString(iperfPkt);
           restartExpectationTimer();
@@ -184,7 +185,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         {
           // DUPLICATE PKT ////////////////////////////////
           results.numDuplicates++; 
-          logverbose("DUP %d\n", iperfPkt->seqNo);
+          logdebug("DUP %d\n", iperfPkt->seqNo);
         }
         else if (results.lastPktSeqNo < iperfPkt->seqNo)
         {
@@ -206,7 +207,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           results.receivedUniqueChunks++;
           copyPayloadString(iperfPkt);
           restartExpectationTimer();
-          logverbose("LOSS %d pkts. Current Last Pkt %d \n", lostPkts, iperfPkt->seqNo);
+          logdebug("LOSS %d pkts. Current Last Pkt %d \n", lostPkts, iperfPkt->seqNo);
         }
 
         // Tally
@@ -231,20 +232,20 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
       }
     case IPERF_PKT_REQ:
       {
-        logerror("PKT_REQ %d received. Wrong role!\n", iperfPkt->seqNo);
+        logerror("[IPERF_PKT_REQ] %d received. Wrong role!\n", iperfPkt->seqNo);
         break;
       }
     case IPERF_PKT_RESP:
       {
         if (iperfState != IPERF_STATE_RECEIVING) // This could be a test interest service
         {
-          logdebug("PKT_RESP %d received\n", iperfPkt->seqNo);
+          logdebug("[IPERF_PKT_RESP] %d received\n", iperfPkt->seqNo);
           break;
         }
         
         if (iperfPkt->seqNo < IPERF_TOTAL_TRANSMISSION_SIZE_MAX && receivedPktIds[iperfPkt->seqNo] != RECEIVED)
         {
-          logdebug("PKT_RESP %d received\n", iperfPkt->seqNo);
+          logdebug("[IPERF_PKT_RESP] %d received\n", iperfPkt->seqNo);
           receivedPktIds[iperfPkt->seqNo] = RECEIVED;
           results.receivedUniqueChunks++;
           results.numReceivedPkts++;
@@ -269,7 +270,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
       }
     case IPERF_ECHO_CALL:
       {
-        loginfo("Echo CALL Received %s\n", iperfPkt->payload);
+        loginfo("[IPERF_ECHO_CALL] Received %s\n", iperfPkt->payload);
         char rawPkt[20]; 
         IperfUdpPkt_t *respPkt = (IperfUdpPkt_t *) &rawPkt;
         uint8_t plSize = 16;
@@ -282,7 +283,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
       }
     case IPERF_ECHO_RESP:
       {
-        loginfo("Echo RESP Received %s\n", iperfPkt->payload);
+        loginfo("[IPERF_ECHO_RESP] Received %s\n", iperfPkt->payload);
         break;
       }
     case IPERF_CONFIG_SYNC:
@@ -383,17 +384,17 @@ void *Iperf_ReceiverThread(void *arg)
             expectationSeqNo++;
           }
 
-          logdebug("Expecting up to %d\n", expectationSeqNo);
+          logdebug("Expecting up to %d: ", expectationSeqNo);
           for (uint16_t i = 0; i < expectationSeqNo; i++)
           {
             if (receivedPktIds[i] == RECEIVED)
             {
               continue;
             }
-            /*if (SimpleQueue_IsEnqueued(&pktReqQueue, i))*/ // TODO
-            /*{*/
-            /*  continue;*/
-            /*}*/
+            if (SimpleQueue_IsEnqueued(&pktReqQueue, i)) 
+            {
+              continue;
+            }
             if (logprintTags[DEBUG]) printf("%d ", i);
             SimpleQueue_Push(&pktReqQueue, i);
           }

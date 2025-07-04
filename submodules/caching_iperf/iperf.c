@@ -27,9 +27,9 @@
 IperfConfig_s config = {
   .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 10000,
-  .interestDelayUs = 25000,
-  .expectationDelayUs = 15000,
+  .delayUs = 100000,
+  .interestDelayUs = 250000,
+  .expectationDelayUs = 150000,
   .transferSizeBytes = 2048,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
@@ -411,7 +411,7 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
   int snips = 0;
   int size = 0;
   gnrc_pktsnip_t *snip = pkt;
-  logdebug("Handle packet----------------------\n");
+  logverbose("Handle packet----------------------\n");
   while(snip != NULL)
   {
     /*loginfo("SNIP %d. %d bytes. type: %d ", snips, snip->size, snip->type);*/
@@ -419,14 +419,14 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
     {
       case GNRC_NETTYPE_NETIF:
         {
-          logdebug("NETIF\n");
+          logverbose("NETIF\n");
           break;
         }
       case GNRC_NETTYPE_UNDEF:  // APP PAYLOAD HERE
         {
-          logdebug("UNDEF\n");
+          logverbose("UNDEF\n");
           
-          if (logprintTags[DEBUG])
+          if (logprintTags[VERBOSE])
           {
             for (int i = 0; i < snip->size; i++)
             {
@@ -450,17 +450,17 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
         }
       case GNRC_NETTYPE_SIXLOWPAN:
         {
-          logdebug("6LP\n");
+          logverbose("6LP\n");
           break;
         }
       case GNRC_NETTYPE_IPV6:
         {
-          logdebug("IPV6\n");
+          logverbose("IPV6\n");
           break;
         }
       case GNRC_NETTYPE_ICMPV6:
         {
-          logdebug("ICMPV6\n");
+          logverbose("ICMPV6\n");
           break;
         }
       /*case GNRC_NETTYPE_TCP:*/
@@ -470,12 +470,12 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
       /*  }*/
       case GNRC_NETTYPE_UDP:
         {
-          logdebug("UDP\n");
+          logverbose("UDP\n");
           break;
         }
       default:
         {
-          logdebug("NONE\n");
+          logverbose("NONE\n");
           break;
         }
     }
@@ -485,7 +485,7 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
   }
 
   results.numReceivedBytes += size;
-  logdebug("-----------------------------------\n");
+  logverbose("-----------------------------------\n");
 
   gnrc_pktbuf_release(pkt);
   return 1;

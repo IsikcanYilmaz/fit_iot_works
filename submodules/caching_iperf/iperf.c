@@ -33,6 +33,12 @@ IperfConfig_s config = {
   .transferSizeBytes = 2048,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
+
+  // Relay related
+  .cache = true,
+  .code = false,
+  .numCacheBlocks = 1,
+
 };
 
 IperfResults_s results;

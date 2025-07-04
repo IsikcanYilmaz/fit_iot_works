@@ -73,6 +73,14 @@ typedef enum
   CHUNK_STATUS_MAX
 } IperfChunkStatus_e;
 
+typedef enum
+{
+  SENDER,
+  RECEIVER,
+  RELAYER,
+  ROLE_MAX,
+} IperfRole_e;
+
 typedef struct 
 {
   bool iAmSender; // If false we're the listener 
@@ -97,6 +105,12 @@ typedef struct
   uint32_t transferSizeBytes;
 
   uint16_t numPktsToTransfer;
+
+  // Relay related
+  bool cache;
+  bool code;
+  uint8_t numCacheBlocks;
+
 
 } IperfConfig_s;
 

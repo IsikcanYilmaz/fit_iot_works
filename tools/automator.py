@@ -143,7 +143,7 @@ def pingTest(srcDev, dstDev):
     global comm
     dstIp = dstDev["globalAddr"]
     print(f"{srcDev['globalAddr']} Pinging {dstIp}")
-    outStrRaw = comm.sendSerialCommand(srcDev, f"ping {dstIp}", cooldownS=10, captureOutput=True)
+    outStrRaw = comm.sendSerialCommand(srcDev, f"ping {dstIp}", cooldownS=5, captureOutput=True)
     print("<", outStrRaw)
 
 def setTxPower(dev, txpower):

@@ -23,6 +23,7 @@
 
 #include "receiver.h"
 #include "sender.h"
+#include "relayer.h"
 
 IperfConfig_s config = {
   .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
@@ -111,11 +112,11 @@ static void printResults(bool json)
   }
   printf((json) ? \
 
-           "{\"iAmSender\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"numSentPkts\":%d, \"numSentBytes\":%d, \"numInterestsSent\":%d, \"numInterestsServed\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu, \"l2numReceivedPackets\":%d, \"l2numReceivedBytes\":%d, \"l2numSentPackets\":%d, \"l2numSentBytes\":%d, \"l2numSuccessfulTx\":%d, \"l2numErroredTx\":%d, \"ipv6numReceivedPackets\":%d, \"ipv6numReceivedBytes\":%d, \"ipv6numSentPackets\":%d, \"ipv6numSentBytes\":%d, \"ipv6numSuccessfulTx\":%d, \"ipv6numErroredTx\":%d}\n" : \
+           "{\"role\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"numSentPkts\":%d, \"numSentBytes\":%d, \"numInterestsSent\":%d, \"numInterestsServed\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu, \"l2numReceivedPackets\":%d, \"l2numReceivedBytes\":%d, \"l2numSentPackets\":%d, \"l2numSentBytes\":%d, \"l2numSuccessfulTx\":%d, \"l2numErroredTx\":%d, \"ipv6numReceivedPackets\":%d, \"ipv6numReceivedBytes\":%d, \"ipv6numSentPackets\":%d, \"ipv6numSentBytes\":%d, \"ipv6numSuccessfulTx\":%d, \"ipv6numErroredTx\":%d}\n" : \
 
-           "Results\niAmSender           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nnumSentPkts         :%d\nnumSentBytes        :%d\nnumInterestsSent    :%d\nnumInterestsServed  :%d\nstartTimestamp      :%lu\nendTimestamp        :%lu\ntimeDiff            :%lu\nl2numRxPkts         :%d\nl2numRxBytes        :%d\nl2numTxPkts         :%d\nl2numTxBytes        :%d\nl2numSuccessTx      :%d\nl2numErroredTx      :%d\nipv6numRxPkts       :%d\nipv6numRxBytes      :%d\nipv6numTxPkts       :%d\nipv6numTxBytes      :%d\nipv6numSuccessTx    :%d\nipv6numErroredTx    :%d\n", \
+           "Results\nrole           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nnumSentPkts         :%d\nnumSentBytes        :%d\nnumInterestsSent    :%d\nnumInterestsServed  :%d\nstartTimestamp      :%lu\nendTimestamp        :%lu\ntimeDiff            :%lu\nl2numRxPkts         :%d\nl2numRxBytes        :%d\nl2numTxPkts         :%d\nl2numTxBytes        :%d\nl2numSuccessTx      :%d\nl2numErroredTx      :%d\nipv6numRxPkts       :%d\nipv6numRxBytes      :%d\nipv6numTxPkts       :%d\nipv6numTxBytes      :%d\nipv6numSuccessTx    :%d\nipv6numErroredTx    :%d\n", \
 
-           config.iAmSender, \
+           config.role, \
            results.lastPktSeqNo, \
            results.pktLossCounter, \
            results.numReceivedPkts, \
@@ -203,9 +204,9 @@ static void printAll(void)
 
 void Iperf_PrintConfig(bool json)
 {
-  printf((json) ? "{\"iAmSender\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"interestDelayUs\":%d, \"expectationDelayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d, \"numPktsToTransfer\":%d}\n" : \
-           "iAmSender: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\ninterestDelayUs: %d\nexpectationDelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\nnumPktsToTransfer: %d\n", 
-           config.iAmSender, 
+  printf((json) ? "{\"role\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"interestDelayUs\":%d, \"expectationDelayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d, \"numPktsToTransfer\":%d}\n" : \
+           "role: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\ninterestDelayUs: %d\nexpectationDelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\nnumPktsToTransfer: %d\n", 
+           config.role, 
            config.payloadSizeBytes, 
            config.pktPerSecond, 
            config.delayUs, 
@@ -425,7 +426,7 @@ int Iperf_SendConfig(void)
   configPl->delayUs = config.delayUs;
   configPl->transferSizeBytes = config.transferSizeBytes;
   configPl->numPktsToTransfer = config.numPktsToTransfer;
-  if (config.iAmSender)
+  if (config.role == SENDER)
   {
     return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
   }
@@ -465,7 +466,7 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
             printf("\n");
           }
 
-          /*if (!config.iAmSender && logprintTags[VERBOSE])*/
+          /*if (config.role != SENDER && logprintTags[VERBOSE])*/
           /*{*/
             /*printFileTransferStatus();*/
             /*printf("\n");*/
@@ -548,7 +549,7 @@ int Iperf_StopUdpServer(gnrc_netreg_entry_t *server)
   return 0;
 }
 
-int Iperf_Init(bool iAmSender)
+int Iperf_Init(IperfRole_e role)
 {
   if (running)
   {
@@ -558,7 +559,7 @@ int Iperf_Init(bool iAmSender)
 
   Iperf_ResetResults();
 
-  config.iAmSender = iAmSender;
+  config.role = role;
   config.senderPort = IPERF_DEFAULT_PORT; // TODO make more generic? TODO make address more generic
   config.listenerPort = IPERF_DEFAULT_PORT;
 
@@ -566,14 +567,24 @@ int Iperf_Init(bool iAmSender)
 
   SimpleQueue_Init(&pktReqQueue, (uint16_t *) &pktReqQueueBuffer, PKT_REQ_QUEUE_LEN);
 
-  if (!iAmSender)
-  {
-    threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_ReceiverThread, NULL, "iperf_receiver");
-  }
-  if (iAmSender)
+  if (role == SENDER)
   {
     threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_SenderThread, NULL, "iperf_sender"); 
   }
+  else if (role == RECEIVER)
+  {
+    threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_ReceiverThread, NULL, "iperf_receiver");
+  }
+  else if (role == RELAYER)
+  {
+    threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_RelayerThread, NULL, "iperf_relayer");
+  }
+  else
+  {
+    logerror("Bad role %d\n", role);
+    return 1;
+  }
+
   running = true;
   return 0;
 }
@@ -604,7 +615,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   if (strncmp(argv[1], "sender", 16) == 0)
   {
     loginfo("STARTING IPERF SENDER. RX IP: %s\n", dstGlobalIpAddr);
-    Iperf_Init(true);
+    Iperf_Init(SENDER);
     if (argc > 2 && strncmp(argv[2], "start", 16) == 0)
     {
       msg_t m;
@@ -614,7 +625,11 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   }
   else if (strncmp(argv[1], "receiver", 16) == 0)
   {
-    Iperf_Init(false);
+    Iperf_Init(RECEIVER);
+  }
+  else if (strncmp(argv[1], "relayer", 16) == 0)
+  {
+    Iperf_Init(RELAYER);
   }
   else if (strncmp(argv[1], "start", 16) == 0)
   {
@@ -622,7 +637,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     // ECHO commands can still be sent and received
     if (!running)
     {
-      logerror("First select a role: iperf <sender|receiver>\n");
+      logerror("First select a role: iperf <sender|receiver|relay>\n");
       return 1;
     }
     msg_t m;
@@ -640,7 +655,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   }
   else if (strncmp(argv[1], "restart", 16) == 0)
   {
-    bool wasISender = config.iAmSender;
+    bool wasISender = (config.role == SENDER);
     Iperf_Deinit();
     Iperf_Init(wasISender);
     /*msg_t m;*/
@@ -876,7 +891,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   }
   else if (strncmp(argv[1], "interest", 16) == 0)
   {
-    if (config.iAmSender)
+    if (config.role == SENDER)
     {
       logerror("You are not the receiver!\n");
       return 1;

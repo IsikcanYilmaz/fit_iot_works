@@ -22,6 +22,8 @@ typedef enum
   IPERF_IPC_MSG_SEND_REQ,
   IPERF_IPC_MSG_IDLE,
   IPERF_IPC_MSG_STOP, // OLD 
+  
+  IPERF_IPC_MSG_RELAY_RESPOND, // IF relayer needs to do something instead of simply forwarding
 
   IPERF_IPC_MSG_EXPECTATION_TIMEOUT,
   IPERF_IPC_MSG_INTEREST_TIMER_TIMEOUT,
@@ -97,6 +99,7 @@ typedef struct
   uint32_t expectationDelayUs;
 
   IperfMode_e mode;
+  IperfRole_e role;
 
   // TIMED MODE
   uint32_t transferTimeUs;
@@ -151,7 +154,7 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt));
 int Iperf_StartUdpServer(gnrc_netreg_entry_t *server, kernel_pid_t pid);
 int Iperf_StopUdpServer(gnrc_netreg_entry_t *server);
 int Iperf_Deinit(void);
-int Iperf_Init(bool iAmSender);
+int Iperf_Init(IperfRole_e role);
 void Iperf_ResetResults(void);
 int Iperf_SocklessUdpSend(const char *data, size_t dataLen, ipv6_addr_t *addr, netif_t *netif);
 int Iperf_SocklessUdpSendToStringAddr(const char *data, size_t dataLen, char *targetIp);

@@ -1,3 +1,4 @@
 #include "net/gnrc.h"
+#include <stdbool.h>
 
-void Iperf_RelayerIntercept(gnrc_pktsnip_t *pkt);
+bool Iperf_RelayerIntercept(gnrc_pktsnip_t *pkt);

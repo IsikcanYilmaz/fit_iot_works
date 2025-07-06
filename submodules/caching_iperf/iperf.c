@@ -230,17 +230,9 @@ void Iperf_ResetResults(void)
 // SOCKLESS 
 // Yanked out of sys/shell/cmds/gnrc_udp.c
 // takes address and port in _string_ form!
-int Iperf_SocklessUdpSend(const char *data, size_t dataLen, char *targetIp)
+int Iperf_SocklessUdpSend(const char *data, size_t dataLen, ipv6_addr_t *addr, netif_t *netif)
 {
-  netif_t *netif;
   uint16_t port;
-  ipv6_addr_t addr;
-
-  /* parse destination address */
-  if (netutils_get_ipv6(&addr, &netif, targetIp) < 0) {
-    loginfo("Error: unable to parse destination address\n");
-    return 1;
-  }
 
   /* parse port */
   port = IPERF_DEFAULT_PORT;
@@ -271,7 +263,7 @@ int Iperf_SocklessUdpSend(const char *data, size_t dataLen, char *targetIp)
   }
 
   /* allocate IPv6 header */
-  ip = (gnrc_pktsnip_t *) gnrc_ipv6_hdr_build(udp, NULL, &addr);
+  ip = (gnrc_pktsnip_t *) gnrc_ipv6_hdr_build(udp, NULL, addr);
   if (ip == NULL) {
     logerror("Error: unable to allocate IPv6 header\n");
     gnrc_pktbuf_release(udp);
@@ -279,16 +271,16 @@ int Iperf_SocklessUdpSend(const char *data, size_t dataLen, char *targetIp)
   }
 
   /* add netif header, if interface was given */
-  if (netif != NULL) {
-    gnrc_pktsnip_t *netif_hdr = gnrc_netif_hdr_build(NULL, 0, NULL, 0);
-    if (netif_hdr == NULL) {
-      loginfo("Error: unable to allocate netif header\n");
-      gnrc_pktbuf_release(ip);
-      return 1;
-    }
-    gnrc_netif_hdr_set_netif(netif_hdr->data, container_of(netif, gnrc_netif_t, netif));
-    ip = gnrc_pkt_prepend(ip, netif_hdr);
-  }
+  /*if (netif != NULL) {*/
+  /*  gnrc_pktsnip_t *netif_hdr = gnrc_netif_hdr_build(NULL, 0, NULL, 0);*/
+  /*  if (netif_hdr == NULL) {*/
+  /*    loginfo("Error: unable to allocate netif header\n");*/
+  /*    gnrc_pktbuf_release(ip);*/
+  /*    return 1;*/
+  /*  }*/
+  /*  gnrc_netif_hdr_set_netif(netif_hdr->data, container_of(netif, gnrc_netif_t, netif));*/
+  /*  ip = gnrc_pkt_prepend(ip, netif_hdr);*/
+  /*}*/
 
   /* send packet */
   if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_UDP,
@@ -301,19 +293,49 @@ int Iperf_SocklessUdpSend(const char *data, size_t dataLen, char *targetIp)
   /* access to `payload` was implicitly given up with the send operation
      * above
      * => use temporary variable for output */
-  logdebug("Success: sent %u byte(s) to [%s]:%u\n", payload_size, targetIp, port);
+  logdebug("Success: sent %u byte(s)\n", payload_size);
   results.numSentPkts++;
   return 0;
 }
 
+// JON TODO Hacky. Make it better in version 3
+int Iperf_SocklessUdpSendToStringAddr(const char *data, size_t dataLen, char *targetIp)
+{
+  netif_t *netif;
+  ipv6_addr_t addr;
+
+/* parse destination address */
+  if (netutils_get_ipv6(&addr, &netif, targetIp) < 0) {
+    loginfo("Error: unable to parse destination address\n");
+    return 1;
+  }
+
+  logdebug("Sending to %s\n", targetIp);
+  return Iperf_SocklessUdpSend(data, dataLen, &addr, netif);
+}
+
+/*int Iperf_SocklessUdpSendToAddr(const char *data, size_t dataLen, ipv6_addr_t *addr)*/
+/*{*/
+/*  netif_t *netif;*/
+/*  ipv6_addr_t addr;*/
+/**/
+/*  if (netutils_get_ipv6(&addr, &netif, targetIp) < 0) {*/
+/*    loginfo("Error: unable to parse destination address\n");*/
+/*    return 1;*/
+/*  }*/
+/**/
+/*  logdebug("Sending to %s\n", targetIp);*/
+/*  return Iperf_SocklessUdpSend(data, dataLen, &addr, netif);*/
+/*}*/
+
 inline int Iperf_SocklessUdpSendToDst(const char *data, size_t dataLen)
 {
-  return Iperf_SocklessUdpSend(data, dataLen, dstGlobalIpAddr);
+  return Iperf_SocklessUdpSendToStringAddr(data, dataLen, dstGlobalIpAddr);
 }
 
 inline int Iperf_SocklessUdpSendToSrc(const char *data, size_t dataLen)
 {
-  return Iperf_SocklessUdpSend(data, dataLen, srcGlobalIpAddr);
+  return Iperf_SocklessUdpSendToStringAddr(data, dataLen, srcGlobalIpAddr);
 }
 
 int Iperf_SendInterest(uint16_t seqNo)
@@ -375,6 +397,7 @@ int Iperf_SendEcho(char *str)
   strncpy((char *) iperfPkt->payload, str, 15);
   iperfPkt->seqNo = 0;
   iperfPkt->msgType = IPERF_ECHO_CALL;
+  printf("rawPkt size %d IperfUdpPkt_t size %d \n", sizeof(rawPkt), sizeof(IperfUdpPkt_t));
   return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
 }
 

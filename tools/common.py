@@ -13,7 +13,7 @@ def interact(): # debug
     import code
     code.InteractiveConsole(locals=globals()).interact()
 
-def sendSerialCommand_local(dev, cmd, cooldownS=1, captureOutput=True):
+def sendSerialCommand_local(dev, cmd, cooldownS=0.5, captureOutput=True):
     s = dev["ser"]
     s.reset_input_buffer()
     s.reset_output_buffer()
@@ -84,7 +84,7 @@ class DeviceCommunicator:
     def __init__(self, fitiot=False):
         self.fitiot = fitiot
     
-    def sendSerialCommand(self, dev, cmd, cooldownS=3, captureOutput=True):
+    def sendSerialCommand(self, dev, cmd, cooldownS=1, captureOutput=True):
         if (self.fitiot):
             return sendSerialCommand_fitiot(dev, cmd, cooldownS, captureOutput)
         else:

@@ -347,6 +347,15 @@ def tester(dev):
     getIpv6Stats(dev)
     resetNetstats(dev)
 
+def setRoles():
+    outStrRaw = comm.sendSerialCommand(devices["sender"], f"iperf sender")
+    print("<", outStrRaw)
+    outStrRaw = comm.sendSerialCommand(devices["receiver"], f"iperf receiver")
+    print("<", outStrRaw)
+    for dev in devices["routers"]:
+        outStrRaw = comm.sendSerialCommand(dev, "iperf relayer")
+        print("<", outStrRaw)
+
 def main():
     global args, comm
     parser = argparse.ArgumentParser()
@@ -361,6 +370,7 @@ def main():
     parser.add_argument("--txpower", type=int)
     parser.add_argument("--retrans", type=int)
     parser.add_argument("--test", action="store_true", default=False)
+    parser.add_argument("--set_roles", action="store_true", default=False)
     args = parser.parse_args()
 
     # print(args)
@@ -430,6 +440,11 @@ def main():
 
     if (len(devices["routers"]) > 0):
         setIperfTarget(devices["sender"], devices["receiver"]["globalAddr"])
+        for dev in devices["routers"]:
+            setIperfTarget(dev, devices["receiver"]["globalAddr"])
+
+    if (args.set_roles):
+        setRoles()
 
     # pdb.set_trace()
 

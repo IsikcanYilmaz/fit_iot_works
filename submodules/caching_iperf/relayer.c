@@ -19,13 +19,16 @@ extern msg_t ipcMsg;
 
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
 static volatile kernel_pid_t relayerPid = KERNEL_PID_UNDEF;
+
 static uint8_t *cacheBuffer = (uint8_t *) &rxtxBuffer;
+static uint8_t cacheIdx = 0;
 
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF); // TODO JON this can be generic, in iperf.c
 
 static void initRelayer(void)
 {
   relayerPid = thread_getpid();
+  memset(cacheBuffer, 0x00, sizeof(rxtxBuffer));
   Iperf_StartUdpServer(&udpServer, relayerPid);
 }
 
@@ -45,13 +48,34 @@ static int sendPayload(void)
   return Iperf_SocklessUdpSendToSrc((char *) buf, sizeof(buf));
 }
 
-static bool diceRoll(uint8_t percent)
+static bool coinFlip(uint8_t percent)
 {
   if (rand() % 100 < percent)
   {
     return true;
   }
   return false;
+}
+
+static void cache(IperfUdpPkt_t *iperfPkt)
+{
+  loginfo("Caching seq no %d at cache index %d\n", iperfPkt->seqNo, cacheIdx);
+  memcpy((uint8_t *) (cacheBuffer + (cacheIdx * config.payloadSizeBytes)), iperfPkt, sizeof(iperfPkt) + (config.payloadSizeBytes));
+  cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
+}
+
+static void printCache(void)
+{
+  printf("Cache contents:\n");
+  for (int i = 0; i < config.numCacheBlocks; i++)
+  {
+    IperfUdpPkt_t *p = (IperfUdpPkt_t *) (cacheBuffer + (cacheIdx * config.payloadSizeBytes));
+    if (p->msgType != IPERF_PAYLOAD)
+    {
+      continue;
+    }
+    printf("%d:%d %s\n", i, p->seqNo, p->payload);
+  }
 }
 
 void *Iperf_RelayerThread(void *arg)
@@ -94,7 +118,7 @@ void *Iperf_RelayerThread(void *arg)
 // Will return true if the packet should keep going
 bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
 {
-  bool shouldForward = false;
+  bool shouldForward = true;
 
   // We care about IPv6 and UNDEF snips. 
   gnrc_pktsnip_t *ipv6 = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_IPV6);
@@ -113,11 +137,12 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
   }
   else if (iperfPkt->msgType == IPERF_PAYLOAD)
   {
-    if (config.cache)
+    if (config.cache && coinFlip(50))
     {
-      
+      loginfo("Payload intercepted. Will cache\n");
+      cache(iperfPkt);
+      printCache();
     }
-    // TODO code
     shouldForward = true;
   }
   else if (iperfPkt->msgType == IPERF_PKT_REQ)

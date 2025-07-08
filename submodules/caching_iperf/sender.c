@@ -106,8 +106,11 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
           if (logprintTags[DEBUG]) printf("%d ", bulkPl->arr[i]);
         }
         if (logprintTags[DEBUG]) printf("\n");
-        ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
-        ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipcMsg, senderPid); // Start immediately
+        if (!ztimer_is_set(ZTIMER_USEC, &intervalTimer))
+        {
+          ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
+          ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipcMsg, senderPid); // Start immediately
+        }
         break;
       }
     case IPERF_ECHO_CALL:

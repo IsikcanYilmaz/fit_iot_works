@@ -64,6 +64,10 @@ static bool isTransferDone(void)
 // TODO below functions can be macros or consolidated
 static void startExpectationTimer(uint32_t timeoutUs)
 {
+  if (config.mode != IPERF_MODE_CACHING_BIDIRECTIONAL) // TODO we shouldnt even get here. fix in v3
+  {
+    return;
+  }
   if (ztimer_is_set(ZTIMER_USEC, &expectationTimer))
   {
     logdebug("Expectation timer already set\n");
@@ -83,6 +87,10 @@ static void stopExpectationTimer(void)
 
 static inline void restartExpectationTimer(void)
 {
+  if (config.mode != IPERF_MODE_CACHING_BIDIRECTIONAL)
+  {
+    return;
+  }
   stopExpectationTimer();
   startExpectationTimer(config.expectationDelayUs);
 }
@@ -168,7 +176,10 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           iperfState = IPERF_STATE_RECEIVING; // TODO see if this logic is needed
           
           // Start our expectation timer
-          startExpectationTimer(config.expectationDelayUs);
+          if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+          {
+            startExpectationTimer(config.expectationDelayUs);
+          }
         }
         
         // handle packet seq no
@@ -179,7 +190,10 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           logdebug("RX %d\n", iperfPkt->seqNo);
           results.receivedUniqueChunks++;
           copyPayloadString(iperfPkt);
-          restartExpectationTimer();
+          if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+          {
+            restartExpectationTimer();
+          }
         }
         else if (receivedPktIds[iperfPkt->seqNo] == RECEIVED)
         {
@@ -206,7 +220,10 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           results.lastPktSeqNo = iperfPkt->seqNo;
           results.receivedUniqueChunks++;
           copyPayloadString(iperfPkt);
-          restartExpectationTimer();
+          if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+          {
+            restartExpectationTimer();
+          }
           logdebug("LOSS %d pkts. Current Last Pkt %d \n", lostPkts, iperfPkt->seqNo);
         }
 

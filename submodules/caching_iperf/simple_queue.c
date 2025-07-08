@@ -42,7 +42,10 @@ int SimpleQueue_Pop(SimpleQueue_t *q, uint16_t *data)
     printf("Queue empty!\n");
     return 1;
   }
-  *data = q->buf[q->headIdx];
+  if (data)
+  {
+    *data = q->buf[q->headIdx];
+  }
   q->currLen--;
   q->headIdx = (q->headIdx + 1) % q->maxLen;
   return 0;
@@ -61,12 +64,15 @@ int SimpleQueue_Seek(SimpleQueue_t *q, uint16_t idx, uint16_t *data)
 
 bool SimpleQueue_IsEnqueued(SimpleQueue_t *q, uint16_t data)
 {
-  for (int i = 0; i < q->currLen; i++)
+  uint16_t tmpHead = q->headIdx;
+  uint16_t tmpTail = q->tailIdx;
+  while (tmpHead != tmpTail)
   {
-    if (q->buf[i] == data)
+    if (q->buf[tmpHead] == data)
     {
       return true;
     }
+    tmpHead = (tmpHead + 1) % q->maxLen;
   }
   return false;
 }
@@ -78,8 +84,10 @@ void SimpleQueue_PrintQueue(SimpleQueue_t *q)
   {
     uint16_t data = 0;
     SimpleQueue_Seek(q, i, &data);
-    printf("%d:%d\n", i, data);
+    /*printf("%d:%d\n", i, data);*/
+    printf("%d ", data);
   }
+  printf("\n");
 }
 
 bool SimpleQueue_IsEmpty(SimpleQueue_t *q)
@@ -96,8 +104,8 @@ bool SimpleQueue_IsFull(SimpleQueue_t *q)
 int main()
 {
   SimpleQueue_t q;
-  uint16_t buffer[16];
-  SimpleQueue_Init(&q, (uint16_t *) &buffer, 4);
+  uint16_t buffer[256];
+  SimpleQueue_Init(&q, (uint16_t *) &buffer, 128);
 
   SimpleQueue_Push(&q, 10);
   SimpleQueue_Push(&q, 20);
@@ -122,6 +130,30 @@ int main()
   printf("Data %d\n", data);
   SimpleQueue_Push(&q, 60);
   SimpleQueue_PrintQueue(&q);
+
+  for (uint16_t i = 1000; i < 1100; i++)
+  {
+    SimpleQueue_Push(&q, i);
+  }
+
+  SimpleQueue_PrintQueue(&q);
+
+  if (SimpleQueue_IsEnqueued(&q, 1079))
+  {
+    printf("is enqueued!\n");
+  }
+
+  for (uint16_t i = 0; i < 50; i++)
+  {
+    SimpleQueue_Pop(&q, NULL);
+  }
+
+  SimpleQueue_PrintQueue(&q);
+
+  if (SimpleQueue_IsEnqueued(&q, 1079))
+  {
+    printf("is enqueued!\n");
+  }
 
   return 0;
 }

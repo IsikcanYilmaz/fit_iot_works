@@ -48,7 +48,7 @@ static int sendPayload(void)
   return Iperf_SocklessUdpSendToSrc((char *) buf, sizeof(buf));
 }
 
-static bool coinFlip(uint8_t percent)
+static inline bool coinFlip(uint8_t percent)
 {
   if (rand() % 100 < percent)
   {
@@ -59,7 +59,7 @@ static bool coinFlip(uint8_t percent)
 
 static void cache(IperfUdpPkt_t *iperfPkt)
 {
-  loginfo("Caching seq no %d at cache index %d\n", iperfPkt->seqNo, cacheIdx);
+  logdebug("Caching seq no %d at cache index %d\n", iperfPkt->seqNo, cacheIdx);
   memcpy((uint8_t *) (cacheBuffer + (cacheIdx * config.payloadSizeBytes)), iperfPkt, sizeof(iperfPkt) + (config.payloadSizeBytes));
   cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
 }
@@ -74,7 +74,7 @@ static void printCache(void)
     {
       continue;
     }
-    printf("%d:%d %s\n", i, p->seqNo, p->payload);
+    printf("[cache %d]:[chunk %d] %s\n", i, p->seqNo, p->payload);
   }
 }
 
@@ -135,19 +135,22 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     msg_send(&ipc, relayerPid);
     shouldForward = false;
   }
+  else if (iperfPkt->msgType == IPERF_CONFIG_SYNC)
+  {
+    Iperf_HandleConfigSync(iperfPkt);
+  }
   else if (iperfPkt->msgType == IPERF_PAYLOAD)
   {
     if (config.cache && coinFlip(50))
     {
-      loginfo("Payload intercepted. Will cache\n");
+      logdebug("Payload seq %d intercepted. Will cache\n", iperfPkt->seqNo);
       cache(iperfPkt);
-      printCache();
+      if (logprintTags[DEBUG]) printCache();
     }
     shouldForward = true;
   }
   else if (iperfPkt->msgType == IPERF_PKT_REQ)
   {
-    //
     if (config.cache)
     {
 
@@ -156,7 +159,21 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
   }
   else if (iperfPkt->msgType == IPERF_PKT_BULK_REQ)
   {
-    //
+    if (config.cache)
+    {
+      IperfBulkInterest_t *bulkInterest = (IperfBulkInterest_t *) iperfPkt->payload;
+      uint8_t numExpects = bulkInterest->len;
+      uint16_t *expectArr = bulkInterest->arr;
+      logdebug("Intercepted bulk interest for %d chunks\n", numExpects);
+      if (logprintTags[DEBUG])
+      {
+        for (int i = 0; i < numExpects; i++)
+        {
+          printf("%d ", expectArr[i]);
+        }
+        printf("\n");
+      }
+    }
     shouldForward = true;
   }
   return shouldForward;

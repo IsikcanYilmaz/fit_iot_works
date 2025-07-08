@@ -288,6 +288,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
       }
     case IPERF_CONFIG_SYNC:
       {
+        loginfo("[IPERF_CONFIG_SYNC] Received\n");
         Iperf_HandleConfigSync(iperfPkt);
         break;
       }
@@ -360,7 +361,7 @@ void *Iperf_ReceiverThread(void *arg)
             int ret = SimpleQueue_Pop(&pktReqQueue, &(expectArr[expectArrIdx]));
             if (logprintTags[DEBUG]) printf("%d ", expectArr[expectArrIdx]);
           }
-          if (logprintTags[DEBUG]) printf("\n");
+          if (logprintTags[DEBUG]) printf(" | %d chunks \n", expectArrIdx);
           Iperf_SendBulkInterest((uint16_t *) &expectArr, expectArrIdx);
 
           if (!SimpleQueue_IsEmpty(&pktReqQueue))
@@ -395,8 +396,12 @@ void *Iperf_ReceiverThread(void *arg)
             {
               continue;
             }
-            if (logprintTags[DEBUG]) printf("%d ", i);
-            SimpleQueue_Push(&pktReqQueue, i);
+            else
+            {
+              if (logprintTags[DEBUG]) printf("%d ", i);
+              SimpleQueue_Push(&pktReqQueue, i);
+              /*SimpleQueue_PrintQueue(&pktReqQueue);*/
+            }
           }
           if (logprintTags[DEBUG]) printf("\n");
           
@@ -428,5 +433,5 @@ void *Iperf_ReceiverThread(void *arg)
   expectationSeqNo = 0; // TODO put this in a cleanup function
   Iperf_StopUdpServer(&udpServer);
   uint32_t usecs = (results.endTimestamp - results.startTimestamp);
-  printf("Receiver thread exiting. Transfer complete in %d useconds\n", usecs);
+  loginfo("Receiver thread exiting. Transfer complete in %d useconds\n", usecs);
 }

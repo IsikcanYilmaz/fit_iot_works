@@ -28,15 +28,15 @@
 IperfConfig_s config = {
   .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 100000,
-  .interestDelayUs = 250000,
-  .expectationDelayUs = 150000,
-  .transferSizeBytes = 2048,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
+  .delayUs = 10000,
+  .interestDelayUs = 100000,
+  .expectationDelayUs = 50000,
+  .transferSizeBytes = 4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
 
   // Relay related
-  .cache = true,
+  .cache = false,
   .code = false,
   .numCacheBlocks = 1,
 
@@ -204,8 +204,8 @@ static void printAll(void)
 
 void Iperf_PrintConfig(bool json)
 {
-  printf((json) ? "{\"role\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"interestDelayUs\":%d, \"expectationDelayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d, \"numPktsToTransfer\":%d}\n" : \
-           "role: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\ninterestDelayUs: %d\nexpectationDelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\nnumPktsToTransfer: %d\n", 
+  printf((json) ? "{\"role\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"interestDelayUs\":%d, \"expectationDelayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d, \"numPktsToTransfer\":%d, \"cache\":%d, \"code\":%d, \"numCacheBlocks\":%d}\n" : \
+           "role: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\ninterestDelayUs: %d\nexpectationDelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\nnumPktsToTransfer: %d\ncache: %d\ncode: %d\nnumCacheBlocks: %d", 
            config.role, 
            config.payloadSizeBytes, 
            config.pktPerSecond, 
@@ -215,7 +215,10 @@ void Iperf_PrintConfig(bool json)
            config.mode, 
            config.transferSizeBytes, 
            config.transferTimeUs, 
-           config.numPktsToTransfer);
+           config.numPktsToTransfer,
+           config.cache, 
+           config.code,
+           config.numCacheBlocks);
 }
 
 void Iperf_ResetResults(void)
@@ -357,7 +360,8 @@ int Iperf_SendBulkInterest(uint16_t *interestArr, uint16_t len)
   {
     logerror("Overflowing bulk interest %d. Max: %d\n", len, IPERF_MAX_PKTS_IN_ONE_BULK_REQ);
   }
-  char rawPkt[32]; // [4][2][...]
+  logverbose("Sending bulk interest for %d chunks\n", len);
+  char rawPkt[sizeof(IperfUdpPkt_t) + sizeof(IperfBulkInterest_t) + (len * sizeof(uint16_t))]; // [4][2][...]
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
   IperfBulkInterest_t *bulkReqPl = (IperfBulkInterest_t *) &iperfPkt->payload;
   memset(&rawPkt, 0x00, sizeof(rawPkt));
@@ -398,7 +402,7 @@ int Iperf_SendEcho(char *str)
   strncpy((char *) iperfPkt->payload, str, 15);
   iperfPkt->seqNo = 0;
   iperfPkt->msgType = IPERF_ECHO_CALL;
-  printf("rawPkt size %d IperfUdpPkt_t size %d \n", sizeof(rawPkt), sizeof(IperfUdpPkt_t));
+  printf("[IPERF ECHO] rawPkt size %d IperfUdpPkt_t size %d \n", sizeof(rawPkt), sizeof(IperfUdpPkt_t));
   return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
 }
 
@@ -411,6 +415,9 @@ void Iperf_HandleConfigSync(IperfUdpPkt_t *p)
   config.delayUs = configPl->delayUs;
   config.transferSizeBytes = configPl->transferSizeBytes;
   config.numPktsToTransfer = config.transferSizeBytes / config.payloadSizeBytes;
+  config.cache = configPl->cache;
+  config.code = configPl->code;
+  config.numCacheBlocks = configPl->numCacheBlocks;
   Iperf_PrintConfig(false);
 }
 
@@ -426,6 +433,9 @@ int Iperf_SendConfig(void)
   configPl->delayUs = config.delayUs;
   configPl->transferSizeBytes = config.transferSizeBytes;
   configPl->numPktsToTransfer = config.numPktsToTransfer;
+  configPl->cache = config.cache;
+  configPl->code = config.code;
+  configPl->numCacheBlocks = config.numCacheBlocks;
   if (config.role == SENDER)
   {
     return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
@@ -655,27 +665,9 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   }
   else if (strncmp(argv[1], "restart", 16) == 0)
   {
-    bool wasISender = (config.role == SENDER);
+    IperfRole_e myOldRole = config.role;
     Iperf_Deinit();
-    Iperf_Init(wasISender);
-    /*msg_t m;*/
-    /*m.type = IPERF_IPC_MSG_START;*/
-    /*msg_send(&m, threadPid);*/
-  }
-  else if (strncmp(argv[1], "delay", 16) == 0)
-  {
-    if (argc < 3)
-    {
-      loginfo("Current delay %d us\n", config.delayUs);
-      return 0;
-    }
-    if (running)
-    {
-      logerror("Need to first stop iperf!\n");
-      return 1;
-    }
-    config.delayUs = atoi(argv[2]);
-    loginfo("Set delay to %d us\n", config.delayUs);
+    Iperf_Init(myOldRole);
   }
   else if (strncmp(argv[1], "log", 16) == 0)
   {
@@ -743,6 +735,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     }
     else if (strncmp(argv[2], "sync", 16) == 0)
     {
+      loginfo("Sending config sync\n");
       return Iperf_SendConfig();
     }
     else
@@ -825,6 +818,27 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
             argIdx+=2;
             continue;
           }
+        }
+        else if (strncmp(argv[argIdx], "cache", 16) == 0)
+        {
+          config.cache = (atoi(argv[argIdx+1]) == 0) ? false : true;
+          loginfo("Set cache to %d\n", config.cache);
+          argIdx+=2;
+          continue;
+        }
+        else if (strncmp(argv[argIdx], "code", 16) == 0)
+        {
+          config.code = (atoi(argv[argIdx+1]) == 0) ? false : true;
+          loginfo("Set code to %d\n", config.code);
+          argIdx+=2;
+          continue;
+        }
+        else if (strncmp(argv[argIdx], "numcacheblocks", 16) == 0)
+        {
+          config.numCacheBlocks = atoi(argv[argIdx+1]);
+          loginfo("Set numCacheBlocks to %d\n", config.numCacheBlocks);
+          argIdx+=2;
+          continue;
         }
         else if (strncmp(argv[argIdx], "sync", 16) == 0)
         {
@@ -928,7 +942,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|start|stop|restart|delay|log|config|target|results|echo|interest|bulk>\n");
+  logerror("Usage: iperf <sender|receiver|start|stop|restart|log|config|target|results|echo|interest|bulk>\n");
   return 1;
 }
 

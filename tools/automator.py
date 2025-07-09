@@ -96,10 +96,12 @@ def unsetRoutes(dev):
 
 # NOTE AND TODO: This only sets the nib entries for the source and the destination basically. if you want any of the other nodes to be reachable you'll haveto consider the logic for it
 def setManualRoutes(devices):
-    global comm
+    global comm, args
     if (len(devices["routers"]) == 0):
         return
     print("Setting routes manually...")
+
+    cooldownS = (1.5 if args.fitiot else 0.5)
 
     # From the sender to the receiver
     print(f"Setting Sender->Receiver {devices['routers'][0]['linkLocalAddr']}")
@@ -127,11 +129,11 @@ def setManualRoutes(devices):
         print(f"Setting R{idx} nextHop:{nextHop} prevHop:{prevHop}")
 
         # tx->rx
-        outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}", cooldownS=0.5)
+        outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}", cooldownS=cooldownS)
         print("<", outStrRaw)
 
         # rx->tx
-        outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}", cooldownS=0.5)
+        outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}", cooldownS=cooldownS)
         print("<", outStrRaw)
 
 def setIperfTarget(dev, targetGlobalAddr):
@@ -577,14 +579,14 @@ def main():
             devices["routers"].append(r)
     devices["receiver"]["id"] = len(devices["routers"])+2
 
+    flushAllDevices()
+
     setGlobalAddress(devices["sender"])
     getAddresses(devices["sender"])
     setGlobalAddress(devices["receiver"])
     getAddresses(devices["receiver"]) # may not be needed? 
 
     setAllDevicesRetrans(args.retrans)
-
-    flushAllDevices()
 
     if (args.rpl):
         setRplRoot(devices["sender"])

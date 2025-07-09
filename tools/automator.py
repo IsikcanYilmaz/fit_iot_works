@@ -205,6 +205,13 @@ def restartAllDevices():
     for dev in devices["routers"]:
         comm.sendSerialCommand(dev, "iperf restart")
 
+def flushAllDevices():
+    global devices, comm
+    comm.flushDevice(devices["sender"])
+    comm.flushDevice(devices["receiver"])
+    for dev in devices["routers"]:
+        comm.flushDevice(dev)
+
 def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, resultsDir="./"):
     global devices, comm, args
     txDev = devices["sender"]
@@ -398,7 +405,7 @@ def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096
 
         if (args.fitiot):
             expectedTime = (delayus / 1000000) * (transfersizebytes / payloadsizebytes)
-            time.sleep(expectedTime + 10) # TODO better output handling
+            time.sleep(expectedTime + 60) # TODO better output handling
         else:
             txSer = txDev["ser"]
             rxSer = rxDev["ser"]
@@ -577,6 +584,8 @@ def main():
 
     setAllDevicesRetrans(args.retrans)
 
+    flushAllDevices()
+
     if (args.rpl):
         setRplRoot(devices["sender"])
     else:
@@ -603,7 +612,7 @@ def main():
 
     if (args.experiment_test):
         # experiment()
-        cachingExperiment(rounds=5)
+        cachingExperiment(delayus=10000, rounds=5)
     elif (args.caching_experiment):
         bulkCachingExperiments((args.results_dir if args.results_dir else DEFAULT_RESULTS_DIR))
     elif (args.experiment):

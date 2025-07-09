@@ -170,10 +170,13 @@ def setAllDevicesRetrans(retrans):
         for dev in devices["routers"]:
             setRetrans(dev, args.retrans)
 
-def parseDeviceJsons(j):
+def parseDeviceJsons(j, caching=False):
     global args
     # Expects {"rx":{}, "tx":{}, "config":{}}
-    timeDiffSecs = j["tx"]["timeDiff"] / 1000000
+    if (caching):
+        timeDiffSecs = j["rx"]["timeDiff"] / 1000000
+    else:
+        timeDiffSecs = j["tx"]["timeDiff"] / 1000000
     numLostPackets = j["tx"]["numSentPkts"] - (j["rx"]["numReceivedPkts"] - j["rx"]["numDuplicates"])
     lossPercent = numLostPackets * 100 / j["tx"]["numSentPkts"]
     sendRate = j["tx"]["numSentPkts"] * j["config"]["payloadSizeBytes"] / timeDiffSecs
@@ -185,7 +188,8 @@ def averageRoundsJsons(j):
     avgLossPercent = sum([j[i]["results"]["lossPercent"] for i in range(0, len(j))])/len(j)
     avgSendRate = sum([j[i]["results"]["sendRate"] for i in range(0, len(j))])/len(j)
     avgReceiveRate = sum([j[i]["results"]["receiveRate"] for i in range(0, len(j))])/len(j)
-    return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate}
+    avgTimeDiffSecs = sum([j[i]["results"]["timeDiffSecs"] for i in range(0, len(j))])/len(j)
+    return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate, "avgTimeDiffSecs":avgTimeDiffSecs}
 
 def resetAllDevicesNetstats():
     global devices
@@ -193,6 +197,13 @@ def resetAllDevicesNetstats():
     resetNetstats(devices["receiver"])
     for dev in devices["routers"]:
         resetNetstats(dev)
+
+def restartAllDevices():
+    global devices, comm
+    comm.sendSerialCommand(devices["sender"], "iperf restart")
+    comm.sendSerialCommand(devices["receiver"], "iperf restart")
+    for dev in devices["routers"]:
+        comm.sendSerialCommand(dev, "iperf restart")
 
 def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, resultsDir="./"):
     global devices, comm, args
@@ -224,8 +235,6 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
 
         resetAllDevicesNetstats()
 
-        # setAllDevicesRetrans(args.retrans)
-        
         rxOut += comm.sendSerialCommand(rxDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=3)
         txOut += comm.sendSerialCommand(txDev, f"iperf config mode {mode} delayus {delayus} payloadsizebytes {payloadsizebytes} transfersizebytes {transfersizebytes}", cooldownS=3)
 
@@ -284,8 +293,7 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
         rxOut += rxJsonRaw
         txOut += txJsonRaw
 
-        rxOut += comm.sendSerialCommand(rxDev, "iperf results reset")
-        txOut += comm.sendSerialCommand(txDev, "iperf results reset")
+        resetAllDevicesNetstats()
 
         rxOut += comm.sendSerialCommand(rxDev, "iperf stop")
         txOut += comm.sendSerialCommand(txDev, "iperf stop")
@@ -342,6 +350,141 @@ def bulkExperiments(resultsDir):
                 experimentCount += 1
                 time.sleep(2)
 
+def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, resultsDir="./"):
+    global devices, comm, args
+    txDev = devices["sender"]
+    rxDev = devices["receiver"]
+    routers = devices["routers"]
+
+    outFilenamePrefix = f"delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
+    overallJson = []
+
+    averagesFilename = f"{resultsDir}/{outFilenamePrefix}_averages.json"
+    experimentFilename = f"{resultsDir}/{outFilenamePrefix}.json"
+
+    for round in range(0, rounds):
+        roundFilename = f"{resultsDir}/{outFilenamePrefix}_round{round}.json"
+
+        # The experiment may have been run before and bombed. 
+        # Check if the experiment was run before. if so, simply load up that round json
+        # if ()
+
+        txOut = ""
+        rxOut = ""
+
+        print("----------------")
+        print(f"EXPERIMENT delayus:{delayus} payloadsizebytes:{payloadsizebytes} transfersizebytes:{transfersizebytes} round:{round}")
+
+        comm.flushDevice(rxDev)
+        comm.flushDevice(txDev)
+
+        resetAllDevicesNetstats()
+
+        rxOut += comm.sendSerialCommand(rxDev, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes}", cooldownS=3)
+        txOut += comm.sendSerialCommand(txDev, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes}", cooldownS=3)
+
+        for r in devices["routers"]:
+            comm.flushDevice(r)
+            comm.sendSerialCommand(r, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes}")
+            comm.sendSerialCommand(r, "iperf relayer")
+
+        rxOut += comm.sendSerialCommand(rxDev, "iperf receiver", cooldownS=1)
+        txOut += comm.sendSerialCommand(txDev, "iperf sender start")
+
+        print("RX:", rxOut)
+        print("TX:", txOut)
+        
+        now = time.time()
+
+        if (args.fitiot):
+            expectedTime = (delayus / 1000000) * (transfersizebytes / payloadsizebytes)
+            time.sleep(expectedTime + 10) # TODO better output handling
+        else:
+            txSer = txDev["ser"]
+            rxSer = rxDev["ser"]
+            while("complete" not in rxOut):
+                if (txSer.in_waiting > 0 or rxSer.in_waiting > 0):
+                    raw = rxSer.readline().decode()
+                    print(f"rx>{raw}")
+                    rxOut += raw
+                    raw = txSer.readline().decode()
+                    print(f"tx>{raw}")
+                    txOut += raw
+                if (time.time() - now > EXPERIMENT_TIMEOUT_S):
+                    print("EXPERIMENT TIMEOUT")
+                    return
+                time.sleep(0.1)
+            txOut += txSer.read(txSer.in_waiting).decode()
+
+        # TODO Hacky parsing below. Could do better formatting on the fw side
+        parsingSuccess = False
+        for i in range(0, 3):
+            rxJsonRaw = comm.sendSerialCommand(rxDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
+            print("<", rxJsonRaw)
+            txJsonRaw = comm.sendSerialCommand(txDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
+            print("<", txJsonRaw)
+
+            rxJsonRaw = " ".join(rxJsonRaw)
+            txJsonRaw = " ".join(txJsonRaw)
+
+            try:
+                rxJson = json.loads(rxJsonRaw)
+                txJson = json.loads(txJsonRaw)
+                parsingSuccess = True
+                break # If success, break out of the loop. otherwise, try 3 times
+            except Exception as e:
+                print(traceback.format_exc())
+                print("trying again")
+                comm.flushDevice(rxDev)
+                comm.flushDevice(txDev)
+                time.sleep(1)
+
+        if not parsingSuccess:
+            print("Couldnt parse json results!")
+            return
+
+        rxOut += rxJsonRaw
+        txOut += txJsonRaw
+
+       # get router results
+        routerJson = []
+        for dev in devices["routers"]:
+            rJsonRaw = comm.sendSerialCommand(dev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
+            print("<", rJsonRaw)
+            rJsonRaw = " ".join(rJsonRaw)
+            rJson = json.loads(rJsonRaw)
+            routerJson.append(rJson)
+
+        resetAllDevicesNetstats()
+        restartAllDevices()
+
+        deviceJson = {"rx":rxJson["results"], "tx":txJson["results"], "config":txJson["config"]} 
+
+        deviceJson["relays"] = routerJson
+
+        roundOverallJson = {"deviceoutput":deviceJson, "results":parseDeviceJsons(deviceJson, True)}
+
+        with open(roundFilename, "w") as f:
+            json.dump(roundOverallJson, f, indent=4)
+
+        pprint(roundOverallJson)
+        overallJson.append(roundOverallJson)
+
+    with open(experimentFilename, "w") as f:
+        json.dump(overallJson, f, indent=4)
+
+    overallAveragesJson = averageRoundsJsons(overallJson)
+    with open(averagesFilename, "w") as f:
+        json.dump(overallAveragesJson, f, indent=4)
+
+    print(f"Results written to {resultsDir}")
+    print("----------------")
+
+
+
+def bulkCachingExperiments(resultsDir):
+    pass
+
 def tester(dev):
     getL2Stats(dev)
     getIpv6Stats(dev)
@@ -365,6 +508,7 @@ def main():
     parser.add_argument("--rpl", action="store_true", default=False)
     parser.add_argument("--experiment_test", action="store_true", default=False)
     parser.add_argument("--experiment", action="store_true", default=False)
+    parser.add_argument("--caching_experiment", action="store_true", default=False)
     parser.add_argument("--fitiot", action="store_true", default=False)
     parser.add_argument("--results_dir", type=str)
     parser.add_argument("--txpower", type=int)
@@ -458,7 +602,10 @@ def main():
         return
 
     if (args.experiment_test):
-        experiment()
+        # experiment()
+        cachingExperiment(rounds=5)
+    elif (args.caching_experiment):
+        bulkCachingExperiments((args.results_dir if args.results_dir else DEFAULT_RESULTS_DIR))
     elif (args.experiment):
         bulkExperiments(resultsDir=(args.results_dir if args.results_dir else DEFAULT_RESULTS_DIR))
     print("DONE")

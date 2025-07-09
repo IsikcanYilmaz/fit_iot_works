@@ -749,7 +749,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       uint8_t argIdx = 2;
       while (argIdx < argc)
       {
-        if (strncmp(argv[argIdx], "payloadsizebytes", 20) == 0)
+        if (strncmp(argv[argIdx], "payloadsizebytes", 20) == 0 || strncmp(argv[argIdx], "plsize", 20) == 0)
         {
           config.payloadSizeBytes = atoi(argv[argIdx+1]);
           config.numPktsToTransfer = (config.transferSizeBytes / config.payloadSizeBytes);
@@ -778,7 +778,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
           argIdx+=2;
           continue;
         }
-        else if (strncmp(argv[argIdx], "transfersizebytes", 20) == 0)
+        else if (strncmp(argv[argIdx], "transfersizebytes", 20) == 0 || strncmp(argv[argIdx], "xfer", 20) == 0)
         {
           config.transferSizeBytes = atoi(argv[argIdx+1]);
           config.numPktsToTransfer = (config.transferSizeBytes / config.payloadSizeBytes);

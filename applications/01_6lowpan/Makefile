@@ -72,9 +72,9 @@ USEMODULE += auto_init_wdt_thread
 
 EXTERNAL_MODULE_DIRS += $(CURDIR)/../../submodules/
 USEMODULE += button
-ifeq ("seeedstudio-xiao-nrf52840", $(BOARD))
+# ifeq ("seeedstudio-xiao-nrf52840", $(BOARD))
 USEMODULE += neopixel
-endif
+# endif
 USEMODULE += onboard_leds
 USEMODULE += throttler
 USEMODULE += udp_stress

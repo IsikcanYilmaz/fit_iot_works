@@ -55,7 +55,6 @@ char srcGlobalIpAddr[25] = "2001::1"; // TODO better solution
 //
 char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 IperfChunkStatus_e receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this
-/*uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];*/
 
 uint8_t rxtxBuffer[256];
 

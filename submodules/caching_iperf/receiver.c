@@ -50,7 +50,6 @@ static ztimer_t interestTimer;
 static uint16_t numExpectedPkts = 0;
 static uint16_t expectationSeqNo = 0;
 
-static uint8_t *txBuffer = (uint8_t *) &rxtxBuffer;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
 
 static kernel_pid_t receiverPid = KERNEL_PID_UNDEF;

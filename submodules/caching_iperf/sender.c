@@ -102,6 +102,10 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
         logdebug("Sender received PKT_BULK_REQ for ");
         for (int i = 0; i < bulkPl->len; i++)
         {
+          if (bulkPl->arr[i] == SIMPLE_QUEUE_INVALID_NUMBER)
+          {
+            continue;
+          }
           SimpleQueue_Push(&pktReqQueue, bulkPl->arr[i]);
           if (logprintTags[DEBUG]) printf("%d ", bulkPl->arr[i]);
         }

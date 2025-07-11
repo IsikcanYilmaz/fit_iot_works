@@ -24,6 +24,7 @@ typedef enum
   IPERF_IPC_MSG_STOP, // OLD 
   
   IPERF_IPC_MSG_RELAY_RESPOND, // IF relayer needs to do something instead of simply forwarding
+  IPERF_IPC_MSG_RELAY_SERVICE_INTEREST, 
 
   IPERF_IPC_MSG_EXPECTATION_TIMEOUT,
   IPERF_IPC_MSG_INTEREST_TIMER_TIMEOUT,
@@ -113,7 +114,7 @@ typedef struct
   bool cache;
   bool code;
   uint8_t numCacheBlocks;
-
+  uint8_t cacheChancePercent;
 
 } IperfConfig_s;
 
@@ -133,6 +134,9 @@ typedef struct
   uint16_t receivedUniqueChunks;
   uint32_t startTimestamp;
   uint32_t endTimestamp;
+
+  uint16_t cacheHits;
+  uint16_t cacheMisses;
 
   uint32_t l2numSentPackets;
   uint32_t l2numSentBytes;

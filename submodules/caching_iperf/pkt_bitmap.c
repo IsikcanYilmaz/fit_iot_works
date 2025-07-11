@@ -13,7 +13,16 @@
 /*  uint8_t bitmap[];*/
 /*} __attribute__((packed)) IperfReceivedPktBitmap_t;*/
 
-void PktBitmap_PopulatePktBitmap(IperfUdpPkt_t *iperfPkt)
+// TODO find better name for this scheme
+void PktBitmap_PopulatePktBitmap(IperfUdpPkt_t *iperfPkt, IperfChunkStatus_e *receivedPktIds, uint16_t offset, uint8_t len)
 {
+  IperfReceivedPktBitmap_t *bmp = (IperfReceivedPktBitmap_t *) iperfPkt->payload;
+  bmp->pktOffset = offset;
+  bmp->len = len;
+
+  // Fill in the bitmap
+  // Received Pkt Ids v
+  // [            |       |    ]
+  //        offset^    len^
   
 }

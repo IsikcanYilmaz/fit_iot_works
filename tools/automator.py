@@ -147,6 +147,10 @@ def pingTest(srcDev, dstDev):
     print(f"{srcDev['globalAddr']} Pinging {dstIp}")
     outStrRaw = comm.sendSerialCommand(srcDev, f"ping {dstIp}", cooldownS=5, captureOutput=True)
     print("<", outStrRaw)
+    if ("100% packet loss" in outStrRaw):
+        print(bcolors.FAIL + "PING TEST FAILED!!!!" + bcolors.ENDC)
+    else:
+        print(bcolors.OKGREEN + "Ping test passed." + bcolors.ENDC)
 
 def setTxPower(dev, txpower):
     global comm

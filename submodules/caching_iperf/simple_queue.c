@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 /*
 * I need a queue type thing to hold u16s. This does that
@@ -19,7 +20,7 @@ void SimpleQueue_Init(SimpleQueue_t *q, uint16_t *buffer, uint16_t size)
 
 void SimpleQueue_Deinit(SimpleQueue_t *q)
 {
-  memset((void *) q->buf, 0x00, sizeof(uint16_t) * q->maxLen);
+  memset((void *) q->buf, 0xff, sizeof(uint16_t) * q->maxLen);
 }
 
 int SimpleQueue_Push(SimpleQueue_t *q, uint16_t data)
@@ -29,6 +30,7 @@ int SimpleQueue_Push(SimpleQueue_t *q, uint16_t data)
     printf("Queue full!\n");
     return 1;
   }
+  assert(data != SIMPLE_QUEUE_INVALID_NUMBER);
   q->buf[q->tailIdx] = data;
   q->tailIdx = (q->tailIdx + 1) % q->maxLen;
   q->currLen++;
@@ -44,6 +46,7 @@ int SimpleQueue_Pop(SimpleQueue_t *q, uint16_t *data)
   }
   if (data)
   {
+    assert(data != SIMPLE_QUEUE_INVALID_NUMBER);
     *data = q->buf[q->headIdx];
   }
   q->currLen--;

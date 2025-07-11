@@ -28,17 +28,18 @@
 IperfConfig_s config = {
   .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 10000,
-  .interestDelayUs = 100000,
-  .expectationDelayUs = 50000,
-  .transferSizeBytes = 4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
+  .delayUs = 100000,
+  .interestDelayUs = 70000,
+  .expectationDelayUs = 100000,
+  .transferSizeBytes = 512, //4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
 
   // Relay related
-  .cache = false,
+  .cache = true,
   .code = false,
-  .numCacheBlocks = 1,
+  .numCacheBlocks = 4,
+  .cacheChancePercent = 10,
 
 };
 
@@ -56,10 +57,10 @@ char srcGlobalIpAddr[25] = "2001::1"; // TODO better solution
 char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 IperfChunkStatus_e receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this
 
-uint8_t rxtxBuffer[256];
+uint8_t rxtxBuffer[128];
 
-// Both roles will use this queue
-#define PKT_REQ_QUEUE_LEN 128
+// All roles will use this queue
+#define PKT_REQ_QUEUE_LEN 256
 uint16_t pktReqQueueBuffer[PKT_REQ_QUEUE_LEN];
 SimpleQueue_t pktReqQueue;
 
@@ -111,9 +112,9 @@ static void printResults(bool json)
   }
   printf((json) ? \
 
-           "{\"role\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"receivedUniqueChunks\":%d, \"numSentPkts\":%d, \"numSentBytes\":%d, \"numInterestsSent\":%d, \"numInterestsServed\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu, \"l2numReceivedPackets\":%d, \"l2numReceivedBytes\":%d, \"l2numSentPackets\":%d, \"l2numSentBytes\":%d, \"l2numSuccessfulTx\":%d, \"l2numErroredTx\":%d, \"ipv6numReceivedPackets\":%d, \"ipv6numReceivedBytes\":%d, \"ipv6numSentPackets\":%d, \"ipv6numSentBytes\":%d, \"ipv6numSuccessfulTx\":%d, \"ipv6numErroredTx\":%d}\n" : \
+           "{\"role\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"receivedUniqueChunks\":%d, \"numSentPkts\":%d, \"numSentBytes\":%d, \"numInterestsSent\":%d, \"numInterestsServed\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu, \"cacheHits\":%d, \"l2numReceivedPackets\":%d, \"l2numReceivedBytes\":%d, \"l2numSentPackets\":%d, \"l2numSentBytes\":%d, \"l2numSuccessfulTx\":%d, \"l2numErroredTx\":%d, \"ipv6numReceivedPackets\":%d, \"ipv6numReceivedBytes\":%d, \"ipv6numSentPackets\":%d, \"ipv6numSentBytes\":%d, \"ipv6numSuccessfulTx\":%d, \"ipv6numErroredTx\":%d}\n" : \
 
-           "Results\nrole           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nreceivedUniqueChunks: %d\nnumSentPkts         :%d\nnumSentBytes        :%d\nnumInterestsSent    :%d\nnumInterestsServed  :%d\nstartTimestamp      :%lu\nendTimestamp        :%lu\ntimeDiff            :%lu\nl2numRxPkts         :%d\nl2numRxBytes        :%d\nl2numTxPkts         :%d\nl2numTxBytes        :%d\nl2numSuccessTx      :%d\nl2numErroredTx      :%d\nipv6numRxPkts       :%d\nipv6numRxBytes      :%d\nipv6numTxPkts       :%d\nipv6numTxBytes      :%d\nipv6numSuccessTx    :%d\nipv6numErroredTx    :%d\n", \
+           "Results\nrole           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nreceivedUniqueChunks: %d\nnumSentPkts         :%d\nnumSentBytes        :%d\nnumInterestsSent    :%d\nnumInterestsServed  :%d\nstartTimestamp      :%lu\nendTimestamp        :%lu\ntimeDiff            :%lu\ncacheHits           :%d\nl2numRxPkts         :%d\nl2numRxBytes        :%d\nl2numTxPkts         :%d\nl2numTxBytes        :%d\nl2numSuccessTx      :%d\nl2numErroredTx      :%d\nipv6numRxPkts       :%d\nipv6numRxBytes      :%d\nipv6numTxPkts       :%d\nipv6numTxBytes      :%d\nipv6numSuccessTx    :%d\nipv6numErroredTx    :%d\n", \
 
            config.role, \
            results.lastPktSeqNo, \
@@ -129,7 +130,7 @@ static void printResults(bool json)
            results.startTimestamp, \
            results.endTimestamp, \
            results.endTimestamp - results.startTimestamp, \
-
+           results.cacheHits, \
            results.l2numReceivedPackets, \
            results.l2numReceivedBytes, \
            results.l2numSentPackets, \
@@ -883,6 +884,10 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       else if (strncmp(argv[2], "reset", 16) == 0)
       {
         Iperf_ResetResults();
+      }
+      else if (strncmp(argv[2], "cache", 16) == 0 && config.role == RELAYER)
+      {
+        Iperf_PrintCache();
       }
     }
     else

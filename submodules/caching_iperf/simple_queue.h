@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define SIMPLE_QUEUE_INVALID_NUMBER 0xffff
+
 typedef struct 
 {
   uint16_t headIdx;

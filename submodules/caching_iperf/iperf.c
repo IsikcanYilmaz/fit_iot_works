@@ -36,7 +36,7 @@ IperfConfig_s config = {
   .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
 
   // Relay related
-  .cache = true,
+  .cache = false,
   .code = false,
   .numCacheBlocks = 16,
   .cacheChancePercent = 25,

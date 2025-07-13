@@ -67,7 +67,7 @@ static int sendPayload(void)
 static int sendCachedPkt(uint16_t i)
 {
   IperfUdpPkt_t *cached = (IperfUdpPkt_t *) (cacheBuffer + (i * CACHE_BLOCK_SIZE));
-  loginfo("Sending cached idx:%d (seq no %d) to destination\n", i, cached->seqNo);
+  logdebug("Sending cached idx:%d (seq no %d) to destination\n", i, cached->seqNo);
   cached->msgType = IPERF_PKT_RESP;
   cacheLock[i] = false;
   return Iperf_SocklessUdpSendToDst((char *) (cacheBuffer + (i * CACHE_BLOCK_SIZE)), CACHE_BLOCK_SIZE);
@@ -75,10 +75,10 @@ static int sendCachedPkt(uint16_t i)
 
 static void cache(IperfUdpPkt_t *iperfPkt)
 {
-  loginfo("Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
+  logdebug("Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
   if (cacheLock[cacheIdx])
   {
-    loginfo("%d cache locked. Searching for a different cache space\n", cacheIdx);
+    logdebug("%d cache locked. Searching for a different cache space\n", cacheIdx);
     for (int i = (cacheIdx + 1) % config.numCacheBlocks; i != cacheIdx; i=(i+1)%config.numCacheBlocks)
     {
       if (!cacheLock[i])
@@ -88,7 +88,7 @@ static void cache(IperfUdpPkt_t *iperfPkt)
     }
     if (cacheLock[cacheIdx])
     {
-      loginfo("All caches are locked\n");
+      logdebug("All caches are locked\n");
       return;
     }
   }
@@ -148,17 +148,17 @@ void *Iperf_RelayerThread(void *arg)
 
   do {
     msg_receive(&msg);
-    loginfo("IPC Message type %x\n", msg.type);
+    logdebug("IPC Message type %x\n", msg.type);
     switch (msg.type) {
       case IPERF_IPC_MSG_RELAY_RESPOND: // IF relayer needs to do something instead of simply forwarding
       {
-        loginfo("RELAYER RESPONSE\n");
+        logdebug("RELAYER RESPONSE\n");
         sendPayload();
         break;
       }
       case IPERF_IPC_MSG_RELAY_SERVICE_INTEREST:
       {
-        loginfo("RELAYER SERVICING INTEREST\n");
+        logdebug("RELAYER SERVICING INTEREST\n");
         uint16_t cacheIdxToSend;
         int ret = SimpleQueue_Pop(&pktReqQueue, &cacheIdxToSend);
         if (ret)
@@ -269,7 +269,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
         {
           // CACHE HIT
           // Remove interest from bulk interest, put it in our service list
-          loginfo("Cache hit! Seq no %d at cache idx %d\n", expectArr[i], cachedPktIdx);
+          logdebug("Cache hit! Seq no %d at cache idx %d\n", expectArr[i], cachedPktIdx);
           expectArr[i] = SIMPLE_QUEUE_INVALID_NUMBER;
           cacheLock[cachedPktIdx] = true;
           SimpleQueue_Push(&pktReqQueue, cachedPktIdx);

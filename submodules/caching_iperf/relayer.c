@@ -210,6 +210,10 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     msg_send(&ipc, relayerPid);
     shouldForward = false;
   }
+  else if (iperfPkt->msgType == IPERF_ECHO_RESP || iperfPkt->msgType == IPERF_ECHO_CALL)
+  {
+    logdebug("Forwarding Echo %s : %s", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload);
+  }
   else if (iperfPkt->msgType == IPERF_CONFIG_SYNC)
   {
     Iperf_HandleConfigSync(iperfPkt);
@@ -300,5 +304,6 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
       }
     }
   }
+
   return shouldForward;
 }

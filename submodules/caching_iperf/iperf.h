@@ -5,7 +5,7 @@
 #include "iperf_pkt.h"
 
 #define IPERF_TOTAL_TRANSMISSION_SIZE_MAX (4096)
-#define IPERF_BUFFER_SIZE_BYTES 512
+#define IPERF_BUFFER_SIZE_BYTES 600
 #define IPERF_MSG_QUEUE_SIZE 32
 #define IPERF_DEFAULT_PORT (1)
 #define IPERF_PAYLOAD_DEFAULT_SIZE_BYTES 32
@@ -153,6 +153,14 @@ typedef struct
   uint32_t ipv6numErroredTx;
 } IperfResults_s;
 
+static inline bool coinFlip(uint8_t percent)
+{
+  if (rand() % 100 < percent)
+  {
+    return true;
+  }
+  return false;
+}
 
 int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt));
 int Iperf_StartUdpServer(gnrc_netreg_entry_t *server, kernel_pid_t pid);

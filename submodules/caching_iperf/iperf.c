@@ -28,18 +28,18 @@
 IperfConfig_s config = {
   .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 100000,
-  .interestDelayUs = 70000,
+  .delayUs = 30000,
+  .interestDelayUs = 30000,
   .expectationDelayUs = 100000,
-  .transferSizeBytes = 512, //4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
+  .transferSizeBytes = 4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
 
   // Relay related
   .cache = true,
   .code = false,
-  .numCacheBlocks = 4,
-  .cacheChancePercent = 10,
+  .numCacheBlocks = 16,
+  .cacheChancePercent = 25,
 
 };
 
@@ -57,7 +57,7 @@ char srcGlobalIpAddr[25] = "2001::1"; // TODO better solution
 char receiveFileBuffer[IPERF_TOTAL_TRANSMISSION_SIZE_MAX];
 IperfChunkStatus_e receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this
 
-uint8_t rxtxBuffer[128];
+uint8_t rxtxBuffer[1024]; // TODO THIS IS TOO MUCH
 
 // All roles will use this queue
 #define PKT_REQ_QUEUE_LEN 256

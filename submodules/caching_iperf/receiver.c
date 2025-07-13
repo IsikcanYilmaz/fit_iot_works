@@ -164,6 +164,11 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
   {
     case IPERF_PAYLOAD:
       {
+        /*if (coinFlip(5))*/
+        /*{*/
+        /*  return 0;*/
+        /*}*/
+
         logdebug("[IPERF_PAYLOAD] %d received\n", iperfPkt->seqNo);
 
         // If it's the first payload packet we receive, ////
@@ -205,16 +210,18 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           // OUT OF ORDER (LOSS) //////////////////////////
           uint16_t lostPkts = (iperfPkt->seqNo - results.lastPktSeqNo);
           // Should we send an interest as soon as we detect a loss? 
-          /*if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)*/
-          /*{*/
-          /*  for (uint16_t i = results.lastPktSeqNo + 1; i < iperfPkt->seqNo; i++)*/
-          /*  {*/
-          /*    loginfo("Lost packet %d adding to request queue\n", i);*/
-          /*    SimpleQueue_Push(&pktReqQueue, i);*/
-          /*    receivedPktIds[i] = REQUESTED;*/
-          /*  }*/
-          /*  startInterestTimer(config.interestDelayUs);*/
-          /*}*/
+          
+          if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+          {
+            for (uint16_t i = results.lastPktSeqNo + 1; i < iperfPkt->seqNo; i++)
+            {
+              logdebug("Lost packet %d adding to request queue\n", i);
+              SimpleQueue_Push(&pktReqQueue, i);
+              receivedPktIds[i] = REQUESTED;
+            }
+            startInterestTimer(config.interestDelayUs);
+          }
+
           results.pktLossCounter += lostPkts;
           results.lastPktSeqNo = iperfPkt->seqNo;
           results.receivedUniqueChunks++;

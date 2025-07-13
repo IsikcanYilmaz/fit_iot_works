@@ -28,7 +28,7 @@ def sendSerialCommand_local(dev, cmd, cooldownS=0.5, captureOutput=True):
     s = dev["ser"]
     s.reset_input_buffer()
     s.reset_output_buffer()
-    print(f"{dev['name']}>", cmd)
+    # print(f"{dev['name']} >", cmd)
     while(len(cmd) > 0):
         s.write(cmd[0:SERIAL_COMMAND_BUFFER_SIZE].encode())
         cmd = cmd[SERIAL_COMMAND_BUFFER_SIZE:]
@@ -43,7 +43,7 @@ def sendSerialCommand_fitiot(dev, cmd, cooldownS=1, captureOutput=True):
     procCmd = f"echo \'{cmd}\' | nc -q {cooldownS} {dev['name']} 20000"
     out = ""
     trial = 0
-    print(f"{dev['name']}>", cmd)
+    # print(f"{dev['name']}>", cmd)
     while (trial <= NC_RETRIES):
         proc = subprocess.Popen(procCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         time.sleep(cooldownS)
@@ -67,6 +67,7 @@ def flushDevice_local(dev):
     s.read(s.in_waiting)
     s.reset_input_buffer()
     s.reset_output_buffer()
+    s.read(s.in_waiting)
 
 def flushDevice_fitiot(dev):
     sendSerialCommand_fitiot(dev, "\n\n", captureOutput=False)
@@ -95,11 +96,20 @@ class DeviceCommunicator:
     def __init__(self, fitiot=False):
         self.fitiot = fitiot
     
-    def sendSerialCommand(self, dev, cmd, cooldownS=1, captureOutput=True):
+    def sendSerialCommand(self, dev, cmd, cooldownS=1, captureOutput=True, printOut=True):
+        out = ""
+        nameStr = f"{bcolors.OKCYAN}{dev["name"]}{bcolors.ENDC}"
+        if (printOut):
+            print(f"{nameStr} > {cmd}")
         if (self.fitiot):
-            return sendSerialCommand_fitiot(dev, cmd, cooldownS, captureOutput)
+            out = sendSerialCommand_fitiot(dev, cmd, cooldownS, captureOutput)
         else:
-            return sendSerialCommand_local(dev, cmd, cooldownS, captureOutput)
+            out = sendSerialCommand_local(dev, cmd, cooldownS, captureOutput)
+        if (printOut):
+            print(f"{nameStr} < {out}")
+        if captureOutput:
+            return out
+        return
 
     def flushDevice(self, dev):
         if (self.fitiot):

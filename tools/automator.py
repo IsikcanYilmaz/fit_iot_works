@@ -413,7 +413,7 @@ def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096
 
         if (args.fitiot):
             expectedTime = (delayus / 1000000) * (transfersizebytes / payloadsizebytes)
-            time.sleep(expectedTime + (30 if caching else 10)) # TODO better output handling
+            time.sleep(expectedTime + (30 if cache else 10)) # TODO better output handling
         else:
             txSer = txDev["ser"]
             rxSer = rxDev["ser"]

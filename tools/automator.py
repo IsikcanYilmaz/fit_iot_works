@@ -68,13 +68,8 @@ def resetNetstats(dev):
             
 def getAddresses(dev):
     global comm
-    count = 0
-    while (count < 3 and "globalAddr" not in dev.keys()):
-        outStrRaw = comm.sendSerialCommand(dev, "ifconfig", cooldownS=0.1)
-        parseIfconfig(dev, outStrRaw)
-        if ("globalAddr" in dev.keys()):
-            break
-        count += 1
+    outStrRaw = comm.sendSerialCommand(dev, "ifconfig")
+    parseIfconfig(dev, outStrRaw)
 
 def setGlobalAddress(dev):
     global comm

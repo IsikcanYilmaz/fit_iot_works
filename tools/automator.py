@@ -206,6 +206,7 @@ def resetAllDevicesNetstats():
 
 def restartAllDevices():
     global devices, comm
+    print("Restarting all devices")
     comm.sendSerialCommand(devices["sender"], "iperf restart")
     comm.sendSerialCommand(devices["receiver"], "iperf restart")
     for dev in devices["routers"]:
@@ -370,7 +371,7 @@ def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096
     rxDev = devices["receiver"]
     routers = devices["routers"]
 
-    outFilenamePrefix = f"delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
+    outFilenamePrefix = f"caching{caching}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
     overallJson = []
 
     averagesFilename = f"{resultsDir}/{outFilenamePrefix}_averages.json"

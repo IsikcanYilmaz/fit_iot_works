@@ -47,7 +47,10 @@ def sendSerialCommand_fitiot(dev, cmd, cooldownS=1, captureOutput=True):
     while (trial <= NC_RETRIES):
         proc = subprocess.Popen(procCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         time.sleep(cooldownS)
-        out = proc.communicate()[0].decode()
+        try:
+            out = proc.communicate()[0].decode()
+        except UnicodeDecodeError as e:
+            print("Error occured:", e)
         proc.terminate()
         proc.wait()
         if ("refused" in out):
@@ -98,7 +101,7 @@ class DeviceCommunicator:
     
     def sendSerialCommand(self, dev, cmd, cooldownS=1, captureOutput=True, printOut=True):
         out = ""
-        nameStr = f"{bcolors.OKCYAN}{dev["name"]}{bcolors.ENDC}"
+        nameStr = f"{bcolors.OKCYAN}{dev['name']}{bcolors.ENDC}"
         if (printOut):
             print(f"{nameStr} > {cmd}")
         if (self.fitiot):

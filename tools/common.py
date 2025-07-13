@@ -49,7 +49,7 @@ def sendSerialCommand_fitiot(dev, cmd, cooldownS=1, captureOutput=True):
         time.sleep(cooldownS)
         try:
             out = proc.communicate()[0].decode()
-        except UnicodeDecodeError as e:
+        except Exception as e:
             print("Error occured:", e)
         proc.terminate()
         proc.wait()

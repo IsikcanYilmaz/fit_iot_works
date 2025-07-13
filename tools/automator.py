@@ -105,12 +105,12 @@ def setManualRoutes(devices):
 
     # From the sender to the receiver
     print(f"Setting Sender->Receiver {devices['routers'][0]['linkLocalAddr']}")
-    outStrRaw = comm.sendSerialCommand(devices["sender"], f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {devices['routers'][0]['linkLocalAddr']}", cooldownS=0) # Sender routes thru first router towards receiver
+    outStrRaw = comm.sendSerialCommand(devices["sender"], f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {devices['routers'][0]['linkLocalAddr']}", cooldownS=0.5) # Sender routes thru first router towards receiver
     # print("<", outStrRaw)
 
     # From the receiver to the sender
     print(f"Setting Receiver->Sender {devices['routers'][-1]['linkLocalAddr']}")
-    outStrRaw = comm.sendSerialCommand(devices["receiver"], f"nib route add {ifaceId} {devices['sender']['globalAddr']} {devices['routers'][-1]['linkLocalAddr']}", cooldownS=0) # Receiver routes thru last router towards sender
+    outStrRaw = comm.sendSerialCommand(devices["receiver"], f"nib route add {ifaceId} {devices['sender']['globalAddr']} {devices['routers'][-1]['linkLocalAddr']}", cooldownS=0.5) # Receiver routes thru last router towards sender
     # print("<", outStrRaw)
 
     for idx, dev in enumerate(devices["routers"]):

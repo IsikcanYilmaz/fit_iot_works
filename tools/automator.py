@@ -218,7 +218,7 @@ def averageRoundsJsons(j):
     avgReceiveRate = sum([j[i]["results"]["receiveRate"] for i in range(0, len(j))])/len(j)
     avgTimeDiffSecs = sum([j[i]["results"]["timeDiffSecs"] for i in range(0, len(j))])/len(j)
     avgSumCacheHits = sum([j[i]["results"]["sumCacheHits"] for i in range(0, len(j))])/len(j)
-    return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate, "avgTimeDiffSecs":avgTimeDiffSecs}
+    return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate, "avgTimeDiffSecs":avgTimeDiffSecs, "avgSumCacheHits":avgSumCacheHits}
 
 def resetAllDevicesNetstats():
     global devices

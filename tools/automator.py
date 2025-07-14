@@ -199,7 +199,7 @@ def setAllDevicesRetrans(retrans):
 
 def parseDeviceJsons(j, caching=False):
     global args
-    # Expects {"rx":{}, "tx":{}, "config":{}}
+    # Expects {"rx":{}, "tx":{}, "relays":{}, "config":{}}
     if (caching):
         timeDiffSecs = j["rx"]["timeDiff"] / 1000000
     else:
@@ -208,7 +208,8 @@ def parseDeviceJsons(j, caching=False):
     lossPercent = numLostPackets * 100 / j["tx"]["numSentPkts"]
     sendRate = j["tx"]["numSentPkts"] * j["config"]["payloadSizeBytes"] / timeDiffSecs
     receiveRate = (j["rx"]["numReceivedPkts"] - j["rx"]["numDuplicates"]) * j["config"]["payloadSizeBytes"] / timeDiffSecs
-    return {"timeDiffSecs":timeDiffSecs, "numLostPackets":numLostPackets, "lossPercent":lossPercent, "sendRate":sendRate, "receiveRate":receiveRate}
+    cacheHits = sum([i["results"]["cacheHits"] for i in j["relays"]])
+    return {"timeDiffSecs":timeDiffSecs, "numLostPackets":numLostPackets, "lossPercent":lossPercent, "sendRate":sendRate, "receiveRate":receiveRate, "sumCacheHits":cacheHits}
 
 def averageRoundsJsons(j):
     avgNumLostPkts = sum([j[i]["results"]["numLostPackets"] for i in range(0, len(j))])/len(j)
@@ -216,6 +217,7 @@ def averageRoundsJsons(j):
     avgSendRate = sum([j[i]["results"]["sendRate"] for i in range(0, len(j))])/len(j)
     avgReceiveRate = sum([j[i]["results"]["receiveRate"] for i in range(0, len(j))])/len(j)
     avgTimeDiffSecs = sum([j[i]["results"]["timeDiffSecs"] for i in range(0, len(j))])/len(j)
+    avgSumCacheHits = sum([j[i]["results"]["sumCacheHits"] for i in range(0, len(j))])/len(j)
     return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate, "avgTimeDiffSecs":avgTimeDiffSecs}
 
 def resetAllDevicesNetstats():
@@ -284,7 +286,7 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
 
         if (args.fitiot):
             expectedTime = (delayus / 1000000) * (transfersizebytes / payloadsizebytes)
-            time.sleep(expectedTime + 10) # TODO better output handling
+            time.sleep(expectedTime + 60) # TODO better output handling
         else:
             txSer = txDev["ser"]
             rxSer = rxDev["ser"]

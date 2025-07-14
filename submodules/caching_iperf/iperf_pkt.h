@@ -31,6 +31,8 @@ typedef struct {
   uint32_t transferSizeBytes; // 4
   uint16_t numPktsToTransfer; // 2
   uint8_t numCacheBlocks; // 1
+  uint32_t interestDelayUs; // 4
+  uint32_t expectationDelayUs; // 4
   bool cache; // 1
   bool code; // 1
 } __attribute__((packed)) IperfConfigPayload_t;

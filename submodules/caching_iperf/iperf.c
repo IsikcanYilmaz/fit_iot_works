@@ -206,7 +206,7 @@ static void printAll(void)
 void Iperf_PrintConfig(bool json)
 {
   printf((json) ? "{\"role\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"interestDelayUs\":%d, \"expectationDelayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d, \"numPktsToTransfer\":%d, \"cache\":%d, \"code\":%d, \"numCacheBlocks\":%d}\n" : \
-           "role: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\ninterestDelayUs: %d\nexpectationDelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\nnumPktsToTransfer: %d\ncache: %d\ncode: %d\nnumCacheBlocks: %d", 
+           "role: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\ninterestDelayUs: %d\nexpectationDelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\nnumPktsToTransfer: %d\ncache: %d\ncode: %d\nnumCacheBlocks: %d\n", 
            config.role, 
            config.payloadSizeBytes, 
            config.pktPerSecond, 
@@ -416,6 +416,8 @@ void Iperf_HandleConfigSync(IperfUdpPkt_t *p)
   config.delayUs = configPl->delayUs;
   config.transferSizeBytes = configPl->transferSizeBytes;
   config.numPktsToTransfer = config.transferSizeBytes / config.payloadSizeBytes;
+  config.interestDelayUs = configPl->interestDelayUs;
+  config.expectationDelayUs = configPl->expectationDelayUs;
   config.cache = configPl->cache;
   config.code = configPl->code;
   config.numCacheBlocks = configPl->numCacheBlocks;
@@ -432,6 +434,8 @@ int Iperf_SendConfig(void)
   configPl->mode = config.mode;
   configPl->payloadSizeBytes = config.payloadSizeBytes;
   configPl->delayUs = config.delayUs;
+  configPl->expectationDelayUs = config.expectationDelayUs;
+  configPl->interestDelayUs = config.interestDelayUs;
   configPl->transferSizeBytes = config.transferSizeBytes;
   configPl->numPktsToTransfer = config.numPktsToTransfer;
   configPl->cache = config.cache;

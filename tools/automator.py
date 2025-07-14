@@ -50,6 +50,10 @@ def parseIfconfig(dev, rawStr):
         if ("global" in i):
             globalAddr = i.split(" ")[2]
             dev["globalAddr"] = globalAddr
+    if ("globalAddr" not in dev.keys()):
+        print(f"{bcolors.FAIL}{dev['name']} globalAddr not picked up!{bcolors.ENDC}")
+    if ("linkLocalAddr" not in dev.keys()):
+        print(f"{bcolors.FAIL}{dev['name']} linkLocalAddr not picked up!{bcolors.ENDC}")
 
 def getL2Stats(dev):
     global comm

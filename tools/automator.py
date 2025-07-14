@@ -7,7 +7,7 @@ import sys, os
 import json
 import pdb
 import traceback
-import threading
+import asyncio
 from common import *
 from pprint import pprint
 
@@ -115,6 +115,30 @@ def setRplRoot(dev):
 def unsetRoutes(dev):
     pass
 
+@background
+def setRouterManualRoutes(idx, dev):
+    nextHop = ""
+    prevHop = ""
+    if idx == len(devices["routers"])-1: # Last router in the line. Next hop is the rx
+        nextHop = devices["receiver"]["linkLocalAddr"]
+        prevHop = devices["routers"][idx-1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["sender"]["linkLocalAddr"]
+    elif idx == 0: # First router in the line
+        nextHop = devices["routers"][idx+1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["receiver"]["linkLocalAddr"]
+        prevHop = devices["sender"]["linkLocalAddr"]
+    else: # Router after 0th and before nth
+        nextHop = devices["routers"][idx+1]["linkLocalAddr"]
+        prevHop = devices["routers"][idx-1]["linkLocalAddr"]
+
+    print(f"Setting R{idx} nextHop:{nextHop} prevHop:{prevHop}")
+
+    # tx->rx
+    outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}", cooldownS=cooldownS)
+    # print("<", outStrRaw)
+
+    # rx->tx
+    outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}", cooldownS=cooldownS)
+    # print("<", outStrRaw)
+
 # NOTE AND TODO: This only sets the nib entries for the source and the destination basically. if you want any of the other nodes to be reachable you'll haveto consider the logic for it
 def setManualRoutes(devices):
     global comm, args
@@ -135,27 +159,29 @@ def setManualRoutes(devices):
     # print("<", outStrRaw)
 
     for idx, dev in enumerate(devices["routers"]):
-        nextHop = ""
-        prevHop = ""
-        if idx == len(devices["routers"])-1: # Last router in the line. Next hop is the rx
-            nextHop = devices["receiver"]["linkLocalAddr"]
-            prevHop = devices["routers"][idx-1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["sender"]["linkLocalAddr"]
-        elif idx == 0: # First router in the line
-            nextHop = devices["routers"][idx+1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["receiver"]["linkLocalAddr"]
-            prevHop = devices["sender"]["linkLocalAddr"]
-        else: # Router after 0th and before nth
-            nextHop = devices["routers"][idx+1]["linkLocalAddr"]
-            prevHop = devices["routers"][idx-1]["linkLocalAddr"]
-
-        print(f"Setting R{idx} nextHop:{nextHop} prevHop:{prevHop}")
-
-        # tx->rx
-        outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}", cooldownS=cooldownS)
-        # print("<", outStrRaw)
-
-        # rx->tx
-        outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}", cooldownS=cooldownS)
-        # print("<", outStrRaw)
+        setRouterManualRoutes(idx, dev)
+        # nextHop = ""
+        # prevHop = ""
+        # if idx == len(devices["routers"])-1: # Last router in the line. Next hop is the rx
+        #     nextHop = devices["receiver"]["linkLocalAddr"]
+        #     prevHop = devices["routers"][idx-1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["sender"]["linkLocalAddr"]
+        # elif idx == 0: # First router in the line
+        #     nextHop = devices["routers"][idx+1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["receiver"]["linkLocalAddr"]
+        #     prevHop = devices["sender"]["linkLocalAddr"]
+        # else: # Router after 0th and before nth
+        #     nextHop = devices["routers"][idx+1]["linkLocalAddr"]
+        #     prevHop = devices["routers"][idx-1]["linkLocalAddr"]
+        #
+        # print(f"Setting R{idx} nextHop:{nextHop} prevHop:{prevHop}")
+        #
+        # # tx->rx
+        # outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}", cooldownS=cooldownS)
+        # # print("<", outStrRaw)
+        #
+        # # rx->tx
+        # outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}", cooldownS=cooldownS)
+        # # print("<", outStrRaw)
+    time.sleep(5)
 
 def setIperfTarget(dev, targetGlobalAddr):
     global comm

@@ -3,7 +3,7 @@
 import serial
 import time
 import subprocess
-import sys, os
+import sys, os, asyncio
 from pprint import pprint
 
 SERIAL_TIMEOUT_S = 10
@@ -20,6 +20,11 @@ class bcolors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
+def background(f):
+    def wrapped(*args, **kwargs):
+        return asyncio.get_event_loop().run_in_executor(None, f, *args, **kwargs)
+    return wrapped
 
 def interact(): # debug
     import code

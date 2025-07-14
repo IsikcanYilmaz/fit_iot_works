@@ -7,7 +7,6 @@ import sys, os
 import json
 import pdb
 import traceback
-import asyncio
 from common import *
 from pprint import pprint
 
@@ -69,7 +68,6 @@ def getIpv6Stats(dev):
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats ipv6")
     # print("<", outStrRaw)
 
-@background
 def resetNetstats(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats all reset")
@@ -116,37 +114,6 @@ def setRplRoot(dev):
 def unsetRoutes(dev):
     pass
 
-@background
-def sendCmdBackground(dev, cmd):
-    global comm, args
-    cooldownS = (2 if args.fitiot else 0.5)
-    comm.sendSerialCommand(dev, cmd, cooldownS=cooldownS)
-
-@background
-def setRouterManualRoutes(idx, dev):
-    cooldownS = (2 if args.fitiot else 0.5)
-    nextHop = ""
-    prevHop = ""
-    if idx == len(devices["routers"])-1: # Last router in the line. Next hop is the rx
-        nextHop = devices["receiver"]["linkLocalAddr"]
-        prevHop = devices["routers"][idx-1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["sender"]["linkLocalAddr"]
-    elif idx == 0: # First router in the line
-        nextHop = devices["routers"][idx+1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["receiver"]["linkLocalAddr"]
-        prevHop = devices["sender"]["linkLocalAddr"]
-    else: # Router after 0th and before nth
-        nextHop = devices["routers"][idx+1]["linkLocalAddr"]
-        prevHop = devices["routers"][idx-1]["linkLocalAddr"]
-
-    print(f"Setting R{idx} nextHop:{nextHop} prevHop:{prevHop}")
-
-    # tx->rx
-    outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}", cooldownS=cooldownS)
-    # print("<", outStrRaw)
-
-    # rx->tx
-    outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}", cooldownS=cooldownS)
-    # print("<", outStrRaw)
-
 # NOTE AND TODO: This only sets the nib entries for the source and the destination basically. if you want any of the other nodes to be reachable you'll haveto consider the logic for it
 def setManualRoutes(devices):
     global comm, args
@@ -167,29 +134,27 @@ def setManualRoutes(devices):
     # print("<", outStrRaw)
 
     for idx, dev in enumerate(devices["routers"]):
-        setRouterManualRoutes(idx, dev)
-        # nextHop = ""
-        # prevHop = ""
-        # if idx == len(devices["routers"])-1: # Last router in the line. Next hop is the rx
-        #     nextHop = devices["receiver"]["linkLocalAddr"]
-        #     prevHop = devices["routers"][idx-1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["sender"]["linkLocalAddr"]
-        # elif idx == 0: # First router in the line
-        #     nextHop = devices["routers"][idx+1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["receiver"]["linkLocalAddr"]
-        #     prevHop = devices["sender"]["linkLocalAddr"]
-        # else: # Router after 0th and before nth
-        #     nextHop = devices["routers"][idx+1]["linkLocalAddr"]
-        #     prevHop = devices["routers"][idx-1]["linkLocalAddr"]
-        #
-        # print(f"Setting R{idx} nextHop:{nextHop} prevHop:{prevHop}")
-        #
-        # # tx->rx
-        # outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}", cooldownS=cooldownS)
-        # # print("<", outStrRaw)
-        #
-        # # rx->tx
-        # outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}", cooldownS=cooldownS)
-        # # print("<", outStrRaw)
-    time.sleep(6)
+        nextHop = ""
+        prevHop = ""
+        if idx == len(devices["routers"])-1: # Last router in the line. Next hop is the rx
+            nextHop = devices["receiver"]["linkLocalAddr"]
+            prevHop = devices["routers"][idx-1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["sender"]["linkLocalAddr"]
+        elif idx == 0: # First router in the line
+            nextHop = devices["routers"][idx+1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["receiver"]["linkLocalAddr"]
+            prevHop = devices["sender"]["linkLocalAddr"]
+        else: # Router after 0th and before nth
+            nextHop = devices["routers"][idx+1]["linkLocalAddr"]
+            prevHop = devices["routers"][idx-1]["linkLocalAddr"]
+
+        print(f"Setting R{idx} nextHop:{nextHop} prevHop:{prevHop}")
+
+        # tx->rx
+        outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}", cooldownS=cooldownS)
+        # print("<", outStrRaw)
+
+        # rx->tx
+        outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}", cooldownS=cooldownS)
+        # print("<", outStrRaw)
 
 def setIperfTarget(dev, targetGlobalAddr):
     global comm
@@ -260,7 +225,6 @@ def resetAllDevicesNetstats():
     resetNetstats(devices["receiver"])
     for dev in devices["routers"]:
         resetNetstats(dev)
-    time.sleep(3)
 
 def restartAllDevices():
     global devices, comm
@@ -268,9 +232,7 @@ def restartAllDevices():
     comm.sendSerialCommand(devices["sender"], "iperf restart")
     comm.sendSerialCommand(devices["receiver"], "iperf restart")
     for dev in devices["routers"]:
-        # comm.sendSerialCommand(dev, "iperf restart")
-        sendCmdBackground(dev, "iperf restart")
-    time.sleep(3)
+        comm.sendSerialCommand(dev, "iperf restart")
 
 def flushAllDevices():
     global devices, comm
@@ -666,8 +628,7 @@ def main():
     if (len(devices["routers"]) > 0):
         setIperfTarget(devices["sender"], devices["receiver"]["globalAddr"])
         for dev in devices["routers"]:
-            # setIperfTarget(dev, devices["receiver"]["globalAddr"])
-            sendCmdBackground(dev, f"iperf target {devices['receiver']['globalAddr']}")
+            setIperfTarget(dev, devices["receiver"]["globalAddr"])
 
     if (args.set_roles):
         setRoles()
@@ -687,7 +648,7 @@ def main():
         # NO CACHE
         # cachingExperiment(delayus= 10000, cache=0, rounds=50)
         # cachingExperiment(delayus= 20000, cache=0, rounds=50)
-        cachingExperiment(delayus= 70000, cache=1, rounds=3)
+        cachingExperiment(delayus= 30000, cache=0, rounds=3)
         # cachingExperiment(delayus= 40000, cache=0, rounds=50)
         # cachingExperiment(delayus= 50000, cache=0, rounds=50)
         # CACHE

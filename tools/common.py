@@ -109,7 +109,7 @@ class DeviceCommunicator:
             self.serialAgg = True
             pass
     
-    def sendSerialCommand(self, dev, cmd, cooldownS=1, captureOutput=True, printOut=True):
+    def sendSerialCommand(self, dev, cmd, cooldownS=2, captureOutput=True, printOut=True):
         out = ""
         nameStr = f"{bcolors.OKCYAN}{dev['name']}{bcolors.ENDC}"
         if (printOut):

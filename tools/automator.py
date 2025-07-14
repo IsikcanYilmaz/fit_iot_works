@@ -675,7 +675,7 @@ def main():
         # NO CACHE
         # cachingExperiment(delayus= 10000, cache=0, rounds=50)
         # cachingExperiment(delayus= 20000, cache=0, rounds=50)
-        cachingExperiment(delayus= 30000, cache=1, rounds=3)
+        cachingExperiment(delayus= 70000, cache=1, rounds=3)
         # cachingExperiment(delayus= 40000, cache=0, rounds=50)
         # cachingExperiment(delayus= 50000, cache=0, rounds=50)
         # CACHE

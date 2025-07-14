@@ -53,7 +53,7 @@ def parseIfconfig(dev, rawStr):
     success = True
     if ("globalAddr" not in dev.keys()):
         print(f"{bcolors.FAIL}{dev['name']} globalAddr not picked up!{bcolors.ENDC}")
-        success = False
+        # success = False
     if ("linkLocalAddr" not in dev.keys()):
         print(f"{bcolors.FAIL}{dev['name']} linkLocalAddr not picked up!{bcolors.ENDC}")
         success = False

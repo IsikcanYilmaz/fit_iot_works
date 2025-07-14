@@ -69,6 +69,7 @@ def getIpv6Stats(dev):
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats ipv6")
     # print("<", outStrRaw)
 
+@background
 def resetNetstats(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats all reset")
@@ -114,6 +115,11 @@ def setRplRoot(dev):
 
 def unsetRoutes(dev):
     pass
+
+@background
+def sendCmdBackground(dev, cmd):
+    global comm
+    comm.sendSerialCommand(dev, cmd)
 
 @background
 def setRouterManualRoutes(idx, dev):
@@ -252,6 +258,7 @@ def resetAllDevicesNetstats():
     resetNetstats(devices["receiver"])
     for dev in devices["routers"]:
         resetNetstats(dev)
+    time.sleep(3)
 
 def restartAllDevices():
     global devices, comm
@@ -259,7 +266,9 @@ def restartAllDevices():
     comm.sendSerialCommand(devices["sender"], "iperf restart")
     comm.sendSerialCommand(devices["receiver"], "iperf restart")
     for dev in devices["routers"]:
-        comm.sendSerialCommand(dev, "iperf restart")
+        # comm.sendSerialCommand(dev, "iperf restart")
+        sendCmdBackground(dev, "iperf restart")
+    time.sleep(3)
 
 def flushAllDevices():
     global devices, comm

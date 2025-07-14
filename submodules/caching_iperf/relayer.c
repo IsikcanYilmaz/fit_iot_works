@@ -212,7 +212,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
   }
   else if (iperfPkt->msgType == IPERF_ECHO_RESP || iperfPkt->msgType == IPERF_ECHO_CALL)
   {
-    logdebug("Forwarding Echo %s : %s", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload);
+    logdebug("Forwarding Echo %s : %s\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload);
   }
   else if (iperfPkt->msgType == IPERF_CONFIG_SYNC)
   {

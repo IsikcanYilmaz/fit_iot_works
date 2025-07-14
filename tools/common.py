@@ -96,8 +96,18 @@ class Device: # TODO CURRENTLY UNUSED
         pass
 
 class DeviceCommunicator:
-    def __init__(self, fitiot=False):
+    def __init__(self, fitiot=False, serialAggStr=None):
         self.fitiot = fitiot
+        self.serialAgg = False
+
+        if (fitiot):
+            self.hostname = os.uname().nodename
+        else:
+            self.hostname = "local"
+
+        if (fitiot and serialAggStr):
+            self.serialAgg = True
+            pass
     
     def sendSerialCommand(self, dev, cmd, cooldownS=1, captureOutput=True, printOut=True):
         out = ""

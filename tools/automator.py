@@ -74,7 +74,7 @@ def resetNetstats(dev):
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats all reset")
     # print("<", outStrRaw)
             
-def getAddresses(dev):
+def getAddresses(dev, exitOnFail=True):
     global comm
     success = False
     count = 0
@@ -84,9 +84,13 @@ def getAddresses(dev):
         success = parseIfconfig(dev, outStrRaw)
         if (success):
             break
-        print(f"{bcolors.FAIL}Problem running getAddresses on {dev['name']}{bcolors.ENDC}")
+        print(f"{bcolors.FAIL}Problem running getAddresses on {dev['name']}... Trying again {count} {bcolors.ENDC}")
         time.sleep(1)
         count += 1
+    if (not success):
+        print(f"{bcolors.FAIL}GET ADDRESSES FAILED FOR {dev['name']}{bcolors.ENDC}")
+        if (exitOnFail):
+            sys.exit(1)
 
 def setGlobalAddress(dev):
     global comm

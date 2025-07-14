@@ -79,7 +79,7 @@ def getAddresses(dev, exitOnFail=True):
     success = False
     count = 0
     print(f"Getting addresses for {dev['name']}")
-    while (not success or count < 4):
+    while (not success and count < 4):
         outStrRaw = comm.sendSerialCommand(dev, "ifconfig", cooldownS=2)
         success = parseIfconfig(dev, outStrRaw)
         if (success):

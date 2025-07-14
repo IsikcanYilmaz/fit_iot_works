@@ -50,10 +50,14 @@ def parseIfconfig(dev, rawStr):
         if ("global" in i):
             globalAddr = i.split(" ")[2]
             dev["globalAddr"] = globalAddr
+    success = True
     if ("globalAddr" not in dev.keys()):
         print(f"{bcolors.FAIL}{dev['name']} globalAddr not picked up!{bcolors.ENDC}")
+        success = False
     if ("linkLocalAddr" not in dev.keys()):
         print(f"{bcolors.FAIL}{dev['name']} linkLocalAddr not picked up!{bcolors.ENDC}")
+        success = False
+    return success
 
 def getL2Stats(dev):
     global comm
@@ -72,8 +76,16 @@ def resetNetstats(dev):
             
 def getAddresses(dev):
     global comm
-    outStrRaw = comm.sendSerialCommand(dev, "ifconfig")
-    parseIfconfig(dev, outStrRaw)
+    success = False
+    count = 0
+    while (not success or count < 4):
+        outStrRaw = comm.sendSerialCommand(dev, "ifconfig")
+        success = parseIfconfig(dev, outStrRaw)
+        if (success):
+            break
+        print(f"{bcolors.FAIL}Problem running getAddresses on {dev['name']}{bcolors.ENDC}")
+        time.sleep(1)
+        count += 1
 
 def setGlobalAddress(dev):
     global comm

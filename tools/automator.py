@@ -118,11 +118,13 @@ def unsetRoutes(dev):
 
 @background
 def sendCmdBackground(dev, cmd):
-    global comm
-    comm.sendSerialCommand(dev, cmd)
+    global comm, args
+    cooldownS = (2 if args.fitiot else 0.5)
+    comm.sendSerialCommand(dev, cmd, cooldownS=cooldownS)
 
 @background
 def setRouterManualRoutes(idx, dev):
+    cooldownS = (2 if args.fitiot else 0.5)
     nextHop = ""
     prevHop = ""
     if idx == len(devices["routers"])-1: # Last router in the line. Next hop is the rx
@@ -187,7 +189,7 @@ def setManualRoutes(devices):
         # # rx->tx
         # outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}", cooldownS=cooldownS)
         # # print("<", outStrRaw)
-    time.sleep(5)
+    time.sleep(6)
 
 def setIperfTarget(dev, targetGlobalAddr):
     global comm
@@ -664,7 +666,8 @@ def main():
     if (len(devices["routers"]) > 0):
         setIperfTarget(devices["sender"], devices["receiver"]["globalAddr"])
         for dev in devices["routers"]:
-            setIperfTarget(dev, devices["receiver"]["globalAddr"])
+            # setIperfTarget(dev, devices["receiver"]["globalAddr"])
+            sendCmdBackground(dev, f"iperf target {devices['receiver']['globalAddr']}")
 
     if (args.set_roles):
         setRoles()

@@ -3,6 +3,7 @@
 import serial
 import time
 import subprocess
+import sys, os
 from pprint import pprint
 
 SERIAL_TIMEOUT_S = 10

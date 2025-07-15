@@ -405,7 +405,7 @@ def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096
         # The experiment may have been run before and bombed. 
         # Check if the experiment was run before. if so, simply load up that round json
         roundCompletedBefore = False
-        if (roundFilename in os.listdir(resultsDir)):
+        if (os.path.basename(roundFilename) in os.listdir(resultsDir)):
             try:
                 f = open(roundFilename)
                 j = json.load(f)

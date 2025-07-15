@@ -404,8 +404,18 @@ def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096
 
         # The experiment may have been run before and bombed. 
         # Check if the experiment was run before. if so, simply load up that round json
-        # if ()
-
+        roundCompletedBefore = False
+        if (roundFilename in os.listdir(resultsDir)):
+            try:
+                f = open(roundFilename)
+                j = json.load(f)
+                f.close()
+                overallJson.append(j)
+                print(f"{bcolors.OKGREEN}{roundFilename} Round file already there. Moving on{bcolors.ENDC}")
+                continue
+            except Exception as e:
+                print("Error reading old round file!", e)
+                
         txOut = ""
         rxOut = ""
 
@@ -520,8 +530,6 @@ def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096
 
     print(f"Results written to {resultsDir}")
     print("----------------")
-
-
 
 def bulkCachingExperiments(resultsDir):
     pass
@@ -657,6 +665,9 @@ def main():
         # cachingExperiment(delayus= 30000, cache=1, rounds=50)
         # cachingExperiment(delayus= 40000, cache=1, rounds=50)
         # cachingExperiment(delayus= 50000, cache=1, rounds=50)
+
+    if (args.results_dir):
+        args.results_dir = os.path.abspath(args.results_dir)
 
     elif (args.caching_experiment):
         bulkCachingExperiments((args.results_dir if args.results_dir else DEFAULT_RESULTS_DIR))

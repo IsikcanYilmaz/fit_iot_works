@@ -640,7 +640,7 @@ def main():
     if (args.rpl):
         setRplRoot(devices["sender"])
     else:
-        setManualRoutes(devices)
+        asyncio.run(setManualRoutes(devices))
 
     if (len(devices["routers"]) > 0):
         setIperfTarget(devices["sender"], devices["receiver"]["globalAddr"])

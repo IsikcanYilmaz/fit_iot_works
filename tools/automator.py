@@ -132,7 +132,7 @@ def setManualRoutesSingleDevice(idx, dev):
     outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}", cooldownS=cooldownS)
 
 # NOTE AND TODO: This only sets the nib entries for the source and the destination basically. if you want any of the other nodes to be reachable you'll haveto consider the logic for it
-def setManualRoutes(devices):
+async def setManualRoutes(devices):
     global comm, args
     if (len(devices["routers"]) == 0):
         return
@@ -213,7 +213,7 @@ def averageRoundsJsons(j):
     avgSumCacheHits = sum([j[i]["results"]["sumCacheHits"] for i in range(0, len(j))])/len(j)
     return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate, "avgTimeDiffSecs":avgTimeDiffSecs, "avgSumCacheHits":avgSumCacheHits}
 
-def resetAllDevicesNetstats():
+async def resetAllDevicesNetstats():
     global devices, ifaceId
     resetNetstats(devices["sender"])
     resetNetstats(devices["receiver"])
@@ -224,7 +224,7 @@ def resetAllDevicesNetstats():
         futures.append(future)
     await asyncio.gather(*futures)
 
-def restartAllDevices():
+async def restartAllDevices():
     global devices, comm
     print("Restarting all devices")
     comm.sendSerialCommand(devices["sender"], "iperf restart")

@@ -21,6 +21,7 @@ args = None
 comm = None
 
 threads = []
+futures = []
 
 """
 Example usage: ./automator.py /dev/ttyACM0 /dev/ttyACM1 --rpl --experiment --results_dir ../results/
@@ -34,7 +35,6 @@ def parseIfconfig(dev, rawStr):
     globalAddr = None
     for i in rawStr.replace("  ", " ").split("\n"):
         i = i.lstrip()
-        # print(i)
         if ("Iface" in i):
             iface = i.split(" ")[1]
             if (not ifaceId):
@@ -61,17 +61,14 @@ def parseIfconfig(dev, rawStr):
 def getL2Stats(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats l2")
-    # print("<", outStrRaw)
 
 def getIpv6Stats(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats ipv6")
-    # print("<", outStrRaw)
 
 def resetNetstats(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} stats all reset")
-    # print("<", outStrRaw)
             
 def getAddresses(dev, exitOnFail=True):
     global comm
@@ -94,25 +91,45 @@ def getAddresses(dev, exitOnFail=True):
 def setGlobalAddress(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} add 2001::{dev['id']}")
-    # print("<", outStrRaw)
 
 def unsetGlobalAddress(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"ifconfig {ifaceId} del {dev['globalAddr']}")
-    # print("<", outStrRaw)
 
 def unsetRpl(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"rpl rm {ifaceId}")
-    # print("<", outStrRaw)
 
 def setRplRoot(dev):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"rpl root {ifaceId} 2001::{dev['id']}")
-    # print("<", outStrRaw)
 
-def unsetRoutes(dev):
-    pass
+@background
+def sendCmdBackground(dev, cmd):
+    global comm, args
+    cooldownS = (2 if args.fitiot else 0.5)
+    comm.sendSerialCommand(dev, cmd, cooldownS=cooldownS)
+
+@background
+def setManualRoutesSingleDevice(idx, dev):
+    cooldownS = (2 if args.fitiot else 0.5)
+    nextHop = ""
+    prevHop = ""
+    if idx == len(devices["routers"])-1: # Last router in the line. Next hop is the rx
+        nextHop = devices["receiver"]["linkLocalAddr"]
+        prevHop = devices["routers"][idx-1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["sender"]["linkLocalAddr"]
+    elif idx == 0: # First router in the line
+        nextHop = devices["routers"][idx+1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["receiver"]["linkLocalAddr"]
+        prevHop = devices["sender"]["linkLocalAddr"]
+    else: # Router after 0th and before nth
+        nextHop = devices["routers"][idx+1]["linkLocalAddr"]
+        prevHop = devices["routers"][idx-1]["linkLocalAddr"]
+
+    print(f"Setting R{idx} nextHop:{nextHop} prevHop:{prevHop}")
+    # tx->rx
+    outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}", cooldownS=cooldownS)
+    # rx->tx
+    outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}", cooldownS=cooldownS)
 
 # NOTE AND TODO: This only sets the nib entries for the source and the destination basically. if you want any of the other nodes to be reachable you'll haveto consider the logic for it
 def setManualRoutes(devices):
@@ -126,47 +143,26 @@ def setManualRoutes(devices):
     # From the sender to the receiver
     print(f"Setting Sender->Receiver {devices['routers'][0]['linkLocalAddr']}")
     outStrRaw = comm.sendSerialCommand(devices["sender"], f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {devices['routers'][0]['linkLocalAddr']}", cooldownS=0.5) # Sender routes thru first router towards receiver
-    # print("<", outStrRaw)
 
     # From the receiver to the sender
     print(f"Setting Receiver->Sender {devices['routers'][-1]['linkLocalAddr']}")
     outStrRaw = comm.sendSerialCommand(devices["receiver"], f"nib route add {ifaceId} {devices['sender']['globalAddr']} {devices['routers'][-1]['linkLocalAddr']}", cooldownS=0.5) # Receiver routes thru last router towards sender
-    # print("<", outStrRaw)
 
+    futures = []
     for idx, dev in enumerate(devices["routers"]):
-        nextHop = ""
-        prevHop = ""
-        if idx == len(devices["routers"])-1: # Last router in the line. Next hop is the rx
-            nextHop = devices["receiver"]["linkLocalAddr"]
-            prevHop = devices["routers"][idx-1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["sender"]["linkLocalAddr"]
-        elif idx == 0: # First router in the line
-            nextHop = devices["routers"][idx+1]["linkLocalAddr"] if len(devices["routers"])>1 else devices["receiver"]["linkLocalAddr"]
-            prevHop = devices["sender"]["linkLocalAddr"]
-        else: # Router after 0th and before nth
-            nextHop = devices["routers"][idx+1]["linkLocalAddr"]
-            prevHop = devices["routers"][idx-1]["linkLocalAddr"]
-
-        print(f"Setting R{idx} nextHop:{nextHop} prevHop:{prevHop}")
-
-        # tx->rx
-        outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['receiver']['globalAddr']} {nextHop}", cooldownS=cooldownS)
-        # print("<", outStrRaw)
-
-        # rx->tx
-        outStrRaw = comm.sendSerialCommand(dev, f"nib route add {ifaceId} {devices['sender']['globalAddr']} {prevHop}", cooldownS=cooldownS)
-        # print("<", outStrRaw)
+        future = setManualRoutesSingleDevice(idx, dev)
+        futures.append(future)
+    await asyncio.gather(*futures)
 
 def setIperfTarget(dev, targetGlobalAddr):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"iperf target {targetGlobalAddr}")
-    # print("<", outStrRaw)
 
 def pingTest(srcDev, dstDev):
     global comm
     dstIp = dstDev["globalAddr"]
     print(f"{srcDev['globalAddr']} Pinging {dstIp}")
     outStrRaw = comm.sendSerialCommand(srcDev, f"ping {dstIp}", cooldownS=5, captureOutput=True)
-    # print("<", outStrRaw)
     if ("100% packet loss" in outStrRaw):
         print(bcolors.FAIL + "PING TEST FAILED!!!!" + bcolors.ENDC)
     else:
@@ -175,7 +171,6 @@ def pingTest(srcDev, dstDev):
 def setTxPower(dev, txpower):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"setpwr {txpower}")
-    # print("<", outStrRaw)
 
 def setRetrans(dev, retrans):
     global comm, args
@@ -185,7 +180,6 @@ def setRetrans(dev, retrans):
         outStrRaw += comm.sendSerialCommand(dev, f"ifconfig {ifaceId} set retrans {retrans}")
     else:
         outStrRaw = comm.sendSerialCommand(dev, f"setretrans {retrans}")
-    # print("<", outStrRaw)
 
 def setAllDevicesRetrans(retrans):
     global args, devices
@@ -220,19 +214,27 @@ def averageRoundsJsons(j):
     return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate, "avgTimeDiffSecs":avgTimeDiffSecs, "avgSumCacheHits":avgSumCacheHits}
 
 def resetAllDevicesNetstats():
-    global devices
+    global devices, ifaceId
     resetNetstats(devices["sender"])
     resetNetstats(devices["receiver"])
+    futures = [] 
     for dev in devices["routers"]:
-        resetNetstats(dev)
+        # resetNetstats(dev)
+        future = sendCmdBackground(dev, f"ifconfig {ifaceId} stats all reset")
+        futures.append(future)
+    await asyncio.gather(*futures)
 
 def restartAllDevices():
     global devices, comm
     print("Restarting all devices")
     comm.sendSerialCommand(devices["sender"], "iperf restart")
     comm.sendSerialCommand(devices["receiver"], "iperf restart")
+    futures = []
     for dev in devices["routers"]:
-        comm.sendSerialCommand(dev, "iperf restart")
+        # comm.sendSerialCommand(dev, "iperf restart")
+        future = sendCmdBackground(dev, "iperf restart")
+        futures.append(future)
+    await asyncio.gather(*futures)
 
 def flushAllDevices():
     global devices, comm
@@ -387,7 +389,7 @@ def bulkExperiments(resultsDir):
                 experimentCount += 1
                 time.sleep(2)
 
-def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, cache=1, resultsDir="./"):
+async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, cache=1, resultsDir="./"):
     global devices, comm, args
     txDev = devices["sender"]
     rxDev = devices["receiver"]
@@ -432,8 +434,20 @@ def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096
 
         for r in devices["routers"]:
             comm.flushDevice(r)
-            comm.sendSerialCommand(r, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
-            comm.sendSerialCommand(r, "iperf relayer")
+
+        futures = []
+        for r in devices["routers"]:
+            # comm.sendSerialCommand(r, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
+            future = sendCmdBackground(r, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
+            futures.append(future)
+        await asyncio.gather(*futures)
+
+        futures = []
+        for r in devices["routers"]:
+            # comm.sendSerialCommand(r, "iperf relayer")
+            future = sendCmdBackground(r, "iperf relayer")
+            futures.append(future)
+        await asyncio.gather(*futures)
 
         rxOut += comm.sendSerialCommand(rxDev, "iperf receiver", cooldownS=1)
         txOut += comm.sendSerialCommand(txDev, "iperf sender start")
@@ -471,9 +485,7 @@ def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096
         parsingSuccess = False
         for i in range(0, 3):
             rxJsonRaw = comm.sendSerialCommand(rxDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
-            # print("<", rxJsonRaw)
             txJsonRaw = comm.sendSerialCommand(txDev, "iperf results all", captureOutput=True, cooldownS=1).replace("[IPERF][I] ", "").split("\n")[1:-1]
-            # print("<", txJsonRaw)
 
             rxJsonRaw = " ".join(rxJsonRaw)
             txJsonRaw = " ".join(txJsonRaw)
@@ -491,7 +503,7 @@ def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096
                 time.sleep(1)
 
         if not parsingSuccess:
-            print(f"{bcolors.FAIL}Couldnt parse json results!{bcolors.END}")
+            print(f"{bcolors.FAIL}Couldnt parse json results!{bcolors.ENDC}")
             return
 
         rxOut += rxJsonRaw
@@ -541,12 +553,9 @@ def tester(dev):
 
 def setRoles():
     outStrRaw = comm.sendSerialCommand(devices["sender"], f"iperf sender")
-    # print("<", outStrRaw)
     outStrRaw = comm.sendSerialCommand(devices["receiver"], f"iperf receiver")
-    # print("<", outStrRaw)
     for dev in devices["routers"]:
         outStrRaw = comm.sendSerialCommand(dev, "iperf relayer")
-        # print("<", outStrRaw)
 
 def main():
     global args, comm
@@ -654,17 +663,8 @@ def main():
 
     if (args.experiment_test):
         # NO CACHE
-        # cachingExperiment(delayus= 10000, cache=0, rounds=50)
-        # cachingExperiment(delayus= 20000, cache=0, rounds=50)
-        cachingExperiment(delayus= 30000, cache=0, rounds=3)
-        # cachingExperiment(delayus= 40000, cache=0, rounds=50)
-        # cachingExperiment(delayus= 50000, cache=0, rounds=50)
+        asyncio.run(cachingExperiment(delayus= 30000, cache=0, rounds=3))
         # CACHE
-        # cachingExperiment(delayus= 10000, cache=1, rounds=50)
-        # cachingExperiment(delayus= 20000, cache=1, rounds=50)
-        # cachingExperiment(delayus= 30000, cache=1, rounds=50)
-        # cachingExperiment(delayus= 40000, cache=1, rounds=50)
-        # cachingExperiment(delayus= 50000, cache=1, rounds=50)
 
     if (args.results_dir):
         args.results_dir = os.path.abspath(args.results_dir)

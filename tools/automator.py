@@ -152,6 +152,7 @@ async def setManualRoutes(devices):
     for idx, dev in enumerate(devices["routers"]):
         future = setManualRoutesSingleDevice(idx, dev)
         futures.append(future)
+    time.sleep(1)
     await asyncio.gather(*futures)
 
 def setIperfTarget(dev, targetGlobalAddr):
@@ -222,6 +223,7 @@ async def resetAllDevicesNetstats():
         # resetNetstats(dev)
         future = sendCmdBackground(dev, f"ifconfig {ifaceId} stats all reset")
         futures.append(future)
+    time.sleep(1)
     await asyncio.gather(*futures)
 
 async def restartAllDevices():
@@ -234,6 +236,7 @@ async def restartAllDevices():
         # comm.sendSerialCommand(dev, "iperf restart")
         future = sendCmdBackground(dev, "iperf restart")
         futures.append(future)
+    time.sleep(1)
     await asyncio.gather(*futures)
 
 def flushAllDevices():
@@ -440,6 +443,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
             # comm.sendSerialCommand(r, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
             future = sendCmdBackground(r, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
             futures.append(future)
+        time.sleep(1)
         await asyncio.gather(*futures)
 
         futures = []
@@ -447,6 +451,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
             # comm.sendSerialCommand(r, "iperf relayer")
             future = sendCmdBackground(r, "iperf relayer")
             futures.append(future)
+        time.sleep(1)
         await asyncio.gather(*futures)
 
         rxOut += comm.sendSerialCommand(rxDev, "iperf receiver", cooldownS=1)

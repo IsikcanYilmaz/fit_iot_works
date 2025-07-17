@@ -392,13 +392,16 @@ def bulkExperiments(resultsDir):
                 experimentCount += 1
                 time.sleep(2)
 
-async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, cache=1, resultsDir="./"):
+async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, cache=1, numcacheblocks=16, resultsDir="./"):
     global devices, comm, args
     txDev = devices["sender"]
     rxDev = devices["receiver"]
     routers = devices["routers"]
-
-    outFilenamePrefix = f"cache{cache}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
+    
+    if (numcacheblocks == 16): # TODO HACK this is so that my july 17 runs finishj. after this date, make all files include numcache
+        outFilenamePrefix = f"cache{cache}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
+    else:
+        outFilenamePrefix = f"cache{cache}_numcache{numcacheblocks}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
     overallJson = []
 
     averagesFilename = f"{resultsDir}/{outFilenamePrefix}_averages.json"
@@ -442,6 +445,14 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
         for r in devices["routers"]:
             # comm.sendSerialCommand(r, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
             future = sendCmdBackground(r, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
+            futures.append(future)
+        time.sleep(1)
+        await asyncio.gather(*futures)
+
+        futures = []
+        for r in devices["routers"]:
+            # comm.sendSerialCommand(r, "iperf relayer")
+            future = sendCmdBackground(r, f"iperf config numcacheblocks {numcacheblocks}")
             futures.append(future)
         time.sleep(1)
         await asyncio.gather(*futures)
@@ -667,9 +678,9 @@ def main():
         return
 
     if (args.experiment_test):
-        # NO CACHE
-        asyncio.run(cachingExperiment(delayus= 30000, cache=0, rounds=3))
-        # CACHE
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, rounds=500))
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=8, rounds=500))
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=4, rounds=500))
 
     if (args.results_dir):
         args.results_dir = os.path.abspath(args.results_dir)

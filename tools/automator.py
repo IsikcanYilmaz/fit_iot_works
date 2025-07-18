@@ -564,11 +564,16 @@ def tester(dev):
     getIpv6Stats(dev)
     resetNetstats(dev)
 
-def setRoles():
+async def setRoles():
     outStrRaw = comm.sendSerialCommand(devices["sender"], f"iperf sender")
     outStrRaw = comm.sendSerialCommand(devices["receiver"], f"iperf receiver")
+    futures = []
     for dev in devices["routers"]:
-        outStrRaw = comm.sendSerialCommand(dev, "iperf relayer")
+        # outStrRaw = comm.sendSerialCommand(dev, "iperf relayer")
+        future = sendCmdBackground(dev, "iperf relayer")
+        futures.append(future)
+    time.sleep(1)
+    await asyncio.gather(*futures)
 
 def main():
     global args, comm

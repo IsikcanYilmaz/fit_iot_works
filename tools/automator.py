@@ -492,7 +492,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
             txOut += txSer.read(txSer.in_waiting).decode()
             rxOut += rxSer.read(rxSer.in_waiting).decode()
 
-        await flushAllDevices()
+        flushAllDevices()
 
         # TODO Hacky parsing below. Could do better formatting on the fw side
         parsingSuccess = False

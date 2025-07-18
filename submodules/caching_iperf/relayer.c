@@ -34,6 +34,15 @@ static bool cacheLock[CACHE_LOCK_SIZE_MAX];
 
 #define CACHE_BLOCK_SIZE (sizeof(IperfUdpPkt_t) + config.payloadSizeBytes)
 
+#define TIME_CACHING 1
+
+#if TIME_CACHING
+uint32_t sumTimeTakenForCachingWholeBlock = 0;
+uint32_t avgTimeTakenForCachingWholeBlock = 0;
+uint32_t avgTimeTakenForCacheFn = 0;
+uint32_t avgTimeCtr = 0;
+#endif
+
 static void initRelayer(void)
 {
   relayerPid = thread_getpid();
@@ -46,6 +55,12 @@ static void initRelayer(void)
   memset(cacheBuffer, 0x00, sizeof(uint8_t) * config.numCacheBlocks * CACHE_BLOCK_SIZE); // TODO THIS IS CRASHING OUT IF I MEMSET THE WHOLE BUFFER!!!!!
   memset(&cacheLock, 0x00, sizeof(bool) * CACHE_LOCK_SIZE_MAX);
   Iperf_StartUdpServer(&udpServer, relayerPid);
+  #if TIME_CACHING
+  avgTimeTakenForCachingWholeBlock = 0;
+  avgTimeTakenForCacheFn = 0;
+  avgTimeCtr = 0;
+  sumTimeTakenForCachingWholeBlock = 0;
+  #endif
 }
 
 static void deinitRelayer(void)
@@ -255,6 +270,9 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     */
     if (config.cache)
     {
+      #if TIME_CACHING
+      uint32_t t0 = ztimer_now(ZTIMER_USEC);
+      #endif
       IperfBulkInterest_t *bulkInterest = (IperfBulkInterest_t *) iperfPkt->payload;
       uint8_t numExpects = bulkInterest->len;
       uint16_t *expectArr = bulkInterest->arr;
@@ -302,6 +320,13 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
         logdebug("Won't forward this bulk interest since every interest in it is serviced!\n");
         shouldForward = false;
       }
+
+      #if TIME_CACHING
+      avgTimeCtr++;
+      uint32_t t1 = ztimer_now(ZTIMER_USEC);
+      sumTimeTakenForCachingWholeBlock += (t1-t0);
+      avgTimeTakenForCachingWholeBlock = sumTimeTakenForCachingWholeBlock/avgTimeCtr;
+      #endif
     }
   }
 

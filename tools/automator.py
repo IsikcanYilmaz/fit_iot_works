@@ -492,7 +492,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
             txOut += txSer.read(txSer.in_waiting).decode()
             rxOut += rxSer.read(rxSer.in_waiting).decode()
 
-        flushAllDevices()
+        await flushAllDevices()
 
         # TODO Hacky parsing below. Could do better formatting on the fw side
         parsingSuccess = False
@@ -531,8 +531,10 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
             rJson = json.loads(rJsonRaw)
             routerJson.append(rJson)
 
-        resetAllDevicesNetstats()
-        restartAllDevices()
+        await resetAllDevicesNetstats()
+        time.sleep(1)
+        await restartAllDevices()
+        time.sleep(1)
 
         deviceJson = {"rx":rxJson["results"], "tx":txJson["results"], "config":txJson["config"]} 
 

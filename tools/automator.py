@@ -398,10 +398,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
     rxDev = devices["receiver"]
     routers = devices["routers"]
     
-    if (numcacheblocks == 16): # TODO HACK this is so that my july 17 runs finishj. after this date, make all files include numcache
-        outFilenamePrefix = f"cache{cache}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
-    else:
-        outFilenamePrefix = f"cache{cache}_numcache{numcacheblocks}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
+    outFilenamePrefix = f"cache{cache}_numcache{numcacheblocks}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
     overallJson = []
 
     averagesFilename = f"{resultsDir}/{outFilenamePrefix}_averages.json"
@@ -433,7 +430,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
         comm.flushDevice(rxDev)
         comm.flushDevice(txDev)
 
-        resetAllDevicesNetstats()
+        await resetAllDevicesNetstats()
 
         rxOut += comm.sendSerialCommand(rxDev, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}", cooldownS=3)
         txOut += comm.sendSerialCommand(txDev, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}", cooldownS=3)

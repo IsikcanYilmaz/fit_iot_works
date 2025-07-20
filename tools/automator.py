@@ -540,7 +540,13 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
 
         deviceJson["relays"] = routerJson
 
-        roundOverallJson = {"deviceoutput":deviceJson, "results":parseDeviceJsons(deviceJson, True)}
+        try:
+            roundOverallJson = {"deviceoutput":deviceJson, "results":parseDeviceJsons(deviceJson, True)}
+        except Exception as e:
+            print("Error occurred while processing device json. Restarting experiment", e)
+            print(traceback.format_exc()) 
+            round -= 1
+            continue
 
         with open(roundFilename, "w") as f:
             json.dump(roundOverallJson, f, indent=4)

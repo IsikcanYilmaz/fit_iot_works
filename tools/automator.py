@@ -688,7 +688,7 @@ async def setup():
 
     pprint(devices)
 
-def main():
+async def main():
     global args, comm
     # await setup()
 
@@ -731,4 +731,4 @@ def main():
 
 if __name__ == "__main__":
     parseArgs()
-    main()
+    await main()

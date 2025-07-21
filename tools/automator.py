@@ -731,4 +731,4 @@ async def main():
 
 if __name__ == "__main__":
     parseArgs()
-    await main()
+    asyncio.run(main())

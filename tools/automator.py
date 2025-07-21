@@ -676,7 +676,7 @@ async def setup():
         futures = []
         for dev in devices["routers"]:
             # setIperfTarget(dev, devices["receiver"]["globalAddr"])
-            future = sendCmdBackground(dev, f"iperf target {devices["receiver"]["globalAddr"]}")
+            future = sendCmdBackground(dev, f"iperf target {devices['receiver']['globalAddr']}")
             futures.append(future)
         await asyncio.gather(*futures)
 

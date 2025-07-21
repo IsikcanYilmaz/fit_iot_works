@@ -688,7 +688,7 @@ async def setup():
 
     pprint(devices)
 
-async def main():
+def main():
     global args, comm
     # await setup()
 
@@ -701,21 +701,21 @@ async def main():
         count = 0 # JON TODO HACKY
         ret = 1 
         while (ret == 1 and count < 3):
-            await setup()
+            asyncio.run(setup())
             ret = asyncio.run(cachingExperiment(delayus= 50000, cache=1, rounds=500))
             count += 1
 
         count = 0
         ret = 1
         while (ret == 1 and count < 3):
-            await setup()
+            asyncio.run(setup())
             ret = asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=8, rounds=500))
             count += 1
 
         count = 0
         ret = 1
         while (ret == 1 and count < 3):
-            await setup()
+            asyncio.run(setup())
             ret = asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=4, rounds=500))
             count += 1
 

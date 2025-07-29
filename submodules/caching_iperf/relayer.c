@@ -35,12 +35,17 @@ static bool cacheLock[CACHE_LOCK_SIZE_MAX];
 #define CACHE_BLOCK_SIZE (sizeof(IperfUdpPkt_t) + config.payloadSizeBytes)
 
 #define TIME_CACHING 1
+#define PRINT_TIME_CACHING 1
 
 #if TIME_CACHING
-uint32_t sumTimeTakenForCachingWholeBlock = 0;
-uint32_t avgTimeTakenForCachingWholeBlock = 0;
-uint32_t avgTimeTakenForCacheFn = 0;
-uint32_t avgTimeCtr = 0;
+uint32_t sumTimeTakenForCaching = 0;
+uint32_t avgTimeTakenForCaching = 0;
+uint32_t cachingCtr = 0;
+
+uint32_t sumTimeTakenForLookups = 0;
+uint32_t avgTimeTakenForLookups = 0;
+uint32_t lookupCtr = 0;
+
 #endif
 
 static void initRelayer(void)
@@ -55,11 +60,20 @@ static void initRelayer(void)
   memset(cacheBuffer, 0x00, sizeof(uint8_t) * config.numCacheBlocks * CACHE_BLOCK_SIZE); // TODO THIS IS CRASHING OUT IF I MEMSET THE WHOLE BUFFER!!!!!
   memset(&cacheLock, 0x00, sizeof(bool) * CACHE_LOCK_SIZE_MAX);
   Iperf_StartUdpServer(&udpServer, relayerPid);
+
   #if TIME_CACHING
-  avgTimeTakenForCachingWholeBlock = 0;
-  avgTimeTakenForCacheFn = 0;
-  avgTimeCtr = 0;
-  sumTimeTakenForCachingWholeBlock = 0;
+
+  sumTimeTakenForCaching = 0;
+  avgTimeTakenForCaching = 0;
+  cachingCtr = 0;
+
+  sumTimeTakenForLookups = 0;
+  avgTimeTakenForLookups = 0;
+  lookupCtr = 0;
+
+  printf("TIME_CACHING enabled. setting cache chance percent to 100\n");
+  config.cacheChancePercent = 100;
+
   #endif
 }
 
@@ -90,6 +104,9 @@ static int sendCachedPkt(uint16_t i)
 
 static void cache(IperfUdpPkt_t *iperfPkt)
 {
+  #if TIME_CACHING
+  uint32_t t0 = ztimer_now(ZTIMER_USEC);
+  #endif
   logdebug("Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
   if (cacheLock[cacheIdx])
   {
@@ -110,6 +127,17 @@ static void cache(IperfUdpPkt_t *iperfPkt)
 
   memcpy((uint8_t *) (cacheBuffer + (cacheIdx * CACHE_BLOCK_SIZE)), iperfPkt, CACHE_BLOCK_SIZE);
   cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
+
+  #if TIME_CACHING
+  uint32_t t1 = ztimer_now(ZTIMER_USEC);
+  uint32_t diff = t1-t0;
+  sumTimeTakenForCaching += diff;
+  cachingCtr++;
+  avgTimeTakenForCaching = sumTimeTakenForCaching / cachingCtr;
+  #if PRINT_TIME_CACHING
+  printf("cache took %d us, on average %d\n", diff, avgTimeTakenForCaching);
+  #endif
+  #endif
 }
 
 void Iperf_PrintCache(void)
@@ -240,24 +268,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
       logdebug("Payload seq %d intercepted. Will cache\n", iperfPkt->seqNo);
       cache(iperfPkt);
       if (logprintTags[DEBUG]) Iperf_PrintCache();
-
-      /*if (coinFlip(50)) // TODO testing purposes*/
-      /*{*/
-      /*  shouldForward = false;*/
-      /*}*/
     } 
-
-    // CACHING SERVICING TEST
-    /*if (iperfPkt->seqNo > 6)*/
-    /*{*/
-    /*  shouldForward = false;*/
-    /*}*/
-  }
-  else if (iperfPkt->msgType == IPERF_PKT_REQ)
-  {
-    if (config.cache)
-    {
-    }
   }
   else if (iperfPkt->msgType == IPERF_PKT_BULK_REQ)
   {
@@ -273,6 +284,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
       #if TIME_CACHING
       uint32_t t0 = ztimer_now(ZTIMER_USEC);
       #endif
+
       IperfBulkInterest_t *bulkInterest = (IperfBulkInterest_t *) iperfPkt->payload;
       uint8_t numExpects = bulkInterest->len;
       uint16_t *expectArr = bulkInterest->arr;
@@ -322,11 +334,21 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
       }
 
       #if TIME_CACHING
-      avgTimeCtr++;
+      lookupCtr++;
       uint32_t t1 = ztimer_now(ZTIMER_USEC);
-      sumTimeTakenForCachingWholeBlock += (t1-t0);
-      avgTimeTakenForCachingWholeBlock = sumTimeTakenForCachingWholeBlock/avgTimeCtr;
+      uint32_t diff = (t1-t0);
+      sumTimeTakenForLookups += diff;
+      avgTimeTakenForLookups = sumTimeTakenForLookups / lookupCtr;
+      #if PRINT_TIME_CACHING
+      printf("lookup took %d us, on average %d\n", diff, avgTimeTakenForLookups);
       #endif
+      #endif
+    }
+  }
+  else if (iperfPkt->msgType == IPERF_PKT_REQ)
+  {
+    if (config.cache)
+    {
     }
   }
 

@@ -417,7 +417,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
                 f.close()
                 overallJson.append(j)
                 print(f"{bcolors.OKGREEN}{roundFilename} Round file already there. Moving on{bcolors.ENDC}")
-                return 1
+                continue
             except Exception as e:
                 print("Error reading old round file!", e)
                 
@@ -543,10 +543,9 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
         try:
             roundOverallJson = {"deviceoutput":deviceJson, "results":parseDeviceJsons(deviceJson, True)}
         except Exception as e:
-            print("Error occurred while processing device json. Restarting experiment", e)
+            print("Error occurred while processing device json!", e)
             print(traceback.format_exc()) 
-            round -= 1
-            continue
+            sys.exit(2)
 
         with open(roundFilename, "w") as f:
             json.dump(roundOverallJson, f, indent=4)
@@ -563,7 +562,6 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
 
     print(f"Results written to {resultsDir}")
     print("----------------")
-    return 0
 
 def bulkCachingExperiments(resultsDir):
     pass
@@ -584,7 +582,7 @@ async def setRoles():
     time.sleep(1)
     await asyncio.gather(*futures)
 
-def parseArgs():
+def main():
     global args, comm
     parser = argparse.ArgumentParser()
     parser.add_argument("sender")
@@ -605,8 +603,6 @@ def parseArgs():
     # print(args)
     # return
 
-async def setup():
-    global args, comm
     print(f"SENDER {args.sender}, RECEIVER {args.receiver}, ROUTER(s) {args.router}")
     print(f"RPL {args.rpl}, FITIOT {args.fitiot}, EXPERIMENT {args.experiment}")
 
@@ -669,28 +665,21 @@ async def setup():
     if (args.rpl):
         setRplRoot(devices["sender"])
     else:
-        await setManualRoutes(devices)
+        asyncio.run(setManualRoutes(devices))
 
     if (len(devices["routers"]) > 0):
         setIperfTarget(devices["sender"], devices["receiver"]["globalAddr"])
-        futures = []
         for dev in devices["routers"]:
-            # setIperfTarget(dev, devices["receiver"]["globalAddr"])
-            future = sendCmdBackground(dev, f"iperf target {devices['receiver']['globalAddr']}")
-            futures.append(future)
-        await asyncio.gather(*futures)
-
+            setIperfTarget(dev, devices["receiver"]["globalAddr"])
 
     if (args.set_roles):
-        setRoles()
+        asyncio.run(setRoles())
+
+    # pdb.set_trace()
 
     pingTest(devices["sender"], devices["receiver"])
 
     pprint(devices)
-
-def main():
-    global args, comm
-    # await setup()
 
     if (args.test):
         tester(devices["sender"])
@@ -698,26 +687,11 @@ def main():
         return
 
     if (args.experiment_test):
-        count = 0 # JON TODO HACKY
-        ret = 1 
-        while (ret == 1 and count < 3):
-            asyncio.run(setup())
-            ret = asyncio.run(cachingExperiment(delayus= 50000, cache=1, rounds=500))
-            count += 1
-
-        count = 0
-        ret = 1
-        while (ret == 1 and count < 3):
-            asyncio.run(setup())
-            ret = asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=8, rounds=500))
-            count += 1
-
-        count = 0
-        ret = 1
-        while (ret == 1 and count < 3):
-            asyncio.run(setup())
-            ret = asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=4, rounds=500))
-            count += 1
+        #asyncio.run(cachingExperiment(delayus= 50000, cache=1, rounds=500))
+        #asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=8, rounds=500))
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=4, rounds=500))
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=16, rounds=500))
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=1, rounds=500))
 
     if (args.results_dir):
         args.results_dir = os.path.abspath(args.results_dir)
@@ -730,5 +704,4 @@ def main():
     
 
 if __name__ == "__main__":
-    parseArgs()
-    asyncio.run(main())
+    main()

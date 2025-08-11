@@ -1,4 +1,4 @@
-APPLICATION = 6lp 
+APPLICATION = cache_6lp 
 
 # If no BOARD is found in the environment, use this default:
 BOARD ?= native
@@ -27,6 +27,8 @@ CFLAGS += -DLED2_TO_SHOW_GOOD_RX
 CFLAGS += -DNEOPIXEL_SHELL_COMMANDS
 CFLAGS += -DTHROTTLERS_SHELL_COMMANDS
 
+CFLAGS += -DJON_RELAYS_CODE_AND_CACHE
+
 # WS281X CONFIG
 PIN ?= GPIO_PIN(0, 29)
 N ?= 16
@@ -52,13 +54,15 @@ ifndef CONFIG_GNRC_PKTBUF_SIZE
 endif
 
 # 802154 CONFIG # Found in sys/include/net/ieee802154.h
-CFLAGS += -DCONFIG_IEEE802154_DEFAULT_MAX_FRAME_RETRANS=0 # 0 to disable L2 retransmissions
+# CFLAGS += -DCONFIG_IEEE802154_DEFAULT_MAX_FRAME_RETRANS=0 # 0 to disable L2 retransmissions
 # ifeq ("seeedstudio-xiao-nrf52840", $(BOARD))
 # CFLAGS += -DJON_802154_MAX_RETRANS=4
 # endif
 
 # WATCHDOG CONFIG
 CFLAGS += -DCONFIG_PERIPH_WDT_WIN_MAX_MS=10000 # 10 seconds watchdog time
+
+CFLAGS += -DDEBUG_ASSERT_VERBOSE
 
 ###########
 
@@ -73,12 +77,12 @@ USEMODULE += auto_init_wdt_thread
 EXTERNAL_MODULE_DIRS += $(CURDIR)/../../submodules/
 USEMODULE += button
 # ifeq ("seeedstudio-xiao-nrf52840", $(BOARD))
-USEMODULE += neopixel
+# USEMODULE += neopixel
 # endif
 USEMODULE += onboard_leds
 USEMODULE += throttler
 USEMODULE += udp_stress
-USEMODULE += iperf
+USEMODULE += caching_iperf
 # USEMODULE += udp_multihop
 
 
@@ -87,7 +91,7 @@ CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/button/
 CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/neopixel/
 CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/onboard_leds/
 CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/throttler/
-CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/iperf/
+CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/caching_iperf/
 
 # USEPKG += ccn-lite
 

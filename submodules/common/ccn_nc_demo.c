@@ -394,7 +394,7 @@ void CCN_NC_Init(void)
 
 	/*ccnl_set_local_producer(producer_func);*/
 
-  Throttler_Init();
+  /*Throttler_Init();*/
   init_hardware(currentHardware);
 }
 

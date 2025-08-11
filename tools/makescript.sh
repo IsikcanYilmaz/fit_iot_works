@@ -35,7 +35,12 @@ done
 echo -e "${GREEN}Building for board $BOARD ${NC}"
 
 # build the thing 
-make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
+if [ $(which bear) ]; then
+  bear -- make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
+else
+  make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
+fi
+
 ret="$?"
 
 if [ "$ret" != 0 ]; then

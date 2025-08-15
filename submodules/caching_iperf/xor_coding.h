@@ -13,4 +13,5 @@ typedef struct CodedPacket_s
   uint8_t payload[]; // Payload size will be a chunk long
 } CodedPacket_t;
 
-void XorCoding_DoCoding(CodedPacket_t *src, CodedPacket_t *dst, uint16_t payloadLen);
+void XorCoding_DoCoding(XorCodingConfig_t *config, CodedPacket_t *src, CodedPacket_t *dst);
+void XorCoding_PrintEntry(XorCodingConfig_t *config, CodedPacket_t *c);

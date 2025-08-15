@@ -12,7 +12,7 @@
 */
 
 // $SRC = $SRC ^ $DST
-void XorCoding_DoCoding(CodingConfig_t *config, CodedPacket_t *src, CodedPacket_t *dst)
+void XorCoding_DoCoding(XorCodingConfig_t *config, CodedPacket_t *src, CodedPacket_t *dst)
 {
   // First code together the vectors 
   src->vector = src->vector ^ dst->vector;

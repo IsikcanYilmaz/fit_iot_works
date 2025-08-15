@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-RIOTBASE="$(git rev-parse --show-toplevel)/RIOT/"
+PROJBASE="$(git rev-parse --show-toplevel)"
+RIOTBASE="$PROJBASE"/RIOT/
 
 BOARD="seeedstudio-xiao-nrf52840"
 
@@ -35,8 +36,10 @@ done
 echo -e "${GREEN}Building for board $BOARD ${NC}"
 
 # build the thing 
-if [ $(which bear) ]; then
-  bear -- make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
+if [ $(which compiledb) ]; then
+  echo "compiledb found in system."
+  compiledb make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
+  cp compile_commands.json "$PROJBASE"
 else
   make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
 fi

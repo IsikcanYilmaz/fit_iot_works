@@ -28,10 +28,10 @@
 IperfConfig_s config = {
   .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 70000,
-  .interestDelayUs = 100000,
-  .expectationDelayUs = 250000,
-  .transferSizeBytes = 4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
+  .delayUs = 500000,
+  .interestDelayUs = 1000000,
+  .expectationDelayUs = 2500000,
+  .transferSizeBytes = 1024, //4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
 

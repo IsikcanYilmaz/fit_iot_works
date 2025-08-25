@@ -159,15 +159,17 @@ def setIperfTarget(dev, targetGlobalAddr):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"iperf target {targetGlobalAddr}")
 
-def pingTest(srcDev, dstDev):
+def pingTest(srcDev, dstDev, cooldownS=5):
     global comm
     dstIp = dstDev["globalAddr"]
     print(f"{srcDev['globalAddr']} Pinging {dstIp}")
-    outStrRaw = comm.sendSerialCommand(srcDev, f"ping {dstIp}", cooldownS=5, captureOutput=True)
+    outStrRaw = comm.sendSerialCommand(srcDev, f"ping {dstIp}", cooldownS=cooldownS, captureOutput=True)
     if ("100% packet loss" in outStrRaw):
         print(bcolors.FAIL + "PING TEST FAILED!!!!" + bcolors.ENDC)
+        return False
     else:
         print(bcolors.OKGREEN + "Ping test passed." + bcolors.ENDC)
+        return True
 
 def setTxPower(dev, txpower):
     global comm
@@ -677,7 +679,10 @@ def main():
 
     # pdb.set_trace()
 
-    pingTest(devices["sender"], devices["receiver"])
+    pingTestPassed = pingTest(devices["sender"], devices["receiver"])
+    
+    if (not pingTestPassed):
+        print(f"{bcolors.FAIL}PING TEST FAILED {bcolors.ENDC}")
 
     pprint(devices)
 
@@ -700,7 +705,8 @@ def main():
         bulkCachingExperiments((args.results_dir if args.results_dir else DEFAULT_RESULTS_DIR))
     elif (args.experiment):
         bulkExperiments(resultsDir=(args.results_dir if args.results_dir else DEFAULT_RESULTS_DIR))
-    print("DONE")
+
+    print(f"{bcolors.OKGREEN}DONE{bcolors.ENDC}")
     
 
 if __name__ == "__main__":

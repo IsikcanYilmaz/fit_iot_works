@@ -34,8 +34,10 @@ static bool cacheLock[CACHE_LOCK_SIZE_MAX];
 
 #define CACHE_BLOCK_SIZE (sizeof(IperfUdpPkt_t) + config.payloadSizeBytes)
 
-#define TIME_CACHING 1
-#define PRINT_TIME_CACHING 1
+#define TIME_CACHING 0
+#define PRINT_TIME_CACHING 0
+
+#define CHANCE_TO_DROP 30 
 
 #if TIME_CACHING
 uint32_t sumTimeTakenForCaching = 0;
@@ -263,6 +265,16 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
   }
   else if (iperfPkt->msgType == IPERF_PAYLOAD || iperfPkt->msgType == IPERF_PKT_RESP)
   {
+
+#if CHANCE_TO_DROP
+    shouldForward = !coinFlip(CHANCE_TO_DROP);
+    if (!shouldForward)
+    {
+      logdebug("Simulating pkt drop. payload no %d\n", iperfPkt->seqNo);
+      return shouldForward;
+    }
+#endif
+
     if (config.cache && coinFlip(config.cacheChancePercent))
     {
       logdebug("Payload seq %d intercepted. Will cache\n", iperfPkt->seqNo);

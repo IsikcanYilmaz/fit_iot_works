@@ -600,6 +600,7 @@ def main():
     parser.add_argument("--retrans", type=int)
     parser.add_argument("--test", action="store_true", default=False)
     parser.add_argument("--set_roles", action="store_true", default=False)
+    parser.add_argument("--set_ip_only", action="store_true", default=False)
     args = parser.parse_args()
 
     # print(args)
@@ -668,6 +669,10 @@ def main():
         setRplRoot(devices["sender"])
     else:
         asyncio.run(setManualRoutes(devices))
+
+    if (args.set_ip_only):
+        pprint(devices)
+        return
 
     if (len(devices["routers"]) > 0):
         setIperfTarget(devices["sender"], devices["receiver"]["globalAddr"])

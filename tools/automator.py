@@ -607,7 +607,7 @@ def main():
     # return
 
     print(f"SENDER {args.sender}, RECEIVER {args.receiver}, ROUTER(s) {args.router}")
-    print(f"RPL {args.rpl}, FITIOT {args.fitiot}, EXPERIMENT {args.experiment}")
+    print(f"RPL {args.rpl}, FITIOT {args.fitiot}, EXPERIMENT {args.experiment}, IP ONLY {args.set_ip_only}")
 
     comm = DeviceCommunicator(args.fitiot)
 

@@ -33,7 +33,7 @@ IperfConfig_s config = {
   .expectationDelayUs = 2500000,
   .transferSizeBytes = 1024, //4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
-  .mode = IPERF_MODE_CACHING_BIDIRECTIONAL,
+  .mode = IPERF_MODE_CACHING_CODING,
 
   // Relay related
   .cache = true,
@@ -378,6 +378,73 @@ int Iperf_SendBulkInterest(uint16_t *interestArr, uint16_t len)
   }
   results.numInterestsSent++;
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
+}
+
+int Iperf_PrintCatalogueVector(IperfCatalogueVector_t *vectorPkt)
+{
+  uint16_t offset = vectorPkt->pktOffset;
+  uint16_t length = vectorPkt->len;
+  uint8_t numBytes = length / 8;
+
+  // debug print of vector
+  printf("Offset %d, length %d ", offset, length);
+  for (uint16_t pktIdx = 0; pktIdx < length; pktIdx++)
+  {
+    uint8_t currByteIdx = pktIdx / 8;
+    uint8_t currBitIdx = pktIdx % 8;
+    printf("%d", (vectorPkt->bitmap[currByteIdx] & (1 << currBitIdx)) > 0 ? 1 : 0);
+  }
+  printf("\n");
+  for (int i = 0; i < numBytes; i++)
+  {
+    printf("0x%02x ", vectorPkt->bitmap[i]);
+  }
+  printf("\n");
+}
+
+// Takes the chunk status. Offset to offset by. length to put in that many bits/pkts
+int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint16_t offset, uint16_t length)
+{
+
+  loginfo("%s\n", __FUNCTION__);
+  loginfo("before length %d offset %d\n", length, offset); // TODO REMOVE
+  
+  // $length needs to be rolled up to the next power of 8
+  // you know what, lets make $offset be rolled down to the prev power of 8
+  length = (length % 8 == 0) ? length : length + (8 - (length % 8));
+  offset = offset - (offset % 8);
+  uint8_t numBytes = length / 8;
+  loginfo("after length %d offset %d\n", length, offset);
+
+  char rawPkt[sizeof(IperfUdpPkt_t) + sizeof(IperfCatalogueVector_t) + (numBytes * sizeof(uint8_t))];
+  loginfo("Sending catalogue vector with offset %d length %d needed bytes %d pkt size %d\n", offset, length, numBytes, sizeof(rawPkt));
+  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
+  IperfCatalogueVector_t *vectorPkt = (IperfCatalogueVector_t *) &iperfPkt->payload;
+  memset(&rawPkt, 0x00, sizeof(rawPkt));
+
+  iperfPkt->msgType = IPERF_PKT_CATALOGUE_VECTOR;
+  iperfPkt->plSize = sizeof(IperfCatalogueVector_t) + (sizeof(uint8_t) * numBytes);
+  iperfPkt->seqNo = 0;
+  vectorPkt->len = length;
+  vectorPkt->pktOffset = offset;
+
+  // Go thru $offset'th packet for $length packets
+  for (uint16_t pktIdx = 0; pktIdx < length; pktIdx++)
+  {
+    uint16_t overallPktIdx = pktIdx + offset;
+    uint8_t currByteIdx = pktIdx / 8;
+    uint8_t currBitIdx = pktIdx % 8;
+    // printf("idx:%d %s received. byte %d bit %d\n", overallPktIdx, (chunkStatus[overallPktIdx] == RECEIVED ? "" : "not "), currByteIdx, currBitIdx);
+    if (chunkStatus[overallPktIdx] == RECEIVED)
+    {
+      vectorPkt->bitmap[currByteIdx] = vectorPkt->bitmap[currByteIdx] | (1 << currBitIdx);
+    }
+  }
+
+  Iperf_PrintCatalogueVector(vectorPkt);
+  
+  return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
+  // TODO
 }
 
 int Iperf_HandleEcho(IperfUdpPkt_t *iperfPkt)

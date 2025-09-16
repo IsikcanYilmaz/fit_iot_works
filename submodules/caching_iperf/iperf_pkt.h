@@ -8,7 +8,7 @@ typedef enum {
   IPERF_PKT_REQ,
   IPERF_PKT_BULK_REQ,
   IPERF_PKT_RESP,
-  IPERF_RX_BITMAP,
+  IPERF_PKT_CATALOGUE_VECTOR,
   IPERF_ECHO_CALL,
   IPERF_ECHO_RESP,
   IPERF_CONFIG_SYNC,
@@ -53,8 +53,8 @@ typedef struct {
 
 typedef struct {
   uint16_t pktOffset; // 2
-  uint8_t len; // 1 // todo do we want this? 
+  uint16_t len; // 2 // todo do we want this? 
   uint8_t bitmap[];
-} __attribute__((packed)) IperfReceivedPktBitmap_t;
+} __attribute__((packed)) IperfCatalogueVector_t;
 
 #endif

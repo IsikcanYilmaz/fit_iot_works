@@ -180,3 +180,5 @@ void Iperf_HandleConfigSync(IperfUdpPkt_t *p);
 int Iperf_SendInterest(uint16_t seqNo);
 int Iperf_SendLastReceivedPacket(uint16_t lastSeqNo);
 int Iperf_SendBulkInterest(uint16_t *interestArr, uint16_t len);
+int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint16_t offset, uint16_t length);
+int Iperf_PrintCatalogueVector(IperfCatalogueVector_t *vectorPkt);

@@ -109,26 +109,34 @@ static void cache(IperfUdpPkt_t *iperfPkt)
   #if TIME_CACHING
   uint32_t t0 = ztimer_now(ZTIMER_USEC);
   #endif
-  logdebug("Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
-  if (cacheLock[cacheIdx])
+  if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
   {
-    logdebug("%d cache locked. Searching for a different cache space\n", cacheIdx);
-    for (int i = (cacheIdx + 1) % config.numCacheBlocks; i != cacheIdx; i=(i+1)%config.numCacheBlocks)
-    {
-      if (!cacheLock[i])
-      {
-        cacheIdx = i; 
-      }
-    }
+    logdebug("Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
     if (cacheLock[cacheIdx])
     {
-      logdebug("All caches are locked\n");
-      return;
+      logdebug("%d cache locked. Searching for a different cache space\n", cacheIdx);
+      for (int i = (cacheIdx + 1) % config.numCacheBlocks; i != cacheIdx; i=(i+1)%config.numCacheBlocks)
+      {
+        if (!cacheLock[i])
+        {
+          cacheIdx = i; 
+        }
+      }
+      if (cacheLock[cacheIdx])
+      {
+        logdebug("All caches are locked\n");
+        return;
+      }
     }
-  }
 
-  memcpy((uint8_t *) (cacheBuffer + (cacheIdx * CACHE_BLOCK_SIZE)), iperfPkt, CACHE_BLOCK_SIZE);
-  cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
+    memcpy((uint8_t *) (cacheBuffer + (cacheIdx * CACHE_BLOCK_SIZE)), iperfPkt, CACHE_BLOCK_SIZE);
+    cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
+  }
+  else if (config.mode == IPERF_MODE_CACHING_CODING)
+  {
+    // CACHING CODING
+    // TODO
+  }
 
   #if TIME_CACHING
   uint32_t t1 = ztimer_now(ZTIMER_USEC);
@@ -268,6 +276,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
 
 #if CHANCE_TO_DROP
     shouldForward = !coinFlip(CHANCE_TO_DROP);
+    shouldForward = iperfPkt->seqNo % 2 > 0 ? true : false; // drop half
     if (!shouldForward)
     {
       logdebug("Simulating pkt drop. payload no %d\n", iperfPkt->seqNo);
@@ -362,6 +371,14 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     if (config.cache)
     {
     }
+  }
+  else if (iperfPkt->msgType == IPERF_PKT_CATALOGUE_VECTOR)
+  {
+    // CODED CACHING
+    // We just caught a catalogue vector. This will tell us what the receiver has and what it does not have
+    //
+    printf("IPERF_PKT_CATALOGUE_VECTOR\n");
+    Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
   }
 
   return shouldForward;

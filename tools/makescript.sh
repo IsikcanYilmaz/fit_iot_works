@@ -36,15 +36,16 @@ done
 echo -e "${GREEN}Building for board $BOARD ${NC}"
 
 # build the thing 
+ret=1
 if [ $(which compiledb) ]; then
   echo "compiledb found in system."
   compiledb make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
+  ret="$?"
   cp compile_commands.json "$PROJBASE"
 else
   make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
+  ret="$?"
 fi
-
-ret="$?"
 
 if [ "$ret" != 0 ]; then
   echo -e "${RED}Make failed! ${NC}"

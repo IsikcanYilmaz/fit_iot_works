@@ -276,16 +276,16 @@ int Iperf_SocklessUdpSend(const char *data, size_t dataLen, ipv6_addr_t *addr, n
   }
 
   /* add netif header, if interface was given */
-  /*if (netif != NULL) {*/
-  /*  gnrc_pktsnip_t *netif_hdr = gnrc_netif_hdr_build(NULL, 0, NULL, 0);*/
-  /*  if (netif_hdr == NULL) {*/
-  /*    loginfo("Error: unable to allocate netif header\n");*/
-  /*    gnrc_pktbuf_release(ip);*/
-  /*    return 1;*/
-  /*  }*/
-  /*  gnrc_netif_hdr_set_netif(netif_hdr->data, container_of(netif, gnrc_netif_t, netif));*/
-  /*  ip = gnrc_pkt_prepend(ip, netif_hdr);*/
-  /*}*/
+  if (netif != NULL) {
+    gnrc_pktsnip_t *netif_hdr = gnrc_netif_hdr_build(NULL, 0, NULL, 0);
+    if (netif_hdr == NULL) {
+      loginfo("Error: unable to allocate netif header\n");
+      gnrc_pktbuf_release(ip);
+      return 1;
+    }
+    gnrc_netif_hdr_set_netif(netif_hdr->data, container_of(netif, gnrc_netif_t, netif));
+    ip = gnrc_pkt_prepend(ip, netif_hdr);
+  }
 
   /* send packet */
   if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_UDP,
@@ -320,7 +320,7 @@ int Iperf_SocklessUdpSendToStringAddr(const char *data, size_t dataLen, char *ta
 }
 
 /*int Iperf_SocklessUdpSendToAddr(const char *data, size_t dataLen, ipv6_addr_t *addr)*/
-/*{*/
+/*{
 /*  netif_t *netif;*/
 /*  ipv6_addr_t addr;*/
 /**/
@@ -380,22 +380,28 @@ int Iperf_SendBulkInterest(uint16_t *interestArr, uint16_t len)
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
 }
 
-int Iperf_PrintCatalogueVector(IperfCatalogueVector_t *vectorPkt)
+void Iperf_PrintBitmapHex(IperfCodedPayloadPkt_t *codedPkt)
+{
+  for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_BYTES; i++)
+  {
+    printf("%02x ", codedPkt->bitmap[i]);
+  }
+}
+
+void Iperf_PrintCatalogueVector(IperfCatalogueVector_t *vectorPkt) // TODO make htis more generic
 {
   uint16_t offset = vectorPkt->pktOffset;
-  uint16_t length = vectorPkt->len;
-  uint8_t numBytes = length / 8;
 
   // debug print of vector
-  printf("Offset %d, length %d ", offset, length);
-  for (uint16_t pktIdx = 0; pktIdx < length; pktIdx++)
+  printf("Catalogue Vector Offset %d\n", offset);
+  for (uint16_t pktIdx = 0; pktIdx < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; pktIdx++)
   {
     uint8_t currByteIdx = pktIdx / 8;
     uint8_t currBitIdx = pktIdx % 8;
     printf("%d", (vectorPkt->bitmap[currByteIdx] & (1 << currBitIdx)) > 0 ? 1 : 0);
   }
   printf("\n");
-  for (int i = 0; i < numBytes; i++)
+  for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_BYTES; i++)
   {
     printf("0x%02x ", vectorPkt->bitmap[i]);
   }
@@ -403,38 +409,41 @@ int Iperf_PrintCatalogueVector(IperfCatalogueVector_t *vectorPkt)
 }
 
 // Takes the chunk status. Offset to offset by. length to put in that many bits/pkts
-int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint16_t offset, uint16_t length)
+int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint8_t offset)
 {
 
   loginfo("%s\n", __FUNCTION__);
-  loginfo("before length %d offset %d\n", length, offset); // TODO REMOVE
   
   // $length needs to be rolled up to the next power of 8
   // you know what, lets make $offset be rolled down to the prev power of 8
-  length = (length % 8 == 0) ? length : length + (8 - (length % 8));
-  offset = offset - (offset % 8);
-  uint8_t numBytes = length / 8;
-  loginfo("after length %d offset %d\n", length, offset);
+  // length = (length % 8 == 0) ? length : length + (8 - (length % 8));
+  // offset = offset - (offset % 8);
+  // uint8_t numBytes = length / 8;
+  // loginfo("after length %d offset %d\n", length, offset);
 
-  char rawPkt[sizeof(IperfUdpPkt_t) + sizeof(IperfCatalogueVector_t) + (numBytes * sizeof(uint8_t))];
-  loginfo("Sending catalogue vector with offset %d length %d needed bytes %d pkt size %d\n", offset, length, numBytes, sizeof(rawPkt));
+  char rawPkt[sizeof(IperfUdpPkt_t) + sizeof(IperfCatalogueVector_t) + (IPERF_CATALOGUE_BITMAP_LENGTH_BYTES * sizeof(uint8_t))];
+  loginfo("Sending catalogue vector with offset %d needed bytes %d pkt size %d\n", offset, IPERF_CATALOGUE_BITMAP_LENGTH_BYTES, sizeof(rawPkt));
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
   IperfCatalogueVector_t *vectorPkt = (IperfCatalogueVector_t *) &iperfPkt->payload;
   memset(&rawPkt, 0x00, sizeof(rawPkt));
 
   iperfPkt->msgType = IPERF_PKT_CATALOGUE_VECTOR;
-  iperfPkt->plSize = sizeof(IperfCatalogueVector_t) + (sizeof(uint8_t) * numBytes);
+  iperfPkt->plSize = sizeof(IperfCatalogueVector_t) + (sizeof(uint8_t) * IPERF_CATALOGUE_BITMAP_LENGTH_BYTES);
   iperfPkt->seqNo = 0;
-  vectorPkt->len = length;
+  // vectorPkt->len = length;
   vectorPkt->pktOffset = offset;
 
   // Go thru $offset'th packet for $length packets
-  for (uint16_t pktIdx = 0; pktIdx < length; pktIdx++)
+  for (uint16_t pktIdx = 0; pktIdx < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; pktIdx++)
   {
     uint16_t overallPktIdx = pktIdx + offset;
     uint8_t currByteIdx = pktIdx / 8;
     uint8_t currBitIdx = pktIdx % 8;
     // printf("idx:%d %s received. byte %d bit %d\n", overallPktIdx, (chunkStatus[overallPktIdx] == RECEIVED ? "" : "not "), currByteIdx, currBitIdx);
+    if (overallPktIdx >= config.numPktsToTransfer)
+    {
+      break;
+    }
     if (chunkStatus[overallPktIdx] == RECEIVED)
     {
       vectorPkt->bitmap[currByteIdx] = vectorPkt->bitmap[currByteIdx] | (1 << currBitIdx);
@@ -444,32 +453,33 @@ int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint16_t offset, 
   Iperf_PrintCatalogueVector(vectorPkt);
   
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
-  // TODO
 }
 
 int Iperf_HandleEcho(IperfUdpPkt_t *iperfPkt)
 {
   loginfo("Echo CALL Received %s\n", iperfPkt->payload);
-  char rawPkt[sizeof(IperfUdpPkt_t) + 16]; 
+  uint16_t plSize = iperfPkt->plSize;
+  char rawPkt[sizeof(IperfUdpPkt_t) + plSize]; 
   IperfUdpPkt_t *respPkt = (IperfUdpPkt_t *) &rawPkt;
-  uint8_t plSize = 16;
-  memset(&respPkt->payload, 0x00, 16);
-  strncpy((char *) respPkt->payload, iperfPkt->payload, 15);
+  memset(&respPkt->payload, 0x00, plSize);
+  strncpy((char *) respPkt->payload, iperfPkt->payload, plSize);
   respPkt->seqNo = 0;
   respPkt->msgType = IPERF_ECHO_RESP;
+  respPkt->plSize = plSize;
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
 }
 
 // With the following two fns, we assume the Tx machine is the master the Rx machine is the follower
 int Iperf_SendEcho(char *str)
 {
-  char rawPkt[sizeof(IperfUdpPkt_t) + 16]; 
+  uint16_t plSize = strnlen(str, 128); 
+  char rawPkt[sizeof(IperfUdpPkt_t) + plSize]; 
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
-  uint8_t plSize = 16;
-  memset(&iperfPkt->payload, 0x00, 16);
-  strncpy((char *) iperfPkt->payload, str, 15);
+  memset(&iperfPkt->payload, 0x00, plSize);
+  strncpy((char *) iperfPkt->payload, str, plSize);
   iperfPkt->seqNo = 0;
   iperfPkt->msgType = IPERF_ECHO_CALL;
+  iperfPkt->plSize = plSize;
   printf("[IPERF ECHO] rawPkt size %d IperfUdpPkt_t size %d \n", sizeof(rawPkt), sizeof(IperfUdpPkt_t));
   return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
 }
@@ -526,7 +536,7 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
   logverbose("Handle packet----------------------\n");
   while(snip != NULL)
   {
-    /*loginfo("SNIP %d. %d bytes. type: %d ", snips, snip->size, snip->type);*/
+    logverbose("SNIP %d. %d bytes. type: %d \n", snips, snip->size, snip->type);
     switch(snip->type)
     {
       case GNRC_NETTYPE_NETIF:
@@ -979,6 +989,15 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     char *str = (argc >= 2) ? argv[2] : "TEST";
     return Iperf_SendEcho(str);
   }
+  else if (strncmp(argv[1], "sizetest", 16) == 0)
+  {
+    uint8_t size = (argc > 2) ? atoi(argv[2]) : 32;
+    printf("Size test %d\n", size);
+    char pl[size];
+    memset(&pl, 'a', size);
+    pl[size] = NULL;
+    return Iperf_SendEcho(&pl);
+  }
   else if (strncmp(argv[1], "interest", 16) == 0)
   {
     if (config.role == SENDER)
@@ -1018,7 +1037,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|start|stop|restart|log|config|target|results|echo|interest|bulk>\n");
+  logerror("Usage: iperf <sender|receiver|start|stop|restart|log|config|target|results|echo|interest|bulk|sizetest>\n");
   return 1;
 }
 

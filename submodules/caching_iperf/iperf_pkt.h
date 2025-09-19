@@ -3,12 +3,16 @@
 
 #define IPERF_MAX_PKTS_IN_ONE_BULK_REQ 15
 
+#define IPERF_CATALOGUE_BITMAP_LENGTH_BYTES 8
+#define IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS (IPERF_CATALOGUE_BITMAP_LENGTH_BYTES * 8)
+
 typedef enum {
   IPERF_PAYLOAD = 0x1,
   IPERF_PKT_REQ,
   IPERF_PKT_BULK_REQ,
   IPERF_PKT_RESP,
   IPERF_PKT_CATALOGUE_VECTOR,
+  IPERF_PKT_CODED_DATA,
   IPERF_ECHO_CALL,
   IPERF_ECHO_RESP,
   IPERF_CONFIG_SYNC,
@@ -52,9 +56,14 @@ typedef struct {
 } __attribute__((packed)) IperfBulkInterest_t;
 
 typedef struct {
-  uint16_t pktOffset; // 2
-  uint16_t len; // 2 // todo do we want this? 
-  uint8_t bitmap[];
+  uint8_t pktOffset; // 1 
+  uint8_t bitmap[IPERF_CATALOGUE_BITMAP_LENGTH_BYTES]; // 8
 } __attribute__((packed)) IperfCatalogueVector_t;
+
+typedef struct { // TODO could consolidate this and catalogue vector
+  uint8_t pktOffset; // 1
+  uint8_t bitmap[IPERF_CATALOGUE_BITMAP_LENGTH_BYTES]; // 8
+  uint8_t payload[]; // chunk size
+} __attribute__((packed)) IperfCodedPayloadPkt_t;
 
 #endif

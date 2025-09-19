@@ -30,9 +30,10 @@ static uint8_t cacheIdx = 0;
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF); // TODO JON this can be generic, in iperf.c
 
 #define CACHE_LOCK_SIZE_MAX 16 // TODO make generic no time aaaa
-static bool cacheLock[CACHE_LOCK_SIZE_MAX];
+static bool cacheLock[CACHE_LOCK_SIZE_MAX]; // theres a time gap between a cache hit being noticed and that block being sent off. this lock makes sure that cache block stays until the block is sent off
 
 #define CACHE_BLOCK_SIZE (sizeof(IperfUdpPkt_t) + config.payloadSizeBytes)
+#define CODED_CACHE_BLOCK_SIZE (sizeof(IperfCodedPayloadPkt_t) + config.payloadSizeBytes)
 
 #define TIME_CACHING 0
 #define PRINT_TIME_CACHING 0
@@ -59,7 +60,7 @@ static void initRelayer(void)
              IPERF_BUFFER_SIZE_BYTES, sizeof(uint8_t) * config.numCacheBlocks * CACHE_BLOCK_SIZE, \
              IPERF_BUFFER_SIZE_BYTES, config.numCacheBlocks, CACHE_BLOCK_SIZE);
   }
-  memset(cacheBuffer, 0x00, sizeof(uint8_t) * config.numCacheBlocks * CACHE_BLOCK_SIZE); // TODO THIS IS CRASHING OUT IF I MEMSET THE WHOLE BUFFER!!!!!
+  memset(cacheBuffer, 0x00, sizeof(uint8_t) * config.numCacheBlocks * CODED_CACHE_BLOCK_SIZE); // TODO THIS IS CRASHING OUT IF I MEMSET THE WHOLE BUFFER!!!!!
   memset(&cacheLock, 0x00, sizeof(bool) * CACHE_LOCK_SIZE_MAX);
   Iperf_StartUdpServer(&udpServer, relayerPid);
 
@@ -104,38 +105,67 @@ static int sendCachedPkt(uint16_t i)
   return Iperf_SocklessUdpSendToDst((char *) (cacheBuffer + (i * CACHE_BLOCK_SIZE)), CACHE_BLOCK_SIZE);
 }
 
+// Returns -1 if every cache block is locked
+static int findUnlockedCacheSlot(void)
+{
+  for (int i = (cacheIdx + 1) % config.numCacheBlocks; i != cacheIdx; i=(i+1) % config.numCacheBlocks)
+  {
+    if (!cacheLock[i])
+    {
+      return i;
+    }
+  }
+  return -1;
+}
+
 static void cache(IperfUdpPkt_t *iperfPkt)
 {
   #if TIME_CACHING
   uint32_t t0 = ztimer_now(ZTIMER_USEC);
   #endif
-  if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+  // if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
   {
-    logdebug("Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
+    logdebug("[NO-CODING] Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
     if (cacheLock[cacheIdx])
     {
       logdebug("%d cache locked. Searching for a different cache space\n", cacheIdx);
-      for (int i = (cacheIdx + 1) % config.numCacheBlocks; i != cacheIdx; i=(i+1)%config.numCacheBlocks)
-      {
-        if (!cacheLock[i])
-        {
-          cacheIdx = i; 
-        }
-      }
-      if (cacheLock[cacheIdx])
+      int newCacheIdx = findUnlockedCacheSlot();
+      if (newCacheIdx < 0)
       {
         logdebug("All caches are locked\n");
         return;
       }
+      cacheIdx = newCacheIdx;
     }
 
     memcpy((uint8_t *) (cacheBuffer + (cacheIdx * CACHE_BLOCK_SIZE)), iperfPkt, CACHE_BLOCK_SIZE);
     cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
   }
-  else if (config.mode == IPERF_MODE_CACHING_CODING)
+  return;
+  // else if (config.mode == IPERF_MODE_CACHING_CODING)
   {
     // CACHING CODING
     // TODO
+    logdebug("[CODED] Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
+
+    // // First find a cache slot
+    // if (cacheLock[cacheIdx]) // TODO consolidate
+    // {
+    //   logdebug("%d cache locked. Searching for a different cache space\n", cacheIdx);
+    //   int newCacheIdx = findUnlockedCacheSlot();
+    //   if (newCacheIdx < 0)
+    //   {
+    //     logdebug("All caches are locked\n");
+    //     return;
+    //   }
+    //   cacheIdx = newCacheIdx;
+    // }
+    //
+    // // Convert the packet to IperfCodedPayloadPkt_t
+    // IperfCodedPayloadPkt_t *codedPkt = (IperfCodedPayloadPkt_t *) (&cacheBuffer + (cacheIdx * CODED_CACHE_BLOCK_SIZE));
+    
+
+
   }
 
   #if TIME_CACHING
@@ -156,14 +186,22 @@ void Iperf_PrintCache(void)
   for (int i = 0; i < config.numCacheBlocks; i++)
   {
     IperfUdpPkt_t *p = (IperfUdpPkt_t *) (cacheBuffer + (i * CACHE_BLOCK_SIZE));
-    if (p->msgType != IPERF_PAYLOAD && p->msgType != IPERF_PKT_RESP)
-    {
-      continue;
-    }
     char chunkPayload[config.payloadSizeBytes + 1];
-    memset((char *) &chunkPayload, 0x00, config.payloadSizeBytes + 1);
-    snprintf((char *) &chunkPayload, config.payloadSizeBytes, p->payload);
-    printf("[cache %d]:[chunk %d] %s\n", i, p->seqNo, chunkPayload);
+    if (p->msgType == IPERF_PAYLOAD || p->msgType == IPERF_PKT_RESP)
+    {
+      memset((char *) &chunkPayload, 0x00, config.payloadSizeBytes + 1);
+      snprintf((char *) &chunkPayload, config.payloadSizeBytes, p->payload);
+      printf("[cache %d]:[chunk %d] %s\n", i, p->seqNo, chunkPayload);
+    }
+    else if (p->msgType == IPERF_PKT_CODED_DATA)
+    {
+      IperfCodedPayloadPkt_t *codedPkt = (IperfCodedPayloadPkt_t *) p->payload;
+      memset((char *) &chunkPayload, 0x00, config.payloadSizeBytes + 1);
+      snprintf((char *) &chunkPayload, config.payloadSizeBytes, codedPkt->payload);
+      printf("[cache %d]:");
+      Iperf_PrintBitmapHex(codedPkt);
+      printf("] %s", chunkPayload);
+    }
   }
 }
 
@@ -284,12 +322,20 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     }
 #endif
 
-    if (config.cache && coinFlip(config.cacheChancePercent))
+    if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL || true) // TODO rm the true 
     {
-      logdebug("Payload seq %d intercepted. Will cache\n", iperfPkt->seqNo);
-      cache(iperfPkt);
-      if (logprintTags[DEBUG]) Iperf_PrintCache();
-    } 
+      if (config.cache && coinFlip(config.cacheChancePercent))
+      {
+        logdebug("Payload seq %d intercepted. Will cache\n", iperfPkt->seqNo);
+        cache(iperfPkt);
+        if (logprintTags[DEBUG]) Iperf_PrintCache();
+      }
+    }
+    else if (config.mode == IPERF_MODE_CACHING_CODING)
+    {
+      // TODO CACHE CODE LOGIC
+    }
+     
   }
   else if (iperfPkt->msgType == IPERF_PKT_BULK_REQ)
   {

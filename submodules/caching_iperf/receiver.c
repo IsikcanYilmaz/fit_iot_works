@@ -405,11 +405,9 @@ void *Iperf_ReceiverThread(void *arg)
 
             loginfo("JON RECEIVER SHOULD SEND OUT VECTOR HERE!!!!\n");
             
-            Iperf_SendCatalogueVector(&receivedPktIds, 0, 32);
+            Iperf_SendCatalogueVector(&receivedPktIds, 0);
 
-
-
-
+            // TODO TODO
 
           }
           break;

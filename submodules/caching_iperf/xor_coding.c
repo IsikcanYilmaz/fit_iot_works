@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include "iperf_pkt.h"
 #include "xor_coding.h"
 
 #define XOR_CODING_DEBUG 0
@@ -40,6 +41,15 @@ void XorCoding_PrintEntry(XorCodingConfig_t *config, CodedPacket_t *c)
     printf("%x ", c->payload[i]);
   }
   printf("\n\n");
+}
+
+void XorCoding_PrintBitmapHex(IperfCodedPayloadPkt_t *codedPkt)
+{
+  printf("Pkt Offset %d| ", codedPkt->pktOffset);
+  for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_BYTES; i++)
+  {
+    printf("%02x ", codedPkt->bitmap[i]);
+  }
 }
 
 #if 0

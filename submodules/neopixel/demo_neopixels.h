@@ -34,9 +34,12 @@ typedef struct
 
 typedef enum
 {
-  #ifdef NEOPIXEL_ANIMATION_CCN_DISPLAY_ENABLED
+  #ifdef ANIMATION_CCN_DISPLAY_ENABLED
   ANIMATION_CCN_DISPLAY,
   #endif
+  #ifdef ANIMATION_CACHING_IPERF_ENABLED
+  ANIMATION_CACHING_IPERF,
+  #endif 
   ANIMATION_LINE,
   ANIMATION_CANVAS,
   ANIMATION_MAX
@@ -63,7 +66,7 @@ typedef struct
 *         idx = 7
 */
 
-kernel_pid_t Neopixel_Init(kernel_pid_t i);
+kernel_pid_t Neopixel_Init(void);
 void Neopixel_DisplayStrip(void);
 void Neopixel_SetPixelRgb(Pixel_t *p, uint8_t r, uint8_t g, uint8_t b);
 void Neopixel_SetPixelHsv(Pixel_t *p, float h, float s, float v);

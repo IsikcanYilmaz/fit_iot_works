@@ -57,7 +57,7 @@ typedef enum {
   NUM_LED_STATES
 } LedState_e;
 
-ztimer_t onboardLedBlinkTimers[NUM_ONBOARD_LEDS];
+// ztimer_t onboardLedBlinkTimers[NUM_ONBOARD_LEDS];
 
 static HardwareType_e currentHardware = HW_NEOPIXELS; //HW_BREADBOARD_LEDS; //HW_ONBOARD_LEDS;
 
@@ -124,7 +124,7 @@ static void init_hardware(HardwareType_e type)
 {
   for (int i = 0; i < NUM_ONBOARD_LEDS; i++)
   {
-    onboardLedBlinkTimers[i] = (ztimer_t) {.callback = timed_onboard_led_trigger_callback, .arg = (void *) i};
+    // onboardLedBlinkTimers[i] = (ztimer_t) {.callback = timed_onboard_led_trigger_callback, .arg = (void *) i};
   }
 
   switch(type) // TODO just remove this distinction its unnecessary
@@ -511,8 +511,8 @@ void CCN_NC_TimedOnboardLedTrigger(uint8_t i, uint16_t ms) // TODO maybe move th
     return;
   }
   led_on(i);
-  ztimer_remove(ZTIMER_MSEC, &onboardLedBlinkTimers[i]); // remove if already set
-  ztimer_set(ZTIMER_MSEC, &onboardLedBlinkTimers[i], ms);
+  // ztimer_remove(ZTIMER_MSEC, &onboardLedBlinkTimers[i]); // remove if already set
+  // ztimer_set(ZTIMER_MSEC, &onboardLedBlinkTimers[i], ms);
 }
 
 ///////////////////////////////////////////////////////////////////

@@ -25,6 +25,25 @@
 #include "sender.h"
 #include "relayer.h"
 
+#ifdef DEMO_CONFIG
+IperfConfig_s config = {
+  .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
+  .pktPerSecond = 0, // TODO
+  .delayUs = 250000,
+  .interestDelayUs = 500000,
+  .expectationDelayUs = 1250000,
+  .transferSizeBytes = 512, //4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
+  .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
+  .mode = IPERF_MODE_CACHING_BIDIRECTIONAL, //IPERF_MODE_CACHING_CODING,
+
+  // Relay related
+  .cache = true,
+  .code = false,
+  .numCacheBlocks = 8,
+  .cacheChancePercent = 50,
+
+};
+#else
 IperfConfig_s config = {
   .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
@@ -37,11 +56,12 @@ IperfConfig_s config = {
 
   // Relay related
   .cache = true,
-  .code = false,
-  .numCacheBlocks = 16,
+  .code = true,
+  .numCacheBlocks = 1,
   .cacheChancePercent = 25,
 
 };
+#endif 
 
 IperfResults_s results;
 
@@ -382,6 +402,7 @@ int Iperf_SendBulkInterest(uint16_t *interestArr, uint16_t len)
 
 void Iperf_PrintBitmapHex(IperfCodedPayloadPkt_t *codedPkt)
 {
+  printf("Pkt Offset %d| ", codedPkt->pktOffset);
   for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_BYTES; i++)
   {
     printf("%02x ", codedPkt->bitmap[i]);

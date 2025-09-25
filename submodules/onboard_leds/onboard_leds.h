@@ -8,3 +8,5 @@ typedef enum { // TODO mv to header
 
 void OnboardLeds_Init(void);
 void OnboardLeds_Blink(OnboardLedID_e led, uint16_t ms);
+
+int cmd_onboardblink(int argc, char **argv);

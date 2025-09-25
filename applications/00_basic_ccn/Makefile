@@ -73,6 +73,8 @@ USEMODULE += prng_xorshift
 
 USEMODULE += periph_gpio_irq
 
+USEMODULE += onboard_leds
+
 # Watchdog
 USEMODULE += auto_init_wdt_thread
 
@@ -81,6 +83,7 @@ EXTERNAL_MODULE_DIRS += $(CURDIR)/../../submodules/
 USEMODULE += common
 
 CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/common/
+CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/onboard_leds/
 
 USEPKG += ccn-lite
 

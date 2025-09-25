@@ -27,7 +27,6 @@ typedef struct {
 } __attribute__((packed)) IperfUdpPkt_t;
 
 // All structs below go to the payload of the UdpPkt_t
-
 typedef struct {
   uint16_t seqNo; // 2
   uint8_t payload[]; // *

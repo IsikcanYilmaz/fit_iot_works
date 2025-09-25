@@ -29,6 +29,9 @@ CFLAGS += -DTHROTTLERS_SHELL_COMMANDS
 
 CFLAGS += -DJON_RELAYS_CODE_AND_CACHE
 
+# CFLAGS += -DANIMATION_CACHING_IPERF_ENABLED
+# CFLAGS += -DDEMO_CONFIG
+
 # WS281X CONFIG
 PIN ?= GPIO_PIN(0, 29)
 N ?= 16
@@ -77,7 +80,7 @@ USEMODULE += auto_init_wdt_thread
 EXTERNAL_MODULE_DIRS += $(CURDIR)/../../submodules/
 USEMODULE += button
 # ifeq ("seeedstudio-xiao-nrf52840", $(BOARD))
-# USEMODULE += neopixel
+USEMODULE += neopixel
 # endif
 USEMODULE += onboard_leds
 USEMODULE += throttler

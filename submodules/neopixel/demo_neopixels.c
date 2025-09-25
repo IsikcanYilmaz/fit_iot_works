@@ -12,15 +12,19 @@
 #include "board.h"
 #include "shell.h"
 
-#ifdef NEOPIXEL_ANIMATION_CCN_DISPLAY_ENABLED
+#ifdef ANIMATION_CCN_DISPLAY_ENABLED
 #include "animation_ccn_display.h"
+#endif
+
+#ifdef ANIMATION_CACHING_IPERF_ENABLED
+#include "animation_caching_iperf_display.h"
 #endif
 
 #include "animation_line.h"
 
 Animation_s animations[ANIMATION_MAX] = 
 {
-#ifdef NEOPIXEL_ANIMATION_CCN_DISPLAY_ENABLED
+#ifdef ANIMATION_CCN_DISPLAY_ENABLED
   [ANIMATION_CCN_DISPLAY] = {
     .name = "ccn_display",
     .init = AnimationCcnDisplay_Init,
@@ -28,7 +32,15 @@ Animation_s animations[ANIMATION_MAX] =
     .draw = AnimationCcnDisplay_Draw,
   },
 #endif
-  [ANIMATION_LINE] = {
+#ifdef ANIMATION_CACHING_IPERF_ENABLED
+  [ANIMATION_CACHING_IPERF] = {
+    .name = "caching_iperf",
+    .init = AnimationCachingIperf_Init,
+    .update = AnimationCachingIperf_Update,
+    .draw = AnimationCachingIperf_Draw,
+  },
+#endif
+    [ANIMATION_LINE] = {
     .name = "line",
     .init = AnimationLine_Init,
     .update = AnimationLine_Update,
@@ -42,7 +54,11 @@ Animation_s animations[ANIMATION_MAX] =
   }
 };
 
+#ifdef ANIMATION_CACHING_IPERF_ENABLED
+AnimationIdx_e currentAnimationIdx = ANIMATION_CACHING_IPERF;
+#else
 AnimationIdx_e currentAnimationIdx = ANIMATION_LINE;
+#endif
 
 ws281x_t handle;
 bool addrLedInitialized = false;
@@ -54,7 +70,6 @@ ztimer_t drawTimer;
 kernel_pid_t neopixelThreadId;
 static char neopixelThreadStack[THREAD_STACKSIZE_DEFAULT];
 
-kernel_pid_t mainThreadId;
 
 static inline void kickDrawTimer(void)
 {
@@ -106,7 +121,7 @@ static void * Neopixel_ThreadHandler(void *arg)
   }
 }
 
-kernel_pid_t Neopixel_Init(kernel_pid_t i)
+kernel_pid_t Neopixel_Init(void)
 {
   // Initialize ws281x module
   int retval;
@@ -152,9 +167,9 @@ kernel_pid_t Neopixel_Init(kernel_pid_t i)
 
   addrLedInitialized = true;
 
-  // Pass events and such to this thread id
-  // can be null
-  mainThreadId = i;
+  Neopixel_Clear();
+  Neopixel_DisplayStrip();
+
   return neopixelThreadId;
 }
 
@@ -216,9 +231,7 @@ Pixel_t * Neopixel_GetPixelByLineIdx(uint8_t idx)
   {
     return Neopixel_GetPixelByIdx(NEOPIXEL_NUM_LEDS-(1+idx-NEOPIXEL_NUM_COLUMNS));
   }
-
 }
-
 
 Pixel_t * Neopixel_GetPixelByCoord(uint8_t x, uint8_t y)
 {
@@ -257,7 +270,9 @@ void Neopixel_SetAnimation(uint8_t animIdx) // TODO Smooth transitions? prolly n
 
 void Neopixel_NextAnimation(void)
 {
+  Neopixel_Clear();
   Neopixel_SetAnimation((currentAnimationIdx + 1) % ANIMATION_MAX);
+  printf("Animation %d\n", currentAnimationIdx);
 }
 
 void Neopixel_IncrementAllByHSV(float h, float s, float v)

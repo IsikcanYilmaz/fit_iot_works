@@ -168,6 +168,7 @@ int Iperf_StartUdpServer(gnrc_netreg_entry_t *server, kernel_pid_t pid);
 int Iperf_StopUdpServer(gnrc_netreg_entry_t *server);
 int Iperf_Deinit(void);
 int Iperf_Init(IperfRole_e role);
+int Iperf_CmdHandler(int argc, char **argv); 
 void Iperf_ResetResults(void);
 int Iperf_SocklessUdpSend(const char *data, size_t dataLen, ipv6_addr_t *addr, netif_t *netif);
 int Iperf_SocklessUdpSendToStringAddr(const char *data, size_t dataLen, char *targetIp);

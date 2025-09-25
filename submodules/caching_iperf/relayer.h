@@ -3,4 +3,5 @@
 
 bool Iperf_RelayerIntercept(gnrc_pktsnip_t *pkt);
 void Iperf_PrintCache(void);
+int Iperf_LookUpCachedPktPtr(uint16_t pktIdx);
 void *Iperf_RelayerThread(void *arg);

@@ -24,7 +24,7 @@ extern IperfResults_s results;
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
 static volatile kernel_pid_t relayerPid = KERNEL_PID_UNDEF;
 
-static uint8_t *cacheBuffer = (uint8_t *) &rxtxBuffer;
+static uint8_t *cacheBuffer = (uint8_t *) &rxtxBuffer[0];
 static uint8_t cacheIdx = 0;
 
 static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF); // TODO JON this can be generic, in iperf.c
@@ -33,12 +33,13 @@ static gnrc_netreg_entry_t udpServer = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DE
 static bool cacheLock[CACHE_LOCK_SIZE_MAX]; // theres a time gap between a cache hit being noticed and that block being sent off. this lock makes sure that cache block stays until the block is sent off
 
 #define CACHE_BLOCK_SIZE (sizeof(IperfUdpPkt_t) + config.payloadSizeBytes)
-#define CODED_CACHE_BLOCK_SIZE (sizeof(IperfCodedPayloadPkt_t) + config.payloadSizeBytes)
+#define CODED_CACHE_BLOCK_SIZE (sizeof(IperfUdpPkt_t) + sizeof(IperfCodedPayloadPkt_t) + config.payloadSizeBytes)
 
 #define TIME_CACHING 0
 #define PRINT_TIME_CACHING 0
 
-#define CHANCE_TO_DROP 30 
+#define CHANCE_TO_DROP 30
+#define DROP_EVEN_NUMBEREDS
 
 #if TIME_CACHING
 uint32_t sumTimeTakenForCaching = 0;
@@ -51,21 +52,57 @@ uint32_t lookupCtr = 0;
 
 #endif
 
+#if DEMO_CONFIG
+uint16_t cacheHitQueueBuffer[16];
+SimpleQueue_t cacheHitQueue; 
+#endif
+
 static void initRelayer(void)
 {
   relayerPid = thread_getpid();
+  cacheBuffer = (uint8_t *) &rxtxBuffer[0];
   if (IPERF_BUFFER_SIZE_BYTES < sizeof(uint8_t) * config.numCacheBlocks * CACHE_BLOCK_SIZE)
   {
     logerror("WARNING!\nrxtxBuffer will overflow!!!\n%d < %d\ncachebuffer %d bytes, %d num blocks, %d num bytes per block!\n", \
              IPERF_BUFFER_SIZE_BYTES, sizeof(uint8_t) * config.numCacheBlocks * CACHE_BLOCK_SIZE, \
              IPERF_BUFFER_SIZE_BYTES, config.numCacheBlocks, CACHE_BLOCK_SIZE);
   }
-  memset(cacheBuffer, 0x00, sizeof(uint8_t) * config.numCacheBlocks * CODED_CACHE_BLOCK_SIZE); // TODO THIS IS CRASHING OUT IF I MEMSET THE WHOLE BUFFER!!!!!
+  memset(rxtxBuffer, 0x00, sizeof(uint8_t) * config.numCacheBlocks * CODED_CACHE_BLOCK_SIZE); // TODO THIS IS CRASHING OUT IF I MEMSET THE WHOLE BUFFER!!!!!
   memset(&cacheLock, 0x00, sizeof(bool) * CACHE_LOCK_SIZE_MAX);
+
+  if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+  {
+    // TODO? too many todos
+  }
+  else if (config.mode == IPERF_MODE_CACHING_CODING)
+  {
+    for (int i = 0; i < config.numCacheBlocks; i++)
+    {
+      IperfUdpPkt_t *p = (IperfUdpPkt_t *) (cacheBuffer + (i * CODED_CACHE_BLOCK_SIZE)); 
+      printf("%d->%x\n" , i, p);
+      p->msgType = IPERF_PKT_CODED_DATA;
+      p->plSize = sizeof(IperfCodedPayloadPkt_t) + (sizeof(uint8_t) * config.payloadSizeBytes);
+      p->seqNo = 0;
+    }
+  }
+
+  // printf("cache blocks %d ", config.numCacheBlocks);
+  // printf("%x | ", cacheBuffer);
+  // for (int i = 0; i < 4 * CODED_CACHE_BLOCK_SIZE; i++)
+  // {
+  //   printf("%02x ", * (uint8_t *) (cacheBuffer + i));
+  // }
+  // printf("\n");
+  // printf("%x | ", rxtxBuffer);
+  // for (int i = 0; i < 4 * CODED_CACHE_BLOCK_SIZE; i++)
+  // {
+  //   printf("%02x ", * (uint8_t *) (rxtxBuffer + i));
+  // }
+  // printf("\n");
+
   Iperf_StartUdpServer(&udpServer, relayerPid);
 
   #if TIME_CACHING
-
   sumTimeTakenForCaching = 0;
   avgTimeTakenForCaching = 0;
   cachingCtr = 0;
@@ -76,7 +113,10 @@ static void initRelayer(void)
 
   printf("TIME_CACHING enabled. setting cache chance percent to 100\n");
   config.cacheChancePercent = 100;
+  #endif
 
+  #if DEMO_CONFIG // This lets the neopixel module know there's been a cache hit
+  SimpleQueue_Init(&cacheHitQueue, (uint16_t *) &cacheHitQueueBuffer, 16);
   #endif
 }
 
@@ -118,55 +158,108 @@ static int findUnlockedCacheSlot(void)
   return -1;
 }
 
-static void cache(IperfUdpPkt_t *iperfPkt)
+static int codedFindCacheSlot(uint16_t seqNo)
+{
+  // JON TODO
+  return 0;
+}
+
+static int codedCacheLookup(uint8_t chunkIdx)
+{
+  for (int i = 0; i < CODED_CACHE_BLOCK_SIZE; i++)
+  {
+    IperfUdpPkt_t *udp = (IperfUdpPkt_t *) (cacheBuffer + (i * CODED_CACHE_BLOCK_SIZE));
+    IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) udp->payload;
+    uint8_t *bitmap = coded->bitmap;
+    uint8_t offset = coded->pktOffset;
+
+    if (chunkIdx > offset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS)
+    {
+      return -1; 
+    }
+  }
+}
+
+static void codedCache(IperfUdpPkt_t *iperfPkt)
+{
+  logdebug("[CODED] Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
+
+  // ASSUMING 1 cache slot
+  // First lets look at if cache slot is taken up by anything
+  IperfUdpPkt_t *udp = (IperfUdpPkt_t *) cacheBuffer;
+  IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) udp->payload;
+  uint8_t *codedPayload = coded->payload;
+  uint8_t *bitmap = coded->bitmap;
+
+  uint8_t numCodedPackets = 0;
+  uint16_t indices[2]; // no need eventually
+  uint8_t offset = coded->pktOffset;
+
+  for (int byte = 0; byte < IPERF_CATALOGUE_BITMAP_LENGTH_BYTES; byte++)
+  {
+    for (int bit = 0; bit < 8; bit++)
+    {
+      if(bitmap[byte] & (0x1 << bit)) // Cached content found
+      {
+        indices[numCodedPackets] = (offset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS * 8) + (byte * 8) + bit;
+        printf("[%d] %d \n", numCodedPackets, indices[numCodedPackets]);
+        numCodedPackets++;
+      }
+    }
+  }
+
+  uint8_t byteIdx = iperfPkt->seqNo / 8;
+  uint8_t bitIdx = iperfPkt->seqNo % 8;
+  if (numCodedPackets < 2) // TEST if there's nothing cached coded, cache the first thing
+  {
+    bitmap[byteIdx] = bitmap[byteIdx] ^ (1 << bitIdx);
+    printf("numCoded < 2. caching/coding \n");
+    for (int i = 0; i < config.payloadSizeBytes; i++)
+    {
+      codedPayload[i] = codedPayload[i] ^ iperfPkt->payload[i];
+      printf("%x ", codedPayload[i]);
+    }
+    printf("\n");
+  }
+  else // There is 2 things cached and coded. flush the cache and put in new thing
+  {
+    memset(bitmap, 0x00, IPERF_CATALOGUE_BITMAP_LENGTH_BYTES);
+    memset(coded, 0x00, CODED_CACHE_BLOCK_SIZE);
+    bitmap[byteIdx] = bitmap[byteIdx] ^ (1 << bitIdx);
+    printf("numCoded == 2. flushing \n");
+    for (int i = 0; i < config.payloadSizeBytes; i++)
+    {
+      codedPayload[i] = codedPayload[i] ^ iperfPkt->payload[i];
+      printf("%x ", codedPayload[i]);
+    }
+    printf("\n");
+  }
+
+  Iperf_PrintBitmapHex(coded);
+  printf(" num coded packets %d ", numCodedPackets);
+  printf("%s\n", codedPayload);
+}
+
+static void legacyCache(IperfUdpPkt_t *iperfPkt)
 {
   #if TIME_CACHING
   uint32_t t0 = ztimer_now(ZTIMER_USEC);
   #endif
-  // if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+  logdebug("[NO-CODING] Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
+  if (cacheLock[cacheIdx])
   {
-    logdebug("[NO-CODING] Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
-    if (cacheLock[cacheIdx])
+    logdebug("%d cache locked. Searching for a different cache space\n", cacheIdx);
+    int newCacheIdx = findUnlockedCacheSlot();
+    if (newCacheIdx < 0)
     {
-      logdebug("%d cache locked. Searching for a different cache space\n", cacheIdx);
-      int newCacheIdx = findUnlockedCacheSlot();
-      if (newCacheIdx < 0)
-      {
-        logdebug("All caches are locked\n");
-        return;
-      }
-      cacheIdx = newCacheIdx;
+      logdebug("All caches are locked\n");
+      return;
     }
-
-    memcpy((uint8_t *) (cacheBuffer + (cacheIdx * CACHE_BLOCK_SIZE)), iperfPkt, CACHE_BLOCK_SIZE);
-    cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
+    cacheIdx = newCacheIdx;
   }
-  return;
-  // else if (config.mode == IPERF_MODE_CACHING_CODING)
-  {
-    // CACHING CODING
-    // TODO
-    logdebug("[CODED] Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
 
-    // // First find a cache slot
-    // if (cacheLock[cacheIdx]) // TODO consolidate
-    // {
-    //   logdebug("%d cache locked. Searching for a different cache space\n", cacheIdx);
-    //   int newCacheIdx = findUnlockedCacheSlot();
-    //   if (newCacheIdx < 0)
-    //   {
-    //     logdebug("All caches are locked\n");
-    //     return;
-    //   }
-    //   cacheIdx = newCacheIdx;
-    // }
-    //
-    // // Convert the packet to IperfCodedPayloadPkt_t
-    // IperfCodedPayloadPkt_t *codedPkt = (IperfCodedPayloadPkt_t *) (&cacheBuffer + (cacheIdx * CODED_CACHE_BLOCK_SIZE));
-    
-
-
-  }
+  memcpy((uint8_t *) (cacheBuffer + (cacheIdx * CACHE_BLOCK_SIZE)), iperfPkt, CACHE_BLOCK_SIZE);
+  cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
 
   #if TIME_CACHING
   uint32_t t1 = ztimer_now(ZTIMER_USEC);
@@ -178,6 +271,28 @@ static void cache(IperfUdpPkt_t *iperfPkt)
   printf("cache took %d us, on average %d\n", diff, avgTimeTakenForCaching);
   #endif
   #endif
+
+  return;
+}
+
+// Şüphesiz inkar edenler Zikr'i (Kur'-an'ı) duydukları zaman neredeyse seni gözleriyle devirecekler. (Senin için,) "Hiç şüphe yok o bir delidir" diyorlar. Halbuki o (Kur'an), âlemler için ancak bir öğüttür. 
+// fhdjfhdjfdfkhdkjf
+int Iperf_LookUpCachedPktPtr(uint16_t pktIdx)
+{
+  for (int i = 0; i < config.numCacheBlocks; i++)
+  {
+    IperfUdpPkt_t *p = (IperfUdpPkt_t *) (cacheBuffer + (i * CACHE_BLOCK_SIZE));
+    if (p->msgType != IPERF_PAYLOAD && p->msgType != IPERF_PKT_RESP)
+    {
+      continue;
+    }
+    /*loginfo("Looking up %d : %d\n", pktIdx, p->seqNo);*/
+    if (p->seqNo == pktIdx)
+    {
+      return i;
+    }
+  }
+  return -1;
 }
 
 void Iperf_PrintCache(void)
@@ -203,26 +318,6 @@ void Iperf_PrintCache(void)
       printf("] %s", chunkPayload);
     }
   }
-}
-
-// Şüphesiz inkar edenler Zikr'i (Kur'-an'ı) duydukları zaman neredeyse seni gözleriyle devirecekler. (Senin için,) "Hiç şüphe yok o bir delidir" diyorlar. Halbuki o (Kur'an), âlemler için ancak bir öğüttür. 
-// fhdjfhdjfdfkhdkjf
-static int lookUpCachedPktPtr(uint16_t pktIdx)
-{
-  for (int i = 0; i < config.numCacheBlocks; i++)
-  {
-    IperfUdpPkt_t *p = (IperfUdpPkt_t *) (cacheBuffer + (i * CACHE_BLOCK_SIZE));
-    if (p->msgType != IPERF_PAYLOAD && p->msgType != IPERF_PKT_RESP)
-    {
-      continue;
-    }
-    /*loginfo("Looking up %d : %d\n", pktIdx, p->seqNo);*/
-    if (p->seqNo == pktIdx)
-    {
-      return i;
-    }
-  }
-  return -1;
 }
 
 void *Iperf_RelayerThread(void *arg)
@@ -292,8 +387,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
   
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) (undef->data + 8); // JON TODO HACK //  Idk why I need this 8 byte offset but i do
   ipv6_hdr_t *ipv6header = (ipv6_hdr_t *) ipv6->data;
-  
-  // FILTERS
+
   if (strncmp(iperfPkt->payload, "asdqwe", 6) == 0)
   {
     msg_t ipc;
@@ -301,131 +395,141 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     msg_send(&ipc, relayerPid);
     shouldForward = false;
   }
-  else if (iperfPkt->msgType == IPERF_ECHO_RESP || iperfPkt->msgType == IPERF_ECHO_CALL)
-  {
-    logdebug("Forwarding Echo %s : %s\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload);
-  }
-  else if (iperfPkt->msgType == IPERF_CONFIG_SYNC)
-  {
-    Iperf_HandleConfigSync(iperfPkt);
-  }
-  else if (iperfPkt->msgType == IPERF_PAYLOAD || iperfPkt->msgType == IPERF_PKT_RESP)
-  {
 
-#if CHANCE_TO_DROP
-    shouldForward = !coinFlip(CHANCE_TO_DROP);
-    shouldForward = iperfPkt->seqNo % 2 > 0 ? true : false; // drop half
-    if (!shouldForward)
-    {
-      logdebug("Simulating pkt drop. payload no %d\n", iperfPkt->seqNo);
-      return shouldForward;
-    }
-#endif
-
-    if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL || true) // TODO rm the true 
-    {
-      if (config.cache && coinFlip(config.cacheChancePercent))
+  // FILTERS
+  switch (iperfPkt->msgType)
+  {
+    case IPERF_ECHO_RESP:
+    case IPERF_ECHO_CALL:
       {
-        logdebug("Payload seq %d intercepted. Will cache\n", iperfPkt->seqNo);
-        cache(iperfPkt);
-        if (logprintTags[DEBUG]) Iperf_PrintCache();
+        logdebug("Forwarding Echo %s : %s\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload);
+        break;
       }
-    }
-    else if (config.mode == IPERF_MODE_CACHING_CODING)
-    {
-      // TODO CACHE CODE LOGIC
-    }
-     
-  }
-  else if (iperfPkt->msgType == IPERF_PKT_BULK_REQ)
-  {
-    /*
-    * BULK REQUEST INTERCEPTED:
-    * - Go thru the requested pkts in the request.
-    * - Check if any are in our cache. 
-    *   - If so, remove that from the interest and add it to our service queue
-    *   - If not, simply forward
-    */
-    if (config.cache)
-    {
-      #if TIME_CACHING
-      uint32_t t0 = ztimer_now(ZTIMER_USEC);
-      #endif
-
-      IperfBulkInterest_t *bulkInterest = (IperfBulkInterest_t *) iperfPkt->payload;
-      uint8_t numExpects = bulkInterest->len;
-      uint16_t *expectArr = bulkInterest->arr;
-      uint16_t numBadExpectsOrCacheHits = 0;
-      logdebug("Intercepted bulk interest for %d chunks\n", numExpects);
-      bool shouldSendIpc = false;
-      for (int i = 0; i < numExpects; i++)
+    case IPERF_CONFIG_SYNC:
       {
-        if (expectArr[i] == SIMPLE_QUEUE_INVALID_NUMBER)
-        {
-          numBadExpectsOrCacheHits++;
-          continue;
-        }
-        int cachedPktIdx = lookUpCachedPktPtr(expectArr[i]);
-        if (cachedPktIdx > -1)
-        {
-          // CACHE HIT
-          // Remove interest from bulk interest, put it in our service list
-          logdebug("Cache hit! Seq no %d at cache idx %d\n", expectArr[i], cachedPktIdx);
-          expectArr[i] = SIMPLE_QUEUE_INVALID_NUMBER;
-          cacheLock[cachedPktIdx] = true;
-          SimpleQueue_Push(&pktReqQueue, cachedPktIdx);
-          shouldSendIpc = true;
-          results.cacheHits++;
-          numBadExpectsOrCacheHits++;
-        }
-
-        if (logprintTags[DEBUG])
-          printf("%d ", expectArr[i]);
+        Iperf_HandleConfigSync(iperfPkt);
+        break;
       }
-      if (logprintTags[DEBUG])
-        printf("\n");
-
-      if (shouldSendIpc)
+    case IPERF_PAYLOAD:
+    case IPERF_PKT_RESP:
       {
-        logverbose("Sending IPC\n");
-        msg_t ipc;
-        ipc.type = IPERF_IPC_MSG_RELAY_SERVICE_INTEREST;
-        msg_send(&ipc, relayerPid);
-      }
-      
-      // TODO TODO NEED TO REORDER THESE SINCE ONCE YOU REMOVE ONE EXPECTATION
-      if (numExpects == numBadExpectsOrCacheHits)
-      {
-        logdebug("Won't forward this bulk interest since every interest in it is serviced!\n");
+        // if (iperfPkt->seqNo == 2 || iperfPkt->seqNo == 4 || iperfPkt->seqNo == 6) // JON TODO RM
+          codedCache(iperfPkt);
         shouldForward = false;
+        break; // JON TODO RM
+#if CHANCE_TO_DROP
+        shouldForward = !coinFlip(CHANCE_TO_DROP);
+#ifdef DROP_EVEN_NUMBEREDS 
+        shouldForward = iperfPkt->seqNo % 2 > 0 ? true : false; // drop half
+#endif
+        if (!shouldForward)
+        {
+          logdebug("Simulating pkt drop. payload no %d\n", iperfPkt->seqNo);
+          return shouldForward;
+        }
+#endif
+        if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL) // TODO rm the true 
+        {
+          if (config.cache && coinFlip(config.cacheChancePercent))
+          {
+            logdebug("Payload seq %d intercepted. Will cache\n", iperfPkt->seqNo);
+            legacyCache(iperfPkt);
+            if (logprintTags[DEBUG]) Iperf_PrintCache();
+          }
+        }
+        else if (config.mode == IPERF_MODE_CACHING_CODING)
+        {
+          if (config.cache && config.code)
+          {
+            // TODO CACHE CODE LOGIC
+            codedCache(iperfPkt);
+          }
+        }
+
+        break;
       }
+    case IPERF_PKT_BULK_REQ:
+      {
+        /*
+        * BULK REQUEST INTERCEPTED:
+        * - Go thru the requested pkts in the request.
+        * - Check if any are in our cache. 
+        *   - If so, remove that from the interest and add it to our service queue
+        *   - If not, simply forward
+        */
+        if (config.cache && config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+        {
+          IperfBulkInterest_t *bulkInterest = (IperfBulkInterest_t *) iperfPkt->payload;
+          uint8_t numExpects = bulkInterest->len;
+          uint16_t *expectArr = bulkInterest->arr;
+          uint16_t numBadExpectsOrCacheHits = 0;
+          logdebug("Intercepted bulk interest for %d chunks\n", numExpects);
+          bool shouldSendIpc = false;
+          for (int i = 0; i < numExpects; i++)
+          {
+            if (expectArr[i] == SIMPLE_QUEUE_INVALID_NUMBER)
+            {
+              numBadExpectsOrCacheHits++;
+              continue;
+            }
+            int cachedPktIdx = Iperf_LookUpCachedPktPtr(expectArr[i]);
+            if (cachedPktIdx > -1)
+            {
+              // CACHE HIT
+              // Remove interest from bulk interest, put it in our service list
+              logdebug("Cache hit! Seq no %d at cache idx %d\n", expectArr[i], cachedPktIdx);
+              printf("CACHE HIT CACHE HIT %d\n", expectArr[i]);
 
-      #if TIME_CACHING
-      lookupCtr++;
-      uint32_t t1 = ztimer_now(ZTIMER_USEC);
-      uint32_t diff = (t1-t0);
-      sumTimeTakenForLookups += diff;
-      avgTimeTakenForLookups = sumTimeTakenForLookups / lookupCtr;
-      #if PRINT_TIME_CACHING
-      printf("lookup took %d us, on average %d\n", diff, avgTimeTakenForLookups);
-      #endif
-      #endif
-    }
-  }
-  else if (iperfPkt->msgType == IPERF_PKT_REQ)
-  {
-    if (config.cache)
-    {
-    }
-  }
-  else if (iperfPkt->msgType == IPERF_PKT_CATALOGUE_VECTOR)
-  {
-    // CODED CACHING
-    // We just caught a catalogue vector. This will tell us what the receiver has and what it does not have
-    //
-    printf("IPERF_PKT_CATALOGUE_VECTOR\n");
-    Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
-  }
+              #if DEMO_CONFIG
+              SimpleQueue_Push(&cacheHitQueue, expectArr[i]);
+              results.lastPktSeqNo = expectArr[i];
+              #endif
 
+              expectArr[i] = SIMPLE_QUEUE_INVALID_NUMBER;
+              cacheLock[cachedPktIdx] = true;
+              SimpleQueue_Push(&pktReqQueue, cachedPktIdx);
+              shouldSendIpc = true;
+              results.cacheHits++;
+              numBadExpectsOrCacheHits++;
+            }
+
+            if (logprintTags[DEBUG])
+              printf("%d ", expectArr[i]);
+          }
+          if (logprintTags[DEBUG])
+            printf("\n");
+
+          if (shouldSendIpc)
+          {
+            logverbose("Sending IPC\n");
+            msg_t ipc;
+            ipc.type = IPERF_IPC_MSG_RELAY_SERVICE_INTEREST;
+            msg_send(&ipc, relayerPid);
+          }
+
+          // TODO TODO NEED TO REORDER THESE SINCE ONCE YOU REMOVE ONE EXPECTATION
+          if (numExpects == numBadExpectsOrCacheHits)
+          {
+            logdebug("Won't forward this bulk interest since every interest in it is serviced!\n");
+            shouldForward = false;
+          }
+        }
+        break;
+      }
+    case IPERF_PKT_CATALOGUE_VECTOR:
+      {
+        // CODED CACHING
+        // We just caught a catalogue vector. This will tell us what the receiver has and what it does not have
+        //
+        // printf("IPERF_PKT_CATALOGUE_VECTOR\n");
+        // Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
+        break;
+      }
+    default:
+      {
+      break;
+      }
+  }
+  
   return shouldForward;
 }

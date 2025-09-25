@@ -418,7 +418,7 @@ void *Iperf_ReceiverThread(void *arg)
           // and starts the interest timer
 
           logdebug("Expectation timeout\n");
-          if (expectationSeqNo < results.lastPktSeqNo)
+          if (expectationSeqNo < results.lastPktSeqNo) // Bump expectation index
           {
             expectationSeqNo = results.lastPktSeqNo+1;
           }
@@ -442,6 +442,7 @@ void *Iperf_ReceiverThread(void *arg)
             {
               if (logprintTags[DEBUG]) printf("%d ", i);
               SimpleQueue_Push(&pktReqQueue, i);
+              receivedPktIds[i] = EXPECTED;
               /*SimpleQueue_PrintQueue(&pktReqQueue);*/
             }
           }

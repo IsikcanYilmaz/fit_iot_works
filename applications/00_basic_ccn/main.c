@@ -22,6 +22,8 @@
 #include "ccn_nc_demo.h"
 #include "demo_neopixels.h"
 
+#include "onboard_leds.h"
+
 #ifdef JON_RSSI_LIMITING
 #include "demo_throttlers.h"
 #endif
@@ -116,6 +118,7 @@ int main(void)
 	);
 
   CCN_NC_Init();
+  OnboardLeds_Init();
 
 	char line_buf[SHELL_DEFAULT_BUFSIZE];
 	shell_run(commands, line_buf, SHELL_DEFAULT_BUFSIZE);

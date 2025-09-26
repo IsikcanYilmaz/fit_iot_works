@@ -52,6 +52,23 @@ void XorCoding_PrintBitmapHex(IperfCodedPayloadPkt_t *codedPkt)
   }
 }
 
+void XorCoding_PrintBitmapBits(uint8_t *bitmap)
+{
+  // debug print of vector
+  for (uint16_t pktIdx = 0; pktIdx < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; pktIdx++)
+  {
+    uint8_t currByteIdx = pktIdx / 8;
+    uint8_t currBitIdx = pktIdx % 8;
+    printf("%d", (bitmap[currByteIdx] & (1 << currBitIdx)) > 0 ? 1 : 0);
+  }
+  printf("\n");
+  for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_BYTES; i++)
+  {
+    printf("0x%02x ", bitmap[i]);
+  }
+  printf("\n");
+}
+
 #if 0
 // TESTER
 int main()

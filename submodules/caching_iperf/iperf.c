@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include "macros/utils.h"
 #include "net/gnrc.h"
 #include "net/sock/udp.h"
@@ -463,17 +464,30 @@ int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint8_t offset)
     // printf("idx:%d %s received. byte %d bit %d\n", overallPktIdx, (chunkStatus[overallPktIdx] == RECEIVED ? "" : "not "), currByteIdx, currBitIdx);
     if (overallPktIdx >= config.numPktsToTransfer)
     {
+      logverbose("overallPktIdx > numPktsToTransfer\n");
       break;
     }
     if (chunkStatus[overallPktIdx] == RECEIVED)
     {
+      // printf("%d ", pktIdx);
       vectorPkt->bitmap[currByteIdx] = vectorPkt->bitmap[currByteIdx] | (1 << currBitIdx);
     }
   }
-
+  // printf("\n");
   Iperf_PrintCatalogueVector(vectorPkt);
   
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
+}
+
+void Iperf_CatalogueVectorTest(void)
+{
+  IperfChunkStatus_e testarr[64]; // TODO bitmap this
+  memset(testarr, RECEIVED, sizeof(IperfChunkStatus_e) * sizeof(testarr));
+  testarr[2] = NOT_RECEIVED;
+  testarr[3] = NOT_RECEIVED;
+  testarr[6] = NOT_RECEIVED;
+  testarr[8] = NOT_RECEIVED;
+  Iperf_SendCatalogueVector(testarr, 0);
 }
 
 int Iperf_HandleEcho(IperfUdpPkt_t *iperfPkt)
@@ -1019,6 +1033,15 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     pl[size] = NULL;
     return Iperf_SendEcho(&pl);
   }
+  else if (strncmp(argv[1], "cataloguetest", 16)   == 0)
+  {
+    if (config.role != RECEIVER)
+    {
+      logerror("I am not receiver!\n");
+      return 1;
+    }
+    Iperf_CatalogueVectorTest();
+  }
   else if (strncmp(argv[1], "interest", 16) == 0)
   {
     if (config.role == SENDER)
@@ -1050,6 +1073,20 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     printf("\n");
     Iperf_SendBulkInterest((uint16_t *) &requests, argc-2);
   }
+  else if (strncmp(argv[1], "64test", 16) == 0)
+  {
+    uint8_t test[8];
+    memset(test, 0x00, 8);
+    // test[0] = 1;
+    // test[1] = 1;
+    uint64_t *test64 = (uint64_t *) test;
+    printf("before %x\n", *test64);
+    // *test64 -= 5;
+    printf("after %x\n", *test64);
+
+    uint64_t canieven = 0x1111222233334444;
+    printf("canieven %lld\n", canieven);
+  }
   else
   {
     goto usage;
@@ -1058,7 +1095,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|start|stop|restart|log|config|target|results|echo|interest|bulk|sizetest>\n");
+  logerror("Usage: iperf <sender|receiver|start|stop|restart|log|config|target|results|echo|interest|bulk|sizetest|cataloguetest|64test>\n");
   return 1;
 }
 

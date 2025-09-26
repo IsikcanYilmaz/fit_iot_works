@@ -166,7 +166,7 @@ static int codedFindCacheSlot(uint16_t seqNo)
 
 static int codedCacheLookup(uint8_t chunkIdx)
 {
-  for (int i = 0; i < CODED_CACHE_BLOCK_SIZE; i++)
+  for (int i = 0; i < config.numCacheBlocks; i++)
   {
     IperfUdpPkt_t *udp = (IperfUdpPkt_t *) (cacheBuffer + (i * CODED_CACHE_BLOCK_SIZE));
     IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) udp->payload;
@@ -177,6 +177,55 @@ static int codedCacheLookup(uint8_t chunkIdx)
     {
       return -1; 
     }
+  }
+}
+
+static int codedCanSatisfyRequest(IperfCatalogueVector_t *catalogue)
+{
+  // We got a catalogue. go thru every one of our cache blocks and see if anything satisfies
+  uint64_t Cbefore = (uint64_t) (* (uint64_t *) catalogue->bitmap);
+  for (int cacheBlockIdx = 0; cacheBlockIdx < config.numCacheBlocks; cacheBlockIdx++)
+  {
+    printf("Checking for servicability with cacheblockidx %d\n", cacheBlockIdx);
+
+    IperfUdpPkt_t *udp = (IperfUdpPkt_t *) (cacheBuffer + (cacheBlockIdx * CODED_CACHE_BLOCK_SIZE));
+    IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) udp->payload;
+    uint8_t *bitmap = coded->bitmap;
+    uint8_t offset = coded->pktOffset;
+
+    if (catalogue->pktOffset != offset)
+    {
+      printf("Catalogue offset mismatch. continuing\n");
+      continue;
+    }
+ 
+    uint64_t R = (uint64_t) (* (uint64_t *) bitmap);
+    printf("R=0x%08x\n", R);
+    printf("Cbefore=0x%08x\n", Cbefore);
+    uint64_t Cafter = Cbefore ^ R;
+    printf("Cafter=0x%08x\n", Cafter);
+    uint64_t Cdiff = (Cafter > Cbefore) ? Cafter - Cbefore : Cbefore - Cafter;
+    printf("Cdiff=0x%08x\n", Cdiff);
+
+    // // Check if Cdiff is a power of 2
+    // if (Cdiff > 0 && ((Cdiff - 1) & Cdiff) == 0)
+    // {
+    //   // Cdiff is a power of 2. Find which packet we can service thru this
+    //   uint16_t decodedPktIdx; // 
+    //   for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
+    //   {
+    //     if (Cdiff & (1 << i) > 0)
+    //     {
+    //       decodedPktIdx = i;
+    //       break;
+    //     }
+    //   }
+    //   printf("Can service. With coded data in cache idx %d we can decode %d\n", cacheBlockIdx, decodedPktIdx);
+    //
+    //   // Put in our outward queue cache block at $cacheblockidx
+    //   // flip the bit
+    // }
+
   }
 }
 
@@ -202,7 +251,7 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
       if(bitmap[byte] & (0x1 << bit)) // Cached content found
       {
         indices[numCodedPackets] = (offset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS * 8) + (byte * 8) + bit;
-        printf("[%d] %d \n", numCodedPackets, indices[numCodedPackets]);
+        printf("[cacheIdx:%d][chunkIdx:%d] %d \n", cacheIdx, numCodedPackets, indices[numCodedPackets]);
         numCodedPackets++;
       }
     }
@@ -213,31 +262,31 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
   if (numCodedPackets < 2) // TEST if there's nothing cached coded, cache the first thing
   {
     bitmap[byteIdx] = bitmap[byteIdx] ^ (1 << bitIdx);
-    printf("numCoded < 2. caching/coding \n");
+    // printf("numCoded < 2. caching/coding \n");
     for (int i = 0; i < config.payloadSizeBytes; i++)
     {
       codedPayload[i] = codedPayload[i] ^ iperfPkt->payload[i];
-      printf("%x ", codedPayload[i]);
+      // printf("%x ", codedPayload[i]);
     }
-    printf("\n");
+    // printf("\n");
   }
   else // There is 2 things cached and coded. flush the cache and put in new thing
   {
     memset(bitmap, 0x00, IPERF_CATALOGUE_BITMAP_LENGTH_BYTES);
     memset(coded, 0x00, CODED_CACHE_BLOCK_SIZE);
     bitmap[byteIdx] = bitmap[byteIdx] ^ (1 << bitIdx);
-    printf("numCoded == 2. flushing \n");
+    // printf("numCoded == 2. flushing \n");
     for (int i = 0; i < config.payloadSizeBytes; i++)
     {
       codedPayload[i] = codedPayload[i] ^ iperfPkt->payload[i];
-      printf("%x ", codedPayload[i]);
+      // printf("%x ", codedPayload[i]);
     }
     printf("\n");
   }
 
-  Iperf_PrintBitmapHex(coded);
-  printf(" num coded packets %d ", numCodedPackets);
-  printf("%s\n", codedPayload);
+  // Iperf_PrintBitmapHex(coded);
+  // printf(" num coded packets %d ", numCodedPackets);
+  // printf("%s\n", codedPayload);
 }
 
 static void legacyCache(IperfUdpPkt_t *iperfPkt)
@@ -313,9 +362,11 @@ void Iperf_PrintCache(void)
       IperfCodedPayloadPkt_t *codedPkt = (IperfCodedPayloadPkt_t *) p->payload;
       memset((char *) &chunkPayload, 0x00, config.payloadSizeBytes + 1);
       snprintf((char *) &chunkPayload, config.payloadSizeBytes, codedPkt->payload);
-      printf("[cache %d]:");
+      printf("[cache %d]:", i);
       Iperf_PrintBitmapHex(codedPkt);
-      printf("] %s", chunkPayload);
+      printf(" ");
+      XorCoding_PrintBitmapBits(codedPkt->bitmap);
+      printf("] %s\n", chunkPayload);
     }
   }
 }
@@ -413,14 +464,21 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     case IPERF_PAYLOAD:
     case IPERF_PKT_RESP:
       {
-        // if (iperfPkt->seqNo == 2 || iperfPkt->seqNo == 4 || iperfPkt->seqNo == 6) // JON TODO RM
+        if (iperfPkt->seqNo == 2 || iperfPkt->seqNo == 3) // JON TODO RM
+        {
           codedCache(iperfPkt);
-        shouldForward = false;
-        break; // JON TODO RM
+        }
+
+        if (iperfPkt->seqNo == 2)
+        {
+          shouldForward = false;
+          break; // JON TODO RM
+        }
+
 #if CHANCE_TO_DROP
-        shouldForward = !coinFlip(CHANCE_TO_DROP);
+        // shouldForward = !coinFlip(CHANCE_TO_DROP);
 #ifdef DROP_EVEN_NUMBEREDS 
-        shouldForward = iperfPkt->seqNo % 2 > 0 ? true : false; // drop half
+        // shouldForward = iperfPkt->seqNo % 2 > 0 ? true : false; // drop half
 #endif
         if (!shouldForward)
         {
@@ -439,11 +497,11 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
         }
         else if (config.mode == IPERF_MODE_CACHING_CODING)
         {
-          if (config.cache && config.code)
-          {
-            // TODO CACHE CODE LOGIC
-            codedCache(iperfPkt);
-          }
+          // if (config.cache && config.code)
+          // {
+          //   // TODO CACHE CODE LOGIC
+          //   codedCache(iperfPkt);
+          // }
         }
 
         break;
@@ -521,8 +579,9 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
         // CODED CACHING
         // We just caught a catalogue vector. This will tell us what the receiver has and what it does not have
         //
-        // printf("IPERF_PKT_CATALOGUE_VECTOR\n");
-        // Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
+        printf("IPERF_PKT_CATALOGUE_VECTOR\n");
+        Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
+        codedCanSatisfyRequest((IperfCatalogueVector_t *) iperfPkt->payload);
         break;
       }
     default:

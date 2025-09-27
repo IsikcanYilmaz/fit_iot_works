@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <string.h>
 #include "macros/utils.h"
 #include "net/gnrc.h"
 #include "net/sock/udp.h"
@@ -481,13 +482,21 @@ int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint8_t offset)
 
 void Iperf_CatalogueVectorTest(void)
 {
-  IperfChunkStatus_e testarr[64]; // TODO bitmap this
-  memset(testarr, RECEIVED, sizeof(IperfChunkStatus_e) * sizeof(testarr));
-  testarr[2] = NOT_RECEIVED;
-  testarr[3] = NOT_RECEIVED;
-  testarr[6] = NOT_RECEIVED;
-  testarr[8] = NOT_RECEIVED;
-  Iperf_SendCatalogueVector(testarr, 0);
+  IperfChunkStatus_e receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this
+  // IperfChunkStatus_e testarr[64]; // TODO bitmap this
+  // memset(testarr, RECEIVED, sizeof(IperfChunkStatus_e) * sizeof(testarr));
+  // testarr[2] = NOT_RECEIVED;
+  // testarr[3] = NOT_RECEIVED;
+  // testarr[6] = NOT_RECEIVED;
+  // testarr[8] = NOT_RECEIVED;
+  //
+  printf("Resetting receivedPktIds array! dont forget to reset!\n");
+  memset(receivedPktIds, RECEIVED, sizeof(IperfChunkStatus_e) * sizeof(receivedPktIds));
+  receivedPktIds[2] = NOT_RECEIVED;
+  receivedPktIds[3] = NOT_RECEIVED;
+  receivedPktIds[6] = NOT_RECEIVED;
+  receivedPktIds[8] = NOT_RECEIVED;
+  Iperf_SendCatalogueVector(receivedPktIds, 0);
 }
 
 int Iperf_HandleEcho(IperfUdpPkt_t *iperfPkt)
@@ -507,7 +516,7 @@ int Iperf_HandleEcho(IperfUdpPkt_t *iperfPkt)
 // With the following two fns, we assume the Tx machine is the master the Rx machine is the follower
 int Iperf_SendEcho(char *str)
 {
-  uint16_t plSize = strnlen(str, 128); 
+  uint16_t plSize = strlen(str); 
   char rawPkt[sizeof(IperfUdpPkt_t) + plSize]; 
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
   memset(&iperfPkt->payload, 0x00, plSize);
@@ -1030,8 +1039,8 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     printf("Size test %d\n", size);
     char pl[size];
     memset(&pl, 'a', size);
-    pl[size] = NULL;
-    return Iperf_SendEcho(&pl);
+    pl[size] = (char) NULL;
+    return Iperf_SendEcho((char *) &pl);
   }
   else if (strncmp(argv[1], "cataloguetest", 16)   == 0)
   {

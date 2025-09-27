@@ -117,6 +117,26 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
         }
         break;
       }
+    case IPERF_PKT_CATALOGUE_VECTOR:
+      {
+        IperfCatalogueVector_t *catalogue = (IperfCatalogueVector_t *) iperfPkt->payload;
+        logdebug("Sender received PKT_CATALOGUE_VECTOR: ");
+        // if (logprintTags[DEBUG])
+        {
+          Iperf_PrintCatalogueVector(catalogue);
+        }
+        for (int i = 0; i > IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
+        {
+          uint8_t byteIdx = i / 8;
+          uint8_t bitIdx = i % 8;
+          uint16_t requestedPktIdx;
+          if ((* (uint32_t *) catalogue->bitmap && (1 << i)) == 0)
+          {
+            printf("Pkt idx %d requested\n", requestedPktIdx);
+          }
+        }
+        break;
+      }
     case IPERF_ECHO_CALL:
       {
         loginfo("Echo CALL Received %s\n", iperfPkt->payload);

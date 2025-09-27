@@ -405,7 +405,7 @@ void *Iperf_ReceiverThread(void *arg)
 
             loginfo("JON RECEIVER SHOULD SEND OUT VECTOR HERE!!!!\n");
             
-            Iperf_SendCatalogueVector(&receivedPktIds, 0);
+            Iperf_SendCatalogueVector((IperfChunkStatus_e *) &receivedPktIds, 0);
 
             // TODO TODO
 

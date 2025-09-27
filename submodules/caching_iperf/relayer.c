@@ -10,6 +10,7 @@
 #include "ztimer.h"
 #include "msg.h"
 #include "simple_queue.h"
+#include "xor_coding.h"
 
 #include "net/ipv6/hdr.h"
 #include "net/ipv6/addr.h"
@@ -183,7 +184,7 @@ static int codedCacheLookup(uint8_t chunkIdx)
 static int codedCanSatisfyRequest(IperfCatalogueVector_t *catalogue)
 {
   // We got a catalogue. go thru every one of our cache blocks and see if anything satisfies
-  uint64_t Cbefore = (uint64_t) (* (uint64_t *) catalogue->bitmap);
+  uint32_t Cbefore = (uint32_t) (* (uint32_t *) catalogue->bitmap);
   for (int cacheBlockIdx = 0; cacheBlockIdx < config.numCacheBlocks; cacheBlockIdx++)
   {
     printf("Checking for servicability with cacheblockidx %d\n", cacheBlockIdx);
@@ -199,34 +200,39 @@ static int codedCanSatisfyRequest(IperfCatalogueVector_t *catalogue)
       continue;
     }
  
-    uint64_t R = (uint64_t) (* (uint64_t *) bitmap);
+    uint32_t R = (uint32_t) (* (uint32_t *) bitmap);
     printf("R=0x%08x\n", R);
     printf("Cbefore=0x%08x\n", Cbefore);
-    uint64_t Cafter = Cbefore ^ R;
+    uint32_t Cafter = Cbefore ^ R;
     printf("Cafter=0x%08x\n", Cafter);
-    uint64_t Cdiff = (Cafter > Cbefore) ? Cafter - Cbefore : Cbefore - Cafter;
+    uint32_t Cdiff = (Cafter > Cbefore) ? Cafter - Cbefore : Cbefore - Cafter;
     printf("Cdiff=0x%08x\n", Cdiff);
 
     // // Check if Cdiff is a power of 2
-    // if (Cdiff > 0 && ((Cdiff - 1) & Cdiff) == 0)
-    // {
-    //   // Cdiff is a power of 2. Find which packet we can service thru this
-    //   uint16_t decodedPktIdx; // 
-    //   for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
-    //   {
-    //     if (Cdiff & (1 << i) > 0)
-    //     {
-    //       decodedPktIdx = i;
-    //       break;
-    //     }
-    //   }
-    //   printf("Can service. With coded data in cache idx %d we can decode %d\n", cacheBlockIdx, decodedPktIdx);
-    //
-    //   // Put in our outward queue cache block at $cacheblockidx
-    //   // flip the bit
-    // }
+    if (Cdiff > 0 && ((Cdiff - 1) & Cdiff) == 0)
+    {
+      // Cdiff is a power of 2. Find which packet we can service thru this
+      uint16_t decodedPktIdx; // 
+      for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
+      {
+        if ((Cdiff & (1 << i)) > 0)
+        {
+          decodedPktIdx = i;
+          break;
+        }
+      }
+      printf("Can service. With coded data in cache idx %d we can decode %d\n", cacheBlockIdx, decodedPktIdx);
 
+      // Put in our outward queue cache block at $cacheblockidx
+      // flip the bit
+      
+      printf("Catalogue before %x ", * (uint32_t *) catalogue->bitmap);
+      // * (uint32_t*) catalogue->bitmap |= (1 << decodedPktIdx);
+      // catalogue->bitmap[0] = 0x00;
+      printf("Catalogue after %x \n", * (uint32_t *) catalogue->bitmap);
+    }
   }
+  return 0;
 }
 
 static void codedCache(IperfUdpPkt_t *iperfPkt)
@@ -454,6 +460,11 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     case IPERF_ECHO_CALL:
       {
         logdebug("Forwarding Echo %s : %s\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload);
+
+        // iperfPkt->payload[0]='X'; // JON TODO RM
+        // iperfPkt->payload[1]='X'; // JON TODO RM
+        logdebug("NOT CHANGED Forwarding Echo %s : %s\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload); // JON TODO RM
+
         break;
       }
     case IPERF_CONFIG_SYNC:
@@ -581,7 +592,9 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
         //
         printf("IPERF_PKT_CATALOGUE_VECTOR\n");
         Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
-        codedCanSatisfyRequest((IperfCatalogueVector_t *) iperfPkt->payload);
+        // codedCanSatisfyRequest((IperfCatalogueVector_t *) iperfPkt->payload);
+        IperfCatalogueVector_t *catalogue = (IperfCatalogueVector_t *) iperfPkt->payload;
+        catalogue->bitmap[0] = 0;
         break;
       }
     default:
@@ -589,6 +602,6 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
       break;
       }
   }
-  
+  printf("should forward %d\n", shouldForward);
   return shouldForward;
 }

@@ -12,8 +12,10 @@
 #include "simple_queue.h"
 #include "xor_coding.h"
 
+#include "net/gnrc/udp.h"
 #include "net/ipv6/hdr.h"
 #include "net/ipv6/addr.h"
+#include "net/inet_csum.h"
 
 extern uint8_t rxtxBuffer[IPERF_BUFFER_SIZE_BYTES];
 extern IperfConfig_s config;
@@ -433,17 +435,59 @@ void *Iperf_RelayerThread(void *arg)
   return NULL;
 }
 
+// static uint16_t _calc_csum(gnrc_pktsnip_t *hdr, gnrc_pktsnip_t *pseudo_hdr,
+//                            gnrc_pktsnip_t *payload)
+// {
+//   uint16_t csum = 0;
+//   uint16_t len = (uint16_t)hdr->size;
+//
+//   /* process the payload */
+//   while (payload && payload != hdr && payload != pseudo_hdr) {
+//     csum = inet_csum_slice(csum, (uint8_t *)(payload->data), payload->size, len);
+//     len += (uint16_t)payload->size;
+//     payload = payload->next;
+//   }
+//   /* process applicable UDP header bytes */
+//   csum = inet_csum(csum, (uint8_t *)hdr->data, sizeof(udp_hdr_t));
+//
+//   switch (pseudo_hdr->type) {
+// #ifdef MODULE_GNRC_IPV6
+//     case GNRC_NETTYPE_IPV6:
+//       csum = ipv6_hdr_inet_csum(csum, pseudo_hdr->data, PROTNUM_UDP, len);
+//       break;
+// #endif
+//     default:
+//       (void)len;
+//       return 0;
+//   }
+//   /* return inverted results */
+//   if (csum == 0xFFFF) {
+//     /* https://tools.ietf.org/html/rfc8200#section-8.1
+//          * bullet 4
+//          * "if that computation yields a result of zero, it must be changed
+//          * to hex FFFF for placement in the UDP header."
+//          */
+//     return 0xFFFF;
+//   } else {
+//     return ~csum;
+//   }
+// }
+
 // Will return true if the packet should keep going
 bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
 {
   bool shouldForward = true;
 
   // We care about IPv6 and UNDEF snips. 
-  gnrc_pktsnip_t *ipv6 = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_IPV6);
   gnrc_pktsnip_t *undef = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_UNDEF);
-  
-  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) (undef->data + 8); // JON TODO HACK //  Idk why I need this 8 byte offset but i do
+  gnrc_pktsnip_t *ipv6 = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_IPV6);
+  gnrc_pktsnip_t *udp = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_UDP);
   ipv6_hdr_t *ipv6header = (ipv6_hdr_t *) ipv6->data;
+  udp_hdr_t *udpHeader = (udp_hdr_t *) udp->data;
+  udp_hdr_print(udpHeader);
+  ipv6_hdr_print(ipv6header);
+
+  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) (undef->data + 8); // JON TODO HACK //  Idk why I need this 8 byte offset but i do
 
   if (strncmp(iperfPkt->payload, "asdqwe", 6) == 0)
   {
@@ -453,18 +497,42 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     shouldForward = false;
   }
 
+  if (strncmp(iperfPkt->payload, "zxc", 3) == 0)
+  {
+    logdebug("MOD ECHO %s : %s. checksum %04x\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload, udpHeader->checksum);
+    iperfPkt->payload[0] = '0';
+  }
+
+  printf("Relayer Intercepted Snip:\n");
+  // Iperf_PacketHandler(snip, NULL);
+
   // FILTERS
   switch (iperfPkt->msgType)
   {
     case IPERF_ECHO_RESP:
     case IPERF_ECHO_CALL:
       {
-        logdebug("Forwarding Echo %s : %s\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload);
+        logdebug("Forwarding Echo %s : %s %04x\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload, udpHeader->checksum);
 
-        // iperfPkt->payload[0]='X'; // JON TODO RM
-        // iperfPkt->payload[1]='X'; // JON TODO RM
-        logdebug("NOT CHANGED Forwarding Echo %s : %s\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload); // JON TODO RM
-
+        // static bool flipflop = false;
+        // logdebug("Checksum %02x\n", udpHeader->checksum);
+        //
+        // if (flipflop == true)
+        // {
+        //   iperfPkt->payload[0]='Z'; // JON TODO RM
+        //   iperfPkt->payload[1]='Z'; // JON TODO RM
+        //   logdebug("CHANGED Forwarding Echo %s : %s\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload); // JON TODO RM
+        //
+        //   // Zero out the chksum first
+        //   udpHeader->checksum = (network_uint16_t) { .u16 = htobe16(0) };
+        //   memset(&udpHeader->checksum, 0x00, sizeof(uint16_t));
+        //   int ret = gnrc_udp_calc_csum(udp, ipv6);
+        //   logdebug("NEW Checksum %x. ret %d\n", udpHeader->checksum, ret);
+        // }
+        //
+        // if (iperfPkt->msgType == IPERF_ECHO_CALL)
+        //   flipflop = !flipflop;
+        //
         break;
       }
     case IPERF_CONFIG_SYNC:

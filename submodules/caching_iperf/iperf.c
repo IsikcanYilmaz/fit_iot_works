@@ -16,6 +16,7 @@
 #include "shell.h"
 #include "od.h"
 #include "net/netstats.h"
+#include "net/sixlowpan.h"
 
 #include "iperf.h"
 #include "iperf_pkt.h"
@@ -608,7 +609,7 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
             /*printf("\n");*/
           /*}*/
 
-          if (fn)
+          if (fn != NULL)
           {
             fn(snip->data);
           }
@@ -617,11 +618,19 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
       case GNRC_NETTYPE_SIXLOWPAN:
         {
           logverbose("6LP\n");
+          // if (logprintTags[VERBOSE])
+          // {
+          //   sixlowpan_print(snip->data, snip->size);
+          // }
           break;
         }
       case GNRC_NETTYPE_IPV6:
         {
           logverbose("IPV6\n");
+          // if (logprintTags[VERBOSE])
+          // {
+          //   ipv6_hdr_print(snip->data);
+          // }
           break;
         }
       case GNRC_NETTYPE_ICMPV6:
@@ -637,6 +646,8 @@ int Iperf_PacketHandler(gnrc_pktsnip_t *pkt, void (*fn) (gnrc_pktsnip_t *pkt))
       case GNRC_NETTYPE_UDP:
         {
           logverbose("UDP\n");
+          // if (logprintTags[VERBOSE])
+          //   udp_hdr_print(snip->data);
           break;
         }
       default:

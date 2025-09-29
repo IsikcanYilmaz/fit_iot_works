@@ -473,6 +473,81 @@ void *Iperf_RelayerThread(void *arg)
 //   }
 // }
 
+static void dump_pkt_snips(gnrc_pktsnip_t *pkt)
+{
+  gnrc_pktsnip_t *s;
+  uint8_t *undef;
+  for (s = pkt; s; s = s->next)
+  {
+    char *typestr;
+    switch(s->type)
+    {
+      case GNRC_NETTYPE_IPV6:
+        typestr = "ipv6";
+        break;
+      case GNRC_NETTYPE_UNDEF:
+        typestr = "undef";
+        IperfUdpPkt_t *p = (IperfUdpPkt_t *) (s->data + 8);
+        printf("JON JON JON %s\n", p->payload);
+        undef = (s->data + 8);
+        break;
+      case GNRC_NETTYPE_UDP:
+        typestr = "udp";
+        break;
+      default:
+        typestr = ".";
+        break;
+    }
+    printf("snip: type %u %s size %d\n", s->type, typestr, s->size);
+  }
+ // *                                                                  buffer
+ // *              +---------------------------+                      +------+
+ // *              | size = 14                 | data +-------------->|      |
+ // *              | type = NETTYPE_ETHERNET   |------+               +------+
+ // *              +---------------------------+                      .      .
+ // *                    | next                                       .      .
+ // *                    v                                            +------+
+ // *              +---------------------------+         +----------->|      |
+ // *              | size = 40                 | data    |            |      |
+ // *              | type = NETTYPE_IPV6       |---------+            +------+
+ // *              +---------------------------+                      .      .
+ // *                    | next                                       .      .
+ // *                    v                                            +------+
+ // *              +---------------------------+            +-------->|      |
+ // *              | size = 8                  | data       |         +------+
+ // *              | type = NETTYPE_UDP        |------------+         .      .
+ // *              +---------------------------+                      .      .
+ // *                    | next                                       +------+
+ // *                    v                                     +----->|      |
+ // *              +---------------------------+               |      |      |
+ // *              | size = 59                 | data          |      .      .
+ // *              | type = NETTYPE_UNDEF      |---------------+      .      .
+ // *              +---------------------------+                      .      .
+
+  printf("------ JON JON HEADER PRINT TEST ipv6 size %d udp size %d ------\n", sizeof(ipv6_hdr_t), sizeof(udp_hdr_t));
+
+  udp_hdr_t *udpHeader = (udp_hdr_t *) (undef - sizeof(udp_hdr_t));
+  printf("JON udp header addr 0x%08x\n", udpHeader);
+  udp_hdr_print(udpHeader);
+
+  ipv6_hdr_t *ipv6Header = (ipv6_hdr_t *) ((uint8_t *) udpHeader - sizeof(ipv6_hdr_t));
+  printf("JON ipv6 header addr 0x%08x\n", ipv6Header);
+  ipv6_hdr_print(ipv6Header);
+}
+
+// JON HACK this layer should not have access to udp. but it do now lol
+udp_hdr_t * findUdpHeaderFromIperfPayload(gnrc_pktsnip_t *snip)
+{
+  uint8_t *undef = (uint8_t *) (snip->data + 8);
+  udp_hdr_t *udpHeader = (udp_hdr_t *) (undef - sizeof(udp_hdr_t));
+  return udpHeader;
+}
+
+static void udpChecksum(udp_hdr_t *udp)
+{
+  //
+}
+
 // Will return true if the packet should keep going
 bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
 {
@@ -481,11 +556,12 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
   // We care about IPv6 and UNDEF snips. 
   gnrc_pktsnip_t *undef = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_UNDEF);
   gnrc_pktsnip_t *ipv6 = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_IPV6);
-  gnrc_pktsnip_t *udp = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_UDP);
   ipv6_hdr_t *ipv6header = (ipv6_hdr_t *) ipv6->data;
-  udp_hdr_t *udpHeader = (udp_hdr_t *) udp->data;
+  udp_hdr_t *udpHeader = findUdpHeaderFromIperfPayload(undef);
+
   udp_hdr_print(udpHeader);
   ipv6_hdr_print(ipv6header);
+  printf("ipv6 header addr 0x%08x\n", ipv6header);
 
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) (undef->data + 8); // JON TODO HACK //  Idk why I need this 8 byte offset but i do
 
@@ -497,10 +573,25 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     shouldForward = false;
   }
 
-  if (strncmp(iperfPkt->payload, "zxc", 3) == 0)
+  // if (strncmp(iperfPkt->payload, "zxc", 3) == 0) 
+  if (iperfPkt->msgType == IPERF_ECHO_CALL)
   {
     logdebug("MOD ECHO %s : %s. checksum %04x\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload, udpHeader->checksum);
-    iperfPkt->payload[0] = '0';
+    // iperfPkt->payload[0] = 'A';
+    network_uint16_t originalChecksum = udpHeader->checksum;
+
+    // TRIAL 1
+    udpHeader->checksum = byteorder_htons(0);
+    gnrc_pktsnip_t fakeUndef = (gnrc_pktsnip_t) {.next = NULL, .data = (void *) iperfPkt, .size = undef->size, .type = GNRC_NETTYPE_UNDEF};
+    gnrc_pktsnip_t fakeUdp = (gnrc_pktsnip_t) {.next = &fakeUndef, .data = (void *) udpHeader, .size = sizeof(udp_hdr_t), .type = GNRC_NETTYPE_UDP};
+    int ret = gnrc_udp_calc_csum(&fakeUdp, ipv6);
+    logdebug("TRIAL 1 NEW Checksum %x. ret %d\n", udpHeader->checksum, ret);
+
+    // TRIAL 2
+    udpHeader->checksum = byteorder_htons(0);
+    ret = gnrc_udp_calc_csum(&fakeUdp, ipv6);
+    logdebug("TRIAL 2 NEW Checksum %x. ret %d\n", udpHeader->checksum, ret);
+
   }
 
   printf("Relayer Intercepted Snip:\n");
@@ -526,8 +617,8 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
         //   // Zero out the chksum first
         //   udpHeader->checksum = (network_uint16_t) { .u16 = htobe16(0) };
         //   memset(&udpHeader->checksum, 0x00, sizeof(uint16_t));
-        //   int ret = gnrc_udp_calc_csum(udp, ipv6);
-        //   logdebug("NEW Checksum %x. ret %d\n", udpHeader->checksum, ret);
+        // int ret = gnrc_udp_calc_csum(udp, ipv6);
+        // logdebug("NEW Checksum %x. ret %d\n", udpHeader->checksum, ret);
         // }
         //
         // if (iperfPkt->msgType == IPERF_ECHO_CALL)

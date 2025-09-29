@@ -543,9 +543,11 @@ udp_hdr_t * findUdpHeaderFromIperfPayload(gnrc_pktsnip_t *snip)
   return udpHeader;
 }
 
-static void udpChecksum(udp_hdr_t *udp)
+udp_hdr_t * findUdpHeaderFromIpv6Header(gnrc_pktsnip_t *snip)
 {
-  //
+  void *ipv6 = (void *) snip->data;
+  udp_hdr_t *udpHeader = (udp_hdr_t *) (ipv6 + sizeof(ipv6_hdr_t));
+  return udpHeader;
 }
 
 // Will return true if the packet should keep going
@@ -576,22 +578,32 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
   // if (strncmp(iperfPkt->payload, "zxc", 3) == 0) 
   if (iperfPkt->msgType == IPERF_ECHO_CALL)
   {
-    logdebug("MOD ECHO %s : %s. checksum %04x\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload, udpHeader->checksum);
+    logdebug("MOD ECHO %s : %s. BEFORE Checksum %04x\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload, udpHeader->checksum);
     // iperfPkt->payload[0] = 'A';
-    network_uint16_t originalChecksum = udpHeader->checksum;
+    // network_uint16_t originalChecksum = udpHeader->checksum;
 
     // TRIAL 1
     udpHeader->checksum = byteorder_htons(0);
-    gnrc_pktsnip_t fakeUndef = (gnrc_pktsnip_t) {.next = NULL, .data = (void *) iperfPkt, .size = undef->size, .type = GNRC_NETTYPE_UNDEF};
-    gnrc_pktsnip_t fakeUdp = (gnrc_pktsnip_t) {.next = &fakeUndef, .data = (void *) udpHeader, .size = sizeof(udp_hdr_t), .type = GNRC_NETTYPE_UDP};
+    gnrc_pktsnip_t *ipv6 = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_IPV6);
+    gnrc_pktsnip_t fakeUndef = (gnrc_pktsnip_t) {.next = NULL, .data = undef->data, .size = undef->size, .type = GNRC_NETTYPE_UNDEF};
+    gnrc_pktsnip_t fakeUdp = (gnrc_pktsnip_t) {.next = &fakeUndef, .data = (void *) udpHeader, .size = byteorder_ntohs(udpHeader->length), .type = GNRC_NETTYPE_UDP};
     int ret = gnrc_udp_calc_csum(&fakeUdp, ipv6);
-    logdebug("TRIAL 1 NEW Checksum %x. ret %d\n", udpHeader->checksum, ret);
+    logdebug("TRIAL 1 NEW Checksum %04x. ret %d. udpHeader->length %d\n", udpHeader->checksum, ret, udpHeader->length);
+    //
+    // void fix_udp_checksum(ipv6_hdr_t *ipv6, uint8_t *udp_start)
+    // udp_hdr_t *udp = (udp_hdr_t *)udp_start;
+    // size_t udp_len = byteorder_ntohs(ipv6->len);  /* length after IPv6 header */
+    //
+    // udp->checksum = 0;
+    // udp->checksum = inet_csum_ipv6(ipv6, udp, udp_len, ipv6->nh);
+    // udpHeader->checksum = byteorder_ntohs(0);
+    // udpHeader->checksum = inet_csum_ipv6(ipv6header, udpHeader, sizeof(udp_hdr_t) + undef->size, ipv6header->nh);
 
-    // TRIAL 2
-    udpHeader->checksum = byteorder_htons(0);
-    ret = gnrc_udp_calc_csum(&fakeUdp, ipv6);
-    logdebug("TRIAL 2 NEW Checksum %x. ret %d\n", udpHeader->checksum, ret);
-
+    // udpHeader->checksum = byteorder_htons(0);
+    // uint16_t csum = 0;
+    // uint16_t len = (uint16_t) (sizeof(udp_hdr_t) + undef->size);
+    // inet_csum(csum, (uint8_t *) udpHeader, len);
+    // logdebug("TRIAL 2 NEW csum %x\n", csum);
   }
 
   printf("Relayer Intercepted Snip:\n");
@@ -761,6 +773,5 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
       break;
       }
   }
-  printf("should forward %d\n", shouldForward);
   return shouldForward;
 }

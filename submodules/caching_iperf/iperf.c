@@ -517,6 +517,20 @@ int Iperf_HandleEcho(IperfUdpPkt_t *iperfPkt)
 // With the following two fns, we assume the Tx machine is the master the Rx machine is the follower
 int Iperf_SendEcho(char *str)
 {
+  if (strncmp(str, "123", 3) == 0)
+  {
+    uint16_t plSize = 0; 
+    char rawPkt[sizeof(IperfUdpPkt_t) + plSize]; 
+    IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
+    memset(&iperfPkt->payload, 0x00, plSize);
+    strncpy((char *) iperfPkt->payload, str, plSize);
+    iperfPkt->seqNo = 0;
+    iperfPkt->msgType = 0;
+    iperfPkt->plSize = 0;
+    printf("[IPERF ECHO] rawPkt size %d IperfUdpPkt_t size %d \n", sizeof(rawPkt), sizeof(IperfUdpPkt_t));
+    return Iperf_SocklessUdpSendToDst((char *) &rawPkt, sizeof(rawPkt));
+  }
+
   uint16_t plSize = strlen(str); 
   char rawPkt[sizeof(IperfUdpPkt_t) + plSize]; 
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;

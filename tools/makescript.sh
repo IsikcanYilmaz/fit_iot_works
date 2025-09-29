@@ -12,6 +12,8 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
+DRY=""
+
 FITIOT=false
 
 # Parse args
@@ -26,6 +28,10 @@ while [ $# -gt 0 ]; do
       shift
       FITIOT=true
       ;;
+    "--dry")
+      shift
+      DRY="echo "
+      ;;
     *)
       PORT+=("$1") 
       shift
@@ -39,12 +45,16 @@ echo -e "${GREEN}Building for board $BOARD ${NC}"
 ret=1
 if [ $(which compiledb) ]; then
   echo "compiledb found in system."
-  compiledb make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
+  $DRY compiledb make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
   ret="$?"
   cp compile_commands.json "$PROJBASE"
 else
-  make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
+  $DRY make RIOTBASE=$RIOTBASE BOARD=$BOARD WERROR=0 UF2_SOFTDEV=DROP
   ret="$?"
+fi
+
+if [ "$DRY" != "" ]; then
+  exit
 fi
 
 if [ "$ret" != 0 ]; then

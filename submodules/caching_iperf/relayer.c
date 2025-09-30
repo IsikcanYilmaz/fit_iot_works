@@ -332,6 +332,69 @@ static void legacyCache(IperfUdpPkt_t *iperfPkt)
   return;
 }
 
+/**
+ * @brief computes UDP checksum for given UDP payload and checksum.
+ *
+ * @param[in] payload_data UDP payload
+ * @param[in] size         The size of the payload
+ * @param[in] checksum     Checksum field of the UDP packet.
+ *                         Will be overridden with the computed checksum.
+ *
+ * @return  0 on success
+ * @return  non-zero on failure
+ */
+static uint16_t computeUdpChecksum(uint8_t *payload_data, size_t size, udp_hdr_t *rawUdpHeaderBefore, ipv6_hdr_t *rawIpv6Header, uint16_t *checksum)
+{
+  static gnrc_pktsnip_t zero_snip = {
+    .users = 0,
+    .next = NULL,
+    .data = NULL,
+    .size = 0,
+    .type = GNRC_NETTYPE_UNDEF,
+  };
+
+  gnrc_pktsnip_t payload = zero_snip;
+  gnrc_pktsnip_t hdr = zero_snip;
+  udp_hdr_t hdr_data = (udp_hdr_t) {
+    .src_port = byteorder_htons(0),
+    .dst_port = byteorder_htons(0),
+    .length = byteorder_htons(0),
+    .checksum = byteorder_htons(*checksum),
+  };
+  memcpy(&hdr_data, rawUdpHeaderBefore, sizeof(udp_hdr_t));
+
+  gnrc_pktsnip_t pseudo_hdr = zero_snip;
+  ipv6_hdr_t pseudo_hdr_data = (ipv6_hdr_t) {
+    .v_tc_fl = byteorder_htonl(0),
+    .len = byteorder_htons((uint16_t) (sizeof(hdr_data) + size)),
+    .nh = GNRC_NETTYPE_UDP,
+    .hl = 0,
+    .src = IPV6_ADDR_UNSPECIFIED,
+    .dst = IPV6_ADDR_UNSPECIFIED,
+  };
+  memcpy(&pseudo_hdr_data, rawIpv6Header, sizeof(ipv6_hdr_t));
+
+  pseudo_hdr.type = GNRC_NETTYPE_IPV6;
+  pseudo_hdr.data = &pseudo_hdr_data;
+  pseudo_hdr.size = sizeof(ipv6_hdr_t);
+  pseudo_hdr.next = &hdr;
+
+  hdr.type = GNRC_NETTYPE_UDP;
+  hdr.data = &hdr_data;
+  hdr.size = sizeof(udp_hdr_t);
+  hdr.next = &payload;
+
+  payload.type = GNRC_NETTYPE_UNDEF;
+  payload.data = payload_data;
+  payload.size = size;
+
+  int status = gnrc_udp_calc_csum(&hdr, &pseudo_hdr);
+
+  *checksum = byteorder_ntohs(hdr_data.checksum);
+
+  return status;
+}
+
 // Şüphesiz inkar edenler Zikr'i (Kur'-an'ı) duydukları zaman neredeyse seni gözleriyle devirecekler. (Senin için,) "Hiç şüphe yok o bir delidir" diyorlar. Halbuki o (Kur'an), âlemler için ancak bir öğüttür. 
 // fhdjfhdjfdfkhdkjf
 int Iperf_LookUpCachedPktPtr(uint16_t pktIdx)
@@ -396,35 +459,35 @@ void *Iperf_RelayerThread(void *arg)
     logdebug("IPC Message type %x\n", msg.type);
     switch (msg.type) {
       case IPERF_IPC_MSG_RELAY_RESPOND: // IF relayer needs to do something instead of simply forwarding
-      {
-        logdebug("RELAYER RESPONSE\n");
-        sendPayload();
-        break;
-      }
-      case IPERF_IPC_MSG_RELAY_SERVICE_INTEREST:
-      {
-        logdebug("RELAYER SERVICING INTEREST\n");
-        uint16_t cacheIdxToSend;
-        int ret = SimpleQueue_Pop(&pktReqQueue, &cacheIdxToSend);
-        if (ret)
         {
-          logdebug("Queue returned 1 %d\n", __LINE__);
+          logdebug("RELAYER RESPONSE\n");
+          sendPayload();
           break;
         }
-        sendCachedPkt(cacheIdxToSend);
-        if (!SimpleQueue_IsEmpty(&pktReqQueue))
+      case IPERF_IPC_MSG_RELAY_SERVICE_INTEREST:
         {
-          msg_t ipc;
-          ipc.type = IPERF_IPC_MSG_RELAY_SERVICE_INTEREST;
-          ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipc, relayerPid);
+          logdebug("RELAYER SERVICING INTEREST\n");
+          uint16_t cacheIdxToSend;
+          int ret = SimpleQueue_Pop(&pktReqQueue, &cacheIdxToSend);
+          if (ret)
+          {
+            logdebug("Queue returned 1 %d\n", __LINE__);
+            break;
+          }
+          sendCachedPkt(cacheIdxToSend);
+          if (!SimpleQueue_IsEmpty(&pktReqQueue))
+          {
+            msg_t ipc;
+            ipc.type = IPERF_IPC_MSG_RELAY_SERVICE_INTEREST;
+            ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipc, relayerPid);
+          }
+          break;
         }
-        break;
-      }
       case IPERF_IPC_MSG_STOP:
-      {
-        running = false;
-        break;
-      }
+        {
+          running = false;
+          break;
+        }
       default:
         logdebug("IPC received something unexpected %x\n", msg.type);
         break;
@@ -434,44 +497,6 @@ void *Iperf_RelayerThread(void *arg)
   loginfo("Relayer thread exiting\n");
   return NULL;
 }
-
-// static uint16_t _calc_csum(gnrc_pktsnip_t *hdr, gnrc_pktsnip_t *pseudo_hdr,
-//                            gnrc_pktsnip_t *payload)
-// {
-//   uint16_t csum = 0;
-//   uint16_t len = (uint16_t)hdr->size;
-//
-//   /* process the payload */
-//   while (payload && payload != hdr && payload != pseudo_hdr) {
-//     csum = inet_csum_slice(csum, (uint8_t *)(payload->data), payload->size, len);
-//     len += (uint16_t)payload->size;
-//     payload = payload->next;
-//   }
-//   /* process applicable UDP header bytes */
-//   csum = inet_csum(csum, (uint8_t *)hdr->data, sizeof(udp_hdr_t));
-//
-//   switch (pseudo_hdr->type) {
-// #ifdef MODULE_GNRC_IPV6
-//     case GNRC_NETTYPE_IPV6:
-//       csum = ipv6_hdr_inet_csum(csum, pseudo_hdr->data, PROTNUM_UDP, len);
-//       break;
-// #endif
-//     default:
-//       (void)len;
-//       return 0;
-//   }
-//   /* return inverted results */
-//   if (csum == 0xFFFF) {
-//     /* https://tools.ietf.org/html/rfc8200#section-8.1
-//          * bullet 4
-//          * "if that computation yields a result of zero, it must be changed
-//          * to hex FFFF for placement in the UDP header."
-//          */
-//     return 0xFFFF;
-//   } else {
-//     return ~csum;
-//   }
-// }
 
 static void dump_pkt_snips(gnrc_pktsnip_t *pkt)
 {
@@ -500,29 +525,29 @@ static void dump_pkt_snips(gnrc_pktsnip_t *pkt)
     }
     printf("snip: type %u %s size %d\n", s->type, typestr, s->size);
   }
- // *                                                                  buffer
- // *              +---------------------------+                      +------+
- // *              | size = 14                 | data +-------------->|      |
- // *              | type = NETTYPE_ETHERNET   |------+               +------+
- // *              +---------------------------+                      .      .
- // *                    | next                                       .      .
- // *                    v                                            +------+
- // *              +---------------------------+         +----------->|      |
- // *              | size = 40                 | data    |            |      |
- // *              | type = NETTYPE_IPV6       |---------+            +------+
- // *              +---------------------------+                      .      .
- // *                    | next                                       .      .
- // *                    v                                            +------+
- // *              +---------------------------+            +-------->|      |
- // *              | size = 8                  | data       |         +------+
- // *              | type = NETTYPE_UDP        |------------+         .      .
- // *              +---------------------------+                      .      .
- // *                    | next                                       +------+
- // *                    v                                     +----->|      |
- // *              +---------------------------+               |      |      |
- // *              | size = 59                 | data          |      .      .
- // *              | type = NETTYPE_UNDEF      |---------------+      .      .
- // *              +---------------------------+                      .      .
+  // *                                                                  buffer
+  // *              +---------------------------+                      +------+
+  // *              | size = 14                 | data +-------------->|      |
+  // *              | type = NETTYPE_ETHERNET   |------+               +------+
+  // *              +---------------------------+                      .      .
+  // *                    | next                                       .      .
+  // *                    v                                            +------+
+  // *              +---------------------------+         +----------->|      |
+  // *              | size = 40                 | data    |            |      |
+  // *              | type = NETTYPE_IPV6       |---------+            +------+
+  // *              +---------------------------+                      .      .
+  // *                    | next                                       .      .
+  // *                    v                                            +------+
+  // *              +---------------------------+            +-------->|      |
+  // *              | size = 8                  | data       |         +------+
+  // *              | type = NETTYPE_UDP        |------------+         .      .
+  // *              +---------------------------+                      .      .
+  // *                    | next                                       +------+
+  // *                    v                                     +----->|      |
+  // *              +---------------------------+               |      |      |
+  // *              | size = 59                 | data          |      .      .
+  // *              | type = NETTYPE_UNDEF      |---------------+      .      .
+  // *              +---------------------------+                      .      .
 
   printf("------ JON JON HEADER PRINT TEST ipv6 size %d udp size %d ------\n", sizeof(ipv6_hdr_t), sizeof(udp_hdr_t));
 
@@ -536,14 +561,14 @@ static void dump_pkt_snips(gnrc_pktsnip_t *pkt)
 }
 
 // JON HACK this layer should not have access to udp. but it do now lol
-udp_hdr_t * findUdpHeaderFromIperfPayload(gnrc_pktsnip_t *snip)
+static udp_hdr_t * findUdpHeaderFromIperfPayload(gnrc_pktsnip_t *snip)
 {
   uint8_t *undef = (uint8_t *) (snip->data + 8);
   udp_hdr_t *udpHeader = (udp_hdr_t *) (undef - sizeof(udp_hdr_t));
   return udpHeader;
 }
 
-udp_hdr_t * findUdpHeaderFromIpv6Header(gnrc_pktsnip_t *snip)
+static udp_hdr_t * findUdpHeaderFromIpv6Header(gnrc_pktsnip_t *snip)
 {
   void *ipv6 = (void *) snip->data;
   udp_hdr_t *udpHeader = (udp_hdr_t *) (ipv6 + sizeof(ipv6_hdr_t));
@@ -558,12 +583,12 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
   // We care about IPv6 and UNDEF snips. 
   gnrc_pktsnip_t *undef = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_UNDEF);
   gnrc_pktsnip_t *ipv6 = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_IPV6);
-  ipv6_hdr_t *ipv6header = (ipv6_hdr_t *) ipv6->data;
+  ipv6_hdr_t *ipv6Header = (ipv6_hdr_t *) ipv6->data;
   udp_hdr_t *udpHeader = findUdpHeaderFromIperfPayload(undef);
 
   udp_hdr_print(udpHeader);
-  ipv6_hdr_print(ipv6header);
-  printf("ipv6 header addr 0x%08x\n", ipv6header);
+  ipv6_hdr_print(ipv6Header);
+  printf("ipv6 header addr 0x%08x\n", ipv6Header);
 
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) (undef->data + 8); // JON TODO HACK //  Idk why I need this 8 byte offset but i do
 
@@ -575,38 +600,30 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     shouldForward = false;
   }
 
-  // if (strncmp(iperfPkt->payload, "zxc", 3) == 0) 
-  if (iperfPkt->msgType == IPERF_ECHO_CALL)
+  if (strncmp(iperfPkt->payload, "zxc", 3) == 0) 
+  // if (iperfPkt->msgType == IPERF_ECHO_CALL)
   {
     logdebug("MOD ECHO %s : %s. BEFORE Checksum %04x\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload, udpHeader->checksum);
-    // iperfPkt->payload[0] = 'A';
-    // network_uint16_t originalChecksum = udpHeader->checksum;
+    iperfPkt->payload[0] = 'A';
+    network_uint16_t originalChecksum = udpHeader->checksum;
 
-    // TRIAL 1
+    // TRIAL 2
+    logdebug("\nTRIAL 2 JON JON JON JON BEGIN\n");
+    ipv6_hdr_print(ipv6Header);
+    udp_hdr_print((udp_hdr_t *) undef->data);
+    for (int i = 0; i < undef->size; i++)
+    {
+      printf("%02x ", ((uint8_t *) (undef->data))[i]);
+    }
     udpHeader->checksum = byteorder_htons(0);
-    gnrc_pktsnip_t *ipv6 = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_IPV6);
-    gnrc_pktsnip_t fakeUndef = (gnrc_pktsnip_t) {.next = NULL, .data = undef->data, .size = undef->size, .type = GNRC_NETTYPE_UNDEF};
-    gnrc_pktsnip_t fakeUdp = (gnrc_pktsnip_t) {.next = &fakeUndef, .data = (void *) udpHeader, .size = byteorder_ntohs(udpHeader->length), .type = GNRC_NETTYPE_UDP};
-    int ret = gnrc_udp_calc_csum(&fakeUdp, ipv6);
-    logdebug("TRIAL 1 NEW Checksum %04x. ret %d. udpHeader->length %d\n", udpHeader->checksum, ret, udpHeader->length);
-    //
-    // void fix_udp_checksum(ipv6_hdr_t *ipv6, uint8_t *udp_start)
-    // udp_hdr_t *udp = (udp_hdr_t *)udp_start;
-    // size_t udp_len = byteorder_ntohs(ipv6->len);  /* length after IPv6 header */
-    //
-    // udp->checksum = 0;
-    // udp->checksum = inet_csum_ipv6(ipv6, udp, udp_len, ipv6->nh);
-    // udpHeader->checksum = byteorder_ntohs(0);
-    // udpHeader->checksum = inet_csum_ipv6(ipv6header, udpHeader, sizeof(udp_hdr_t) + undef->size, ipv6header->nh);
-
-    // udpHeader->checksum = byteorder_htons(0);
-    // uint16_t csum = 0;
-    // uint16_t len = (uint16_t) (sizeof(udp_hdr_t) + undef->size);
-    // inet_csum(csum, (uint8_t *) udpHeader, len);
-    // logdebug("TRIAL 2 NEW csum %x\n", csum);
+    uint16_t newChecksum = 0;
+    computeUdpChecksum((uint8_t *) (undef->data + sizeof(udp_hdr_t)), sizeof(IperfUdpPkt_t) + iperfPkt->plSize, (udp_hdr_t *) undef->data, ipv6Header, &newChecksum);
+    udpHeader->checksum = byteorder_htons(newChecksum);
+    printf("\nTRIAL 2 END NEW CHKSUM 0x%04x IN PKT? 0x%04x JON JON \n", newChecksum, udpHeader->checksum);
+    printf("JON JON JIN JON JON FJDKSFJ:DKJFS:KDFJ\n");
   }
 
-  printf("Relayer Intercepted Snip:\n");
+  // printf("Relayer Intercepted Snip:\n");
   // Iperf_PacketHandler(snip, NULL);
 
   // FILTERS
@@ -720,10 +737,10 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
               logdebug("Cache hit! Seq no %d at cache idx %d\n", expectArr[i], cachedPktIdx);
               printf("CACHE HIT CACHE HIT %d\n", expectArr[i]);
 
-              #if DEMO_CONFIG
+#if DEMO_CONFIG
               SimpleQueue_Push(&cacheHitQueue, expectArr[i]);
               results.lastPktSeqNo = expectArr[i];
-              #endif
+#endif
 
               expectArr[i] = SIMPLE_QUEUE_INVALID_NUMBER;
               cacheLock[cachedPktIdx] = true;
@@ -770,7 +787,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
       }
     default:
       {
-      break;
+        break;
       }
   }
   return shouldForward;

@@ -139,11 +139,20 @@ static int sendPayload(void)
   return Iperf_SocklessUdpSendToSrc((char *) buf, sizeof(buf));
 }
 
-static int sendCachedPkt(uint16_t i)
+static int sendLegacyCachedPkt(uint16_t i)
 {
   IperfUdpPkt_t *cached = (IperfUdpPkt_t *) (cacheBuffer + (i * CACHE_BLOCK_SIZE));
   logdebug("Sending cached idx:%d (seq no %d) to destination\n", i, cached->seqNo);
   cached->msgType = IPERF_PKT_RESP;
+  cacheLock[i] = false;
+  return Iperf_SocklessUdpSendToDst((char *) (cacheBuffer + (i * CACHE_BLOCK_SIZE)), CACHE_BLOCK_SIZE);
+}
+
+static int sendCodedCachedPkt(uint16_t i)
+{
+  IperfUdpPkt_t *cached = (IperfUdpPkt_t *) (cacheBuffer + (i * CACHE_BLOCK_SIZE));
+  printf("JON JON JON Sending cached idx:%d to destination\n", i);
+  cached->msgType = IPERF_PKT_CODED_DATA;
   cacheLock[i] = false;
   return Iperf_SocklessUdpSendToDst((char *) (cacheBuffer + (i * CACHE_BLOCK_SIZE)), CACHE_BLOCK_SIZE);
 }
@@ -183,13 +192,17 @@ static int codedCacheLookup(uint8_t chunkIdx)
   }
 }
 
-static int codedCanSatisfyRequest(IperfCatalogueVector_t *catalogue)
+// Once relay receives a catalogue vector, pass it here. This fn will go thru the vector, check if we can service any of the
+// zeros in the vector. If we can, those cache ids will be put to the service queue, and the bits in the vector will be flipped
+// returns true if we service at least one packet
+static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
 {
+  bool canSatisfy = false;
   // We got a catalogue. go thru every one of our cache blocks and see if anything satisfies
   uint32_t Cbefore = (uint32_t) (* (uint32_t *) catalogue->bitmap);
   for (int cacheBlockIdx = 0; cacheBlockIdx < config.numCacheBlocks; cacheBlockIdx++)
   {
-    printf("Checking for servicability with cacheblockidx %d\n", cacheBlockIdx);
+    logdebug("Checking for servicability with cacheblockidx %d\n", cacheBlockIdx);
 
     IperfUdpPkt_t *udp = (IperfUdpPkt_t *) (cacheBuffer + (cacheBlockIdx * CODED_CACHE_BLOCK_SIZE));
     IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) udp->payload;
@@ -198,19 +211,19 @@ static int codedCanSatisfyRequest(IperfCatalogueVector_t *catalogue)
 
     if (catalogue->pktOffset != offset)
     {
-      printf("Catalogue offset mismatch. continuing\n");
+      logdebug("Catalogue offset mismatch. continuing\n");
       continue;
     }
  
     uint32_t R = (uint32_t) (* (uint32_t *) bitmap);
-    printf("R=0x%08x\n", R);
-    printf("Cbefore=0x%08x\n", Cbefore);
+    logverbose("R=0x%08x\n", R);
+    logverbose("Cbefore=0x%08x\n", Cbefore);
     uint32_t Cafter = Cbefore ^ R;
-    printf("Cafter=0x%08x\n", Cafter);
+    logverbose("Cafter=0x%08x\n", Cafter);
     uint32_t Cdiff = (Cafter > Cbefore) ? Cafter - Cbefore : Cbefore - Cafter;
-    printf("Cdiff=0x%08x\n", Cdiff);
+    logverbose("Cdiff=0x%08x\n", Cdiff);
 
-    // // Check if Cdiff is a power of 2
+    // Check if Cdiff is a power of 2
     if (Cdiff > 0 && ((Cdiff - 1) & Cdiff) == 0)
     {
       // Cdiff is a power of 2. Find which packet we can service thru this
@@ -223,18 +236,19 @@ static int codedCanSatisfyRequest(IperfCatalogueVector_t *catalogue)
           break;
         }
       }
-      printf("Can service. With coded data in cache idx %d we can decode %d\n", cacheBlockIdx, decodedPktIdx);
+      logdebug("Can service. With coded data in cache idx %d we can decode %d\n", cacheBlockIdx, decodedPktIdx);
 
       // Put in our outward queue cache block at $cacheblockidx
       // flip the bit
-      
-      printf("Catalogue before %x ", * (uint32_t *) catalogue->bitmap);
-      // * (uint32_t*) catalogue->bitmap |= (1 << decodedPktIdx);
-      // catalogue->bitmap[0] = 0x00;
-      printf("Catalogue after %x \n", * (uint32_t *) catalogue->bitmap);
+      logdebug("Catalogue before %x ", * (uint32_t *) catalogue->bitmap);
+      * (uint32_t*) catalogue->bitmap |= (1 << decodedPktIdx);
+      logdebug("Catalogue after %x \n", * (uint32_t *) catalogue->bitmap);
+      canSatisfy = true;
+      logdebug("Putting cache block idx %d onto the service queue\n", cacheBlockIdx);
+      SimpleQueue_Push(&pktReqQueue, cacheBlockIdx);
     }
   }
-  return 0;
+  return true;
 }
 
 static void codedCache(IperfUdpPkt_t *iperfPkt)
@@ -382,6 +396,7 @@ static udp_hdr_t * findUdpHeaderFromIpv6Header(gnrc_pktsnip_t *snip)
 
 // Şüphesiz inkar edenler Zikr'i (Kur'-an'ı) duydukları zaman neredeyse seni gözleriyle devirecekler. (Senin için,) "Hiç şüphe yok o bir delidir" diyorlar. Halbuki o (Kur'an), âlemler için ancak bir öğüttür. 
 // fhdjfhdjfdfkhdkjf
+// This function returns the CACHE INDEX if the index of what's cached inside it matches the passed argument. 
 int Iperf_LookUpCachedPktPtr(uint16_t pktIdx)
 {
   for (int i = 0; i < config.numCacheBlocks; i++)
@@ -456,10 +471,21 @@ void *Iperf_RelayerThread(void *arg)
           int ret = SimpleQueue_Pop(&pktReqQueue, &cacheIdxToSend);
           if (ret)
           {
-            logdebug("Queue returned 1 %d\n", __LINE__);
+            logdebug("Queue returned error code 1 %d\n", __LINE__);
             break;
           }
-          sendCachedPkt(cacheIdxToSend);
+
+          if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL) // JON please eventually remove the legacy stuff make generic
+          {
+            sendLegacyCachedPkt(cacheIdxToSend);
+          }
+          else if (config.mode == IPERF_MODE_CACHING_CODING)
+          {
+            printf("SENDING CACHE IDX %d\n", cacheIdxToSend);
+            sendCodedCachedPkt(cacheIdxToSend);
+          }
+
+          // If we got more in the queue, keep coming back here
           if (!SimpleQueue_IsEmpty(&pktReqQueue))
           {
             msg_t ipc;
@@ -488,6 +514,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
 {
   bool shouldForward = true;
   bool shouldComputeChecksum = false;
+  bool shouldSendIpc = false;
 
   // We care about IPv6 and UNDEF snips. 
   gnrc_pktsnip_t *undef = gnrc_pktsnip_search_type(snip, GNRC_NETTYPE_UNDEF);
@@ -594,7 +621,6 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
           uint16_t *expectArr = bulkInterest->arr;
           uint16_t numBadExpectsOrCacheHits = 0;
           logdebug("Intercepted bulk interest for %d chunks\n", numExpects);
-          bool shouldSendIpc = false;
           for (int i = 0; i < numExpects; i++)
           {
             if (expectArr[i] == SIMPLE_QUEUE_INVALID_NUMBER)
@@ -650,12 +676,19 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
       {
         // CODED CACHING
         // We just caught a catalogue vector. This will tell us what the receiver has and what it does not have
-        //
         printf("IPERF_PKT_CATALOGUE_VECTOR\n");
         Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
-        // codedCanSatisfyRequest((IperfCatalogueVector_t *) iperfPkt->payload);
+        bool canSatisfy = handleCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
+        shouldComputeChecksum = canSatisfy;
+        shouldSendIpc = canSatisfy;
         IperfCatalogueVector_t *catalogue = (IperfCatalogueVector_t *) iperfPkt->payload;
-        catalogue->bitmap[0] = 0;
+        if (shouldSendIpc) // JON TODO maybe make this generic?
+        {
+          logverbose("Sending IPC\n");
+          msg_t ipc;
+          ipc.type = IPERF_IPC_MSG_RELAY_SERVICE_INTEREST;
+          msg_send(&ipc, relayerPid);
+        }
         break;
       }
     default:

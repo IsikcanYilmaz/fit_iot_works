@@ -148,6 +148,62 @@ static bool checkForCompletionAndTransition(void)
   }
 }
 
+// Checks the received packets. If all of the ones from the first IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS amount are done, 
+// increments the offset by one, and so on. returns offset
+static uint8_t getCurrentOffset(void)
+{
+  uint8_t offset = 0;
+  uint16_t i;
+  for (i = 0; i < numExpectedPkts; i++)
+  {
+    if (receivedPktIds[i] != RECEIVED)
+    {
+      break;
+    }
+  }
+  offset = i / IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS;
+  return offset;
+}
+
+static uint16_t handleCodedPayload(IperfCodedPayloadPkt_t *p)
+{
+  logdebug("Received coded payload ");
+  if (logprintTags[DEBUG]) Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) p);
+  
+  // Figure out which chunk can be acquired thru the decoding of this newly acquired coded payload
+  uint8_t currentOffset = getCurrentOffset();
+  uint32_t Cbefore = Iperf_GetCatalogueVector(&receivedPktIds, currentOffset);
+  uint32_t R = * (uint32_t *) (p->bitmap);
+  uint32_t Cafter = Cbefore ^ R;
+  uint32_t Cdiff = (Cafter > Cbefore) ? Cafter - Cbefore : Cbefore - Cafter;
+  uint32_t Cdecoded = (Cdiff > R) ? Cdiff - R : R - Cdiff;
+  
+  // Figure out which chunk needs to be xor'd with it to do the decoding
+  uint32_t neededChunkIdx; // This chunk will be used to decode the resulting chunk
+  uint32_t resultingChunkIdx; // this chunk is the resulting chunk
+  for (int i = 0; i < 32; i++)
+  {
+    if ((Cdecoded & (1<<i)) > 0)
+    {
+      resultingChunkIdx = i;
+    }
+  }
+  
+  for (int i = 0; i < 32; i++)
+  {
+    if ((Cdiff & (1<<i)) > 0)
+    {
+       neededChunkIdx = i;
+    }
+  }
+  logdebug("Resulting Chunk Idx %d, Needed Chunk Idx %d\n", resultingChunkIdx, neededChunkIdx);
+
+  // Do the xoring
+  // TODO //
+
+  return 0;
+}
+
 static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
 {
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) pkt;
@@ -289,6 +345,15 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           logerror("%s:%d Out of bounds sequence number!! %d\n", __FUNCTION__, __LINE__, iperfPkt->seqNo);
         }
         checkForCompletionAndTransition();
+        break;
+      }
+    case IPERF_PKT_CODED_DATA:
+      {
+        printf("Received Coded Data\n");
+        IperfCodedPayloadPkt_t *coded = iperfPkt->payload;
+        Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
+        printf("JON JON \n");
+        handleCodedPayload(coded);
         break;
       }
     case IPERF_ECHO_CALL:
@@ -468,7 +533,7 @@ void *Iperf_ReceiverThread(void *arg)
           break;
         }
       default:
-        /*loginfo("received something unexpected");*/
+        // loginfo("received something unexpected");
         break;
     }
   }

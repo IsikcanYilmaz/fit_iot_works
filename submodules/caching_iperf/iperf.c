@@ -481,6 +481,24 @@ int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint8_t offset)
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
 }
 
+uint32_t Iperf_GetCatalogueVector(IperfChunkStatus_e *chunkStatus, uint8_t offset) // JON one of these functions is redundant
+{
+  uint32_t vector = 0x0000;
+  for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
+  {
+    uint16_t absoluteChunkIdx = (offset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS) + i;
+    if (absoluteChunkIdx >= config.numPktsToTransfer)
+    {
+      break;
+    }
+    if (chunkStatus[absoluteChunkIdx] == RECEIVED)
+    {
+      vector |= (1 << i);
+    }
+  }
+  return vector;
+}
+
 void Iperf_CatalogueVectorTest(void)
 {
   IperfChunkStatus_e receivedPktIds[IPERF_TOTAL_TRANSMISSION_SIZE_MAX]; // TODO bitmap this

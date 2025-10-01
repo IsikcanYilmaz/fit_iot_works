@@ -343,7 +343,7 @@ static void legacyCache(IperfUdpPkt_t *iperfPkt)
  * @return  0 on success
  * @return  non-zero on failure
  */
-static uint16_t computeUdpChecksum(uint8_t *payload_data, size_t size, udp_hdr_t *rawUdpHeaderBefore, ipv6_hdr_t *rawIpv6Header, uint16_t *checksum) // JON could remove the checksum pointer from here too
+static uint16_t computeUdpChecksum(uint8_t *payload_data, size_t size, udp_hdr_t *rawUdpHeaderBefore, ipv6_hdr_t *rawIpv6Header) 
 {
   static gnrc_pktsnip_t zero_snip = {
     .users = 0,
@@ -355,27 +355,7 @@ static uint16_t computeUdpChecksum(uint8_t *payload_data, size_t size, udp_hdr_t
 
   gnrc_pktsnip_t payload = zero_snip;
   gnrc_pktsnip_t hdr = zero_snip;
-  // udp_hdr_t hdr_data = (udp_hdr_t) {
-  //   .src_port = byteorder_htons(0),
-  //   .dst_port = byteorder_htons(0),
-  //   .length = byteorder_htons(0),
-  //   .checksum = byteorder_htons(*checksum),
-  // };
-  // memcpy(&hdr_data, rawUdpHeaderBefore, sizeof(udp_hdr_t)); // JON TODO THIS IS INEFFICIENT!!!!
-  // udp_hdr_t *hdr_data = rawUdpHeaderBefore; // JON TODO CLEAN
-
   gnrc_pktsnip_t pseudo_hdr = zero_snip;
-  // ipv6_hdr_t pseudo_hdr_data = (ipv6_hdr_t) {
-  //   .v_tc_fl = byteorder_htonl(0),
-  //   .len = byteorder_htons((uint16_t) (sizeof(hdr_data) + size)),
-  //   .nh = GNRC_NETTYPE_UDP,
-  //   .hl = 0,
-  //   .src = IPV6_ADDR_UNSPECIFIED,
-  //   .dst = IPV6_ADDR_UNSPECIFIED,
-  // };
-  // memcpy(&pseudo_hdr_data, rawIpv6Header, sizeof(ipv6_hdr_t)); // JON TODO THIS IS INEFFICIENT!!!!
-  // ipv6_hdr_t *pseudo_hdr_data = rawIpv6Header; // JON TODO CLEAN
-
   pseudo_hdr.type = GNRC_NETTYPE_IPV6;
   pseudo_hdr.data = rawIpv6Header;
   pseudo_hdr.size = sizeof(ipv6_hdr_t);
@@ -390,11 +370,7 @@ static uint16_t computeUdpChecksum(uint8_t *payload_data, size_t size, udp_hdr_t
   payload.data = payload_data;
   payload.size = size;
 
-  int status = gnrc_udp_calc_csum(&hdr, &pseudo_hdr);
-
-  *checksum = byteorder_ntohs(rawUdpHeaderBefore->checksum);
-
-  return status;
+  return gnrc_udp_calc_csum(&hdr, &pseudo_hdr);
 }
 
 static udp_hdr_t * findUdpHeaderFromIpv6Header(gnrc_pktsnip_t *snip)
@@ -519,13 +495,16 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
   ipv6_hdr_t *ipv6Header = (ipv6_hdr_t *) ipv6->data;
   udp_hdr_t *udpHeader = findUdpHeaderFromIpv6Header(ipv6);
 
-  udp_hdr_print(udpHeader);
-  ipv6_hdr_print(ipv6Header);
-  printf("ipv6 header addr 0x%08x\n", ipv6Header);
+  if (logprintTags[DEBUG])
+  {
+    udp_hdr_print(udpHeader);
+    ipv6_hdr_print(ipv6Header);
+    printf("ipv6 header addr 0x%08x\n", ipv6Header);
+  }
 
-  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) (undef->data + 8); // JON TODO HACK //  Idk why I need this 8 byte offset but i do
+  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) (undef->data + sizeof(udp_hdr_t)); // since we're in the ipv6 layer RIOT only gives us the snip structure up until the ipv6 layer. after that is considered undef. 
 
-  if (strncmp(iperfPkt->payload, "asdqwe", 6) == 0) // TEST
+  if (strncmp(iperfPkt->payload, "asdqwe", 6) == 0) // TEST message queue test
   {
     msg_t ipc;
     ipc.type = IPERF_IPC_MSG_RELAY_RESPOND;
@@ -533,7 +512,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     shouldForward = false;
   }
 
-  if (strncmp(iperfPkt->payload, "zxc", 3) == 0) // TEST
+  if (strncmp(iperfPkt->payload, "zxc", 3) == 0) // TEST message modification test
   {
     logdebug("MOD ECHO %s : %s. BEFORE Checksum %04x\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload, udpHeader->checksum);
     iperfPkt->payload[0] = 'A';
@@ -546,7 +525,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     case IPERF_ECHO_RESP:
     case IPERF_ECHO_CALL:
       {
-        logdebug("Forwarding Echo %s : %s %04x\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload, udpHeader->checksum);
+        logdebug("Forwarding Echo %s : %s\n", (iperfPkt->msgType == IPERF_ECHO_CALL ? "call" : "resp"), iperfPkt->payload);
         break;
       }
     case IPERF_CONFIG_SYNC:
@@ -688,10 +667,12 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
   // If the relay manipulates the packet, we need to recompute the udp checksum
   if (shouldComputeChecksum)
   {
+    logverbose("Packet manipulated. Recomputing checksum 0x%04x\n", byteorder_ntohs(udpHeader->checksum));
     udpHeader->checksum = byteorder_htons(0);
     uint16_t newChecksum = 0;
-    computeUdpChecksum((uint8_t *) (undef->data + sizeof(udp_hdr_t)), sizeof(IperfUdpPkt_t) + iperfPkt->plSize, (udp_hdr_t *) undef->data, ipv6Header, &newChecksum);
-    udpHeader->checksum = byteorder_htons(newChecksum);
+    computeUdpChecksum((uint8_t *) (undef->data + sizeof(udp_hdr_t)), sizeof(IperfUdpPkt_t) + iperfPkt->plSize, (udp_hdr_t *) undef->data, ipv6Header);
+    // udpHeader->checksum = byteorder_htons(newChecksum);
+    logverbose("New checksum 0x%04x\n", byteorder_ntohs(udpHeader->checksum));
   }
 
   return shouldForward;

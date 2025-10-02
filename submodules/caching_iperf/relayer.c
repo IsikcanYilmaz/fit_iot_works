@@ -223,6 +223,9 @@ static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
     uint32_t Cdiff = (Cafter > Cbefore) ? Cafter - Cbefore : Cbefore - Cafter;
     logdebug("Cdiff=0x%08x\n", Cdiff);
 
+    // JON // the correct way to get "decodable pkt idx"
+    // ~Cbefore & Cafter 
+
     // Check if Cdiff is a power of 2
     if (Cdiff > 0 && ((Cdiff - 1) & Cdiff) == 0)
     {

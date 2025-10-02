@@ -216,12 +216,12 @@ static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
     }
  
     uint32_t R = (uint32_t) (* (uint32_t *) bitmap);
-    logverbose("R=0x%08x\n", R);
-    logverbose("Cbefore=0x%08x\n", Cbefore);
+    logdebug("R=0x%08x\n", R);
+    logdebug("Cbefore=0x%08x\n", Cbefore);
     uint32_t Cafter = Cbefore ^ R;
-    logverbose("Cafter=0x%08x\n", Cafter);
+    logdebug("Cafter=0x%08x\n", Cafter);
     uint32_t Cdiff = (Cafter > Cbefore) ? Cafter - Cbefore : Cbefore - Cafter;
-    logverbose("Cdiff=0x%08x\n", Cdiff);
+    logdebug("Cdiff=0x%08x\n", Cdiff);
 
     // Check if Cdiff is a power of 2
     if (Cdiff > 0 && ((Cdiff - 1) & Cdiff) == 0)
@@ -242,13 +242,13 @@ static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
       // flip the bit
       logdebug("Catalogue before %x ", * (uint32_t *) catalogue->bitmap);
       * (uint32_t*) catalogue->bitmap |= (1 << decodedPktIdx);
-      logdebug("Catalogue after %x \n", * (uint32_t *) catalogue->bitmap);
+      if (logprintTags[DEBUG]) printf("Catalogue after %x \n", * (uint32_t *) catalogue->bitmap);
       canSatisfy = true;
       logdebug("Putting cache block idx %d onto the service queue\n", cacheBlockIdx);
       SimpleQueue_Push(&pktReqQueue, cacheBlockIdx);
     }
   }
-  return true;
+  return canSatisfy;
 }
 
 static void codedCache(IperfUdpPkt_t *iperfPkt)
@@ -522,7 +522,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
   ipv6_hdr_t *ipv6Header = (ipv6_hdr_t *) ipv6->data;
   udp_hdr_t *udpHeader = findUdpHeaderFromIpv6Header(ipv6);
 
-  if (logprintTags[DEBUG])
+  if (logprintTags[VERBOSE])
   {
     udp_hdr_print(udpHeader);
     ipv6_hdr_print(ipv6Header);
@@ -563,12 +563,12 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     case IPERF_PAYLOAD:
     case IPERF_PKT_RESP:
       {
-        if (iperfPkt->seqNo == 2 || iperfPkt->seqNo == 3) // JON TODO RM
+        if (iperfPkt->seqNo == 3 || iperfPkt->seqNo == 6) // JON TODO RM
         {
           codedCache(iperfPkt);
         }
 
-        if (iperfPkt->seqNo == 2)
+        if (iperfPkt->seqNo == 3)
         {
           shouldForward = false;
           break; // JON TODO RM

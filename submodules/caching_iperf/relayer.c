@@ -220,20 +220,18 @@ static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
     logdebug("Cbefore=0x%08x\n", Cbefore);
     uint32_t Cafter = Cbefore ^ R;
     logdebug("Cafter=0x%08x\n", Cafter);
-    uint32_t Cdiff = (Cafter > Cbefore) ? Cafter - Cbefore : Cbefore - Cafter;
-    logdebug("Cdiff=0x%08x\n", Cdiff);
+    uint32_t Cdecodable = (~Cbefore) & Cafter;
+    uint32_t Cdependent = (~Cafter) & Cbefore;
+    logdebug("Cdecodable 0x%08x Cdependent 0x%08x\n", Cdecodable, Cdependent);
 
-    // JON // the correct way to get "decodable pkt idx"
-    // ~Cbefore & Cafter 
-
-    // Check if Cdiff is a power of 2
-    if (Cdiff > 0 && ((Cdiff - 1) & Cdiff) == 0)
+    // Check if Cdecodable is a power of 2
+    if (Cdecodable > 0 && ((Cdecodable - 1) & Cdecodable) == 0)
     {
-      // Cdiff is a power of 2. Find which packet we can service thru this
+      // Cdecodable is a power of 2. Find which packet we can service thru this
       uint16_t decodedPktIdx; // 
       for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
       {
-        if ((Cdiff & (1 << i)) > 0)
+        if ((Cdecodable & (1 << i)) > 0)
         {
           decodedPktIdx = i;
           break;

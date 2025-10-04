@@ -172,18 +172,18 @@ static uint16_t handleCodedPayload(IperfCodedPayloadPkt_t *p)
   
   // Figure out which chunk can be acquired thru the decoding of this newly acquired coded payload
   uint8_t currentOffset = getCurrentOffset();
-  uint32_t Cbefore = Iperf_GetCatalogueVector(&receivedPktIds, currentOffset);
+  uint32_t Cbefore = Iperf_GetCatalogueVector((IperfChunkStatus_e *) &receivedPktIds, currentOffset);
   uint32_t R = * (uint32_t *) (p->bitmap);
   uint32_t Cafter = Cbefore ^ R;
-  uint32_t Cdiff = (Cafter > Cbefore) ? Cafter - Cbefore : Cbefore - Cafter;
-  uint32_t Cdecoded = (Cdiff > R) ? Cdiff - R : R - Cdiff;
+  uint32_t Cdecodable = (!Cbefore) & Cafter;
+  uint32_t Cdependent = (!Cafter) & Cbefore;
   
   // Figure out which chunk needs to be xor'd with it to do the decoding
   uint32_t neededChunkIdx; // This chunk will be used to decode the resulting chunk
   uint32_t resultingChunkIdx; // this chunk is the resulting chunk
   for (int i = 0; i < 32; i++)
   {
-    if ((Cdecoded & (1<<i)) > 0)
+    if ((Cdecodable & (1<<i)) > 0)
     {
       resultingChunkIdx = i;
     }
@@ -191,7 +191,7 @@ static uint16_t handleCodedPayload(IperfCodedPayloadPkt_t *p)
   
   for (int i = 0; i < 32; i++)
   {
-    if ((Cdiff & (1<<i)) > 0)
+    if ((Cdependent & (1<<i)) > 0)
     {
        neededChunkIdx = i;
     }
@@ -350,7 +350,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
     case IPERF_PKT_CODED_DATA:
       {
         printf("Received Coded Data\n");
-        IperfCodedPayloadPkt_t *coded = iperfPkt->payload;
+        IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) iperfPkt->payload;
         Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
         printf("JON JON \n");
         handleCodedPayload(coded);

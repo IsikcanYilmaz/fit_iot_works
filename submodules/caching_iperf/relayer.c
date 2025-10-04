@@ -150,11 +150,17 @@ static int sendLegacyCachedPkt(uint16_t i)
 
 static int sendCodedCachedPkt(uint16_t i)
 {
-  IperfUdpPkt_t *cached = (IperfUdpPkt_t *) (cacheBuffer + (i * CACHE_BLOCK_SIZE));
+  IperfUdpPkt_t *cachedIperfPkt = (IperfUdpPkt_t *) (cacheBuffer + (i * CACHE_BLOCK_SIZE));
   printf("JON JON JON Sending cached idx:%d to destination\n", i);
-  cached->msgType = IPERF_PKT_CODED_DATA;
+  IperfCodedPayloadPkt_t *codedPkt = (IperfCodedPayloadPkt_t *) cachedIperfPkt->payload;
+  for (int i = 0; i < config.payloadSizeBytes; i++)
+  {
+    printf("0x%x ", cachedIperfPkt->payload[i]);
+  }
+  printf("\n");
+  cachedIperfPkt->msgType = IPERF_PKT_CODED_DATA;
   cacheLock[i] = false;
-  return Iperf_SocklessUdpSendToDst((char *) (cacheBuffer + (i * CACHE_BLOCK_SIZE)), CACHE_BLOCK_SIZE);
+  return Iperf_SocklessUdpSendToDst((char *) (cacheBuffer + (i * CODED_CACHE_BLOCK_SIZE)), CODED_CACHE_BLOCK_SIZE);
 }
 
 // Returns -1 if every cache block is locked

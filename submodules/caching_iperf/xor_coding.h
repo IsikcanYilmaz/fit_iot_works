@@ -16,3 +16,4 @@ typedef struct CodedPacket_s
 void XorCoding_DoCoding(XorCodingConfig_t *config, CodedPacket_t *src, CodedPacket_t *dst);
 void XorCoding_PrintEntry(XorCodingConfig_t *config, CodedPacket_t *c);
 void XorCoding_PrintBitmapBits(uint8_t *bitmap);
+bool XorCoding_IsPowerOfTwo(uint32_t num);

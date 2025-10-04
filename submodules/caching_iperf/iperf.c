@@ -212,7 +212,7 @@ void Iperf_PrintFileContents(void)
 {
   for (int i = 0; i < config.transferSizeBytes; i++)
   {
-    printf("%c", receiveFileBuffer[i]);
+    printf("%c", (receiveFileBuffer[i] != 0x00) ? receiveFileBuffer[i] : '.');
   }
   printf("\n");
 }
@@ -1125,20 +1125,6 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     printf("\n");
     Iperf_SendBulkInterest((uint16_t *) &requests, argc-2);
   }
-  else if (strncmp(argv[1], "64test", 16) == 0)
-  {
-    uint8_t test[8];
-    memset(test, 0x00, 8);
-    // test[0] = 1;
-    // test[1] = 1;
-    uint64_t *test64 = (uint64_t *) test;
-    printf("before %x\n", *test64);
-    // *test64 -= 5;
-    printf("after %x\n", *test64);
-
-    uint64_t canieven = 0x1111222233334444;
-    printf("canieven %lld\n", canieven);
-  }
   else
   {
     goto usage;
@@ -1147,7 +1133,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|start|stop|restart|log|config|target|results|echo|interest|bulk|sizetest|cataloguetest|64test>\n");
+  logerror("Usage: iperf <sender|receiver|start|stop|restart|log|config|target|results|echo|interest|bulk|sizetest|cataloguetest>\n");
   return 1;
 }
 

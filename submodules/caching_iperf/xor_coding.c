@@ -2,10 +2,13 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include "iperf_pkt.h"
 #include "xor_coding.h"
 
 #define XOR_CODING_DEBUG 0
+
+// TODO Eventually consolidate XOR network coding code here. make functions generic
 
 /*
 * Coding Module
@@ -67,6 +70,11 @@ void XorCoding_PrintBitmapBits(uint8_t *bitmap)
     printf("0x%02x ", bitmap[i]);
   }
   printf("\n");
+}
+
+bool XorCoding_IsPowerOfTwo(uint32_t num)
+{
+  return (num > 0 && ((num - 1) & num) == 0);
 }
 
 #if 0

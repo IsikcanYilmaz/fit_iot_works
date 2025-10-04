@@ -24,7 +24,7 @@
 #include "message.h"
 #include "logger.h"
 #include "simple_queue.h"
-
+#include "xor_coding.h"
 #include "receiver.h"
 
 // TODO clean all this. there'll be a version 3 deffo
@@ -172,20 +172,36 @@ static uint16_t handleCodedPayload(IperfCodedPayloadPkt_t *p)
   
   // Figure out which chunk can be acquired thru the decoding of this newly acquired coded payload
   uint8_t currentOffset = getCurrentOffset();
+
+  // Sanity check if the received coded payload has the same offset as us
+  if (p->pktOffset != currentOffset)
+  {
+    logerror("ERROR: Received coded payload has different offset %d != %d\n", p->pktOffset, currentOffset);
+    return 1;
+  }
+
   uint32_t Cbefore = Iperf_GetCatalogueVector((IperfChunkStatus_e *) &receivedPktIds, currentOffset);
   uint32_t R = * (uint32_t *) (p->bitmap);
   uint32_t Cafter = Cbefore ^ R;
-  uint32_t Cdecodable = (!Cbefore) & Cafter;
-  uint32_t Cdependent = (!Cafter) & Cbefore;
-  
+  uint32_t Cdecodable = (~Cbefore) & Cafter;
+  uint32_t Cdependent = (~Cafter) & Cbefore;
+
+  // If Cdecodable isnt a power of 2 that means the result is not one uncoded chunk
+  // i.e. we cant decode this packet successfully
+  if (!XorCoding_IsPowerOfTwo(Cdecodable))
+  {
+    logerror("ERROR: We received an undecodable coded payload Cdecodable 0x%08x\n", Cdecodable);
+    return 1;
+  }
+
   // Figure out which chunk needs to be xor'd with it to do the decoding
-  uint32_t neededChunkIdx; // This chunk will be used to decode the resulting chunk
-  uint32_t resultingChunkIdx; // this chunk is the resulting chunk
+  uint32_t dependentChunkIdx; // This chunk will be used to decode the resulting chunk
+  uint32_t decodableChunkIdx; // this chunk is the resulting chunk
   for (int i = 0; i < 32; i++)
   {
     if ((Cdecodable & (1<<i)) > 0)
     {
-      resultingChunkIdx = i;
+      decodableChunkIdx = i;
     }
   }
   
@@ -193,13 +209,33 @@ static uint16_t handleCodedPayload(IperfCodedPayloadPkt_t *p)
   {
     if ((Cdependent & (1<<i)) > 0)
     {
-       neededChunkIdx = i;
+       dependentChunkIdx = i;
     }
   }
-  logdebug("Resulting Chunk Idx %d, Needed Chunk Idx %d\n", resultingChunkIdx, neededChunkIdx);
+  logdebug("Decodable Chunk Idx %x, Needed Chunk Idx %x\n", decodableChunkIdx, dependentChunkIdx);
+
+  // First check if we even have the dependent chunk. We should, if we dont thats an error
+  if (receivedPktIds[dependentChunkIdx] != RECEIVED)
+  {
+    logerror("ERROR: For some reason we havent recevied the dependent chunk. decodable %d dependent %d\n", decodableChunkIdx, dependentChunkIdx);
+    return 1;
+  }
 
   // Do the xoring
-  // TODO //
+  // for each byte pl[x] in the payload, xor it with the dependent byte dep[x] and put the resultin buffer[x]
+  for (int i = 0; i < config.payloadSizeBytes; i++)
+  {
+    uint16_t decodableByteIdx = (currentOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS) + i + config.payloadSizeBytes * decodableChunkIdx;
+    uint16_t dependentByteIdx = (currentOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS) + i + config.payloadSizeBytes * dependentChunkIdx;
+    logdebug("offset %d byteIdx %d result (0x%x) ^ (%c 0x%x) = (%c 0x%x)\n", currentOffset, 
+             decodableByteIdx, 
+             p->payload[i],
+             receiveFileBuffer[dependentByteIdx],
+             receiveFileBuffer[dependentByteIdx],
+             p->payload[i] ^ receiveFileBuffer[dependentByteIdx],
+             p->payload[i] ^ receiveFileBuffer[dependentByteIdx]);
+    receiveFileBuffer[decodableByteIdx] = p->payload[i] ^ receiveFileBuffer[dependentByteIdx];
+  }
 
   return 0;
 }
@@ -349,10 +385,8 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
       }
     case IPERF_PKT_CODED_DATA:
       {
-        printf("Received Coded Data\n");
         IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) iperfPkt->payload;
         Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
-        printf("JON JON \n");
         handleCodedPayload(coded);
         break;
       }

@@ -136,9 +136,9 @@ static bool checkForCompletionAndTransition(void)
   if (config.numPktsToTransfer == results.receivedUniqueChunks)
   {
     // We're done. send done message
-    msg_t m;
-    m.type = IPERF_IPC_MSG_STOP;
-    msg_send(&m, receiverPid);
+    // msg_t m; // JON REVERT
+    // m.type = IPERF_IPC_MSG_STOP;
+    // msg_send(&m, receiverPid);
     return true;
   }
   else
@@ -165,7 +165,10 @@ static uint8_t getCurrentOffset(void)
   return offset;
 }
 
-static uint16_t handleCodedPayload(IperfCodedPayloadPkt_t *p)
+// If successful, returns the idx of the packet we just decoded by handling the newly
+// received coded payload. This function does the decoding and saving to our rx buffer. Doesnt 
+// change the results structure, that needs to be done outside.
+static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
 {
   logdebug("Received coded payload ");
   if (logprintTags[DEBUG]) Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) p);
@@ -177,7 +180,7 @@ static uint16_t handleCodedPayload(IperfCodedPayloadPkt_t *p)
   if (p->pktOffset != currentOffset)
   {
     logerror("ERROR: Received coded payload has different offset %d != %d\n", p->pktOffset, currentOffset);
-    return 1;
+    return -1;
   }
 
   uint32_t Cbefore = Iperf_GetCatalogueVector((IperfChunkStatus_e *) &receivedPktIds, currentOffset);
@@ -191,7 +194,7 @@ static uint16_t handleCodedPayload(IperfCodedPayloadPkt_t *p)
   if (!XorCoding_IsPowerOfTwo(Cdecodable))
   {
     logerror("ERROR: We received an undecodable coded payload Cdecodable 0x%08x\n", Cdecodable);
-    return 1;
+    return -1;
   }
 
   // Figure out which chunk needs to be xor'd with it to do the decoding
@@ -202,7 +205,15 @@ static uint16_t handleCodedPayload(IperfCodedPayloadPkt_t *p)
     if ((Cdecodable & (1<<i)) > 0)
     {
       decodableChunkIdx = i;
+      break;
     }
+  }
+
+  // This may be an uncoded packet. if there exists no dependent chunk thats what it means. if so, directly copy over the contents
+  if (Cdependent == 0)
+  {
+    logverbose("Received uncoded packet %d\n", decodableChunkIdx);
+    // JON TODO TODO take into account offset
   }
   
   for (int i = 0; i < 32; i++)
@@ -214,20 +225,21 @@ static uint16_t handleCodedPayload(IperfCodedPayloadPkt_t *p)
   }
   logdebug("Decodable Chunk Idx %x, Needed Chunk Idx %x\n", decodableChunkIdx, dependentChunkIdx);
 
-  // First check if we even have the dependent chunk. We should, if we dont thats an error
+  // check if we even have the dependent chunk. We should, if we dont thats an error
   if (receivedPktIds[dependentChunkIdx] != RECEIVED)
   {
     logerror("ERROR: For some reason we havent recevied the dependent chunk. decodable %d dependent %d\n", decodableChunkIdx, dependentChunkIdx);
-    return 1;
+    return -1;
   }
 
-  // Do the xoring
+  // JON TODO below function can be generalized and moved elsewhere
+  // Do the decoding. current implementation is thru XOR
   // for each byte pl[x] in the payload, xor it with the dependent byte dep[x] and put the resultin buffer[x]
   for (int i = 0; i < config.payloadSizeBytes; i++)
   {
     uint16_t decodableByteIdx = (currentOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS) + i + config.payloadSizeBytes * decodableChunkIdx;
     uint16_t dependentByteIdx = (currentOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS) + i + config.payloadSizeBytes * dependentChunkIdx;
-    logdebug("offset %d byteIdx %d result (0x%x) ^ (%c 0x%x) = (%c 0x%x)\n", currentOffset, 
+    logdebug("offset %d byteIdx %d result (0x%02x) ^ (%c 0x%02x) = (%c 0x%02x)\n", currentOffset, 
              decodableByteIdx, 
              p->payload[i],
              receiveFileBuffer[dependentByteIdx],
@@ -237,7 +249,7 @@ static uint16_t handleCodedPayload(IperfCodedPayloadPkt_t *p)
     receiveFileBuffer[decodableByteIdx] = p->payload[i] ^ receiveFileBuffer[dependentByteIdx];
   }
 
-  return 0;
+  return decodableChunkIdx;
 }
 
 static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
@@ -387,7 +399,19 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
       {
         IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) iperfPkt->payload;
         Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
-        handleCodedPayload(coded);
+        int decodableChunkIdx = handleCodedPayload(coded);
+        logdebug("[IPERF_PKT_CODED_DATA] %d received\n", decodableChunkIdx);
+        results.numReceivedPkts++;
+        if (decodableChunkIdx < 0)
+        {
+          logerror("%s:%d decodableChunkIdx < 0\n", __FUNCTION__, __LINE__);
+          break;
+        }
+        receivedPktIds[decodableChunkIdx] = RECEIVED;
+        results.receivedUniqueChunks++;
+        results.endTimestamp = ztimer_now(ZTIMER_USEC);
+        restartExpectationTimer();
+        checkForCompletionAndTransition();
         break;
       }
     case IPERF_ECHO_CALL:

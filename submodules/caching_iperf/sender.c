@@ -66,6 +66,32 @@ static bool isTransferDone(void)
   return ret;
 }
 
+// returns true if we need to serve some requests
+static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
+{
+  bool ret = false;
+  uint32_t bitmap = *((uint32_t *) catalogue->bitmap);
+  printf("Received catalogue vector. bitmap 0x%08x\n", bitmap);
+  for(int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
+  {
+    uint16_t missingPacketIdx;
+    if ((bitmap & (0x1 << i)) == 0)
+    {
+      missingPacketIdx = catalogue->pktOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS + i;
+      if (missingPacketIdx > results.lastPktSeqNo)
+      {
+        break;
+      }
+      printf("Missing packet %d\n", missingPacketIdx);
+
+      // add this to the resend queue
+      SimpleQueue_Push(&pktReqQueue, missingPacketIdx);
+      ret = true;
+    }
+  }
+  return ret;
+}
+
 static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
 {
   IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) pkt;
@@ -125,15 +151,11 @@ static int senderHandleIperfPacket(gnrc_pktsnip_t *pkt)
         {
           Iperf_PrintCatalogueVector(catalogue);
         }
-        for (int i = 0; i > IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
+        bool ret = handleCatalogueVector(catalogue);
+        if (ret && !ztimer_is_set(ZTIMER_USEC, &intervalTimer))
         {
-          uint8_t byteIdx = i / 8;
-          uint8_t bitIdx = i % 8;
-          uint16_t requestedPktIdx;
-          if ((* (uint32_t *) catalogue->bitmap && (1 << i)) == 0)
-          {
-            printf("Pkt idx %d requested\n", requestedPktIdx);
-          }
+          ipcMsg.type = IPERF_IPC_MSG_SEND_FILE;
+          ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipcMsg, senderPid); // Start immediately
         }
         break;
       }

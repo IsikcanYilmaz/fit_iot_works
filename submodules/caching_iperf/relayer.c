@@ -212,7 +212,6 @@ static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
 
     IperfUdpPkt_t *udp = (IperfUdpPkt_t *) (cacheBuffer + (cacheBlockIdx * CODED_CACHE_BLOCK_SIZE));
     IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) udp->payload;
-    uint8_t *bitmap = coded->bitmap;
     uint8_t offset = coded->pktOffset;
 
     if (catalogue->pktOffset != offset)
@@ -221,7 +220,7 @@ static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
       continue;
     }
  
-    uint32_t R = (uint32_t) (* (uint32_t *) bitmap);
+    uint32_t R = (uint32_t) (* (uint32_t *) coded->bitmap);
     logdebug("R=0x%08x\n", R);
     logdebug("Cbefore=0x%08x\n", Cbefore);
     uint32_t Cafter = Cbefore ^ R;
@@ -230,7 +229,7 @@ static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
     uint32_t Cdependent = (~Cafter) & Cbefore;
     logdebug("Cdecodable 0x%08x Cdependent 0x%08x\n", Cdecodable, Cdependent);
 
-    // Check if Cdecodable is a power of 2
+    // Check if Cdecodable is a power of 2. this means there will be one fully decoded chunk 
     if (Cdecodable > 0 && ((Cdecodable - 1) & Cdecodable) == 0)
     {
       // Cdecodable is a power of 2. Find which packet we can service thru this
@@ -441,7 +440,8 @@ void Iperf_PrintCache(void)
       memset((char *) &chunkPayload, 0x00, config.payloadSizeBytes + 1);
       snprintf((char *) &chunkPayload, config.payloadSizeBytes, codedPkt->payload);
       printf("[cache %d]:", i);
-      Iperf_PrintBitmapHex(codedPkt);
+      // Iperf_PrintBitmapHex(codedPkt);
+      printf("offset %d, vector 0x%04x ", codedPkt->pktOffset, *((uint32_t *) codedPkt->bitmap));
       printf(" ");
       XorCoding_PrintBitmapBits(codedPkt->bitmap);
       printf("] %s\n", chunkPayload);
@@ -570,17 +570,6 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     case IPERF_PAYLOAD:
     case IPERF_PKT_RESP:
       {
-        if (iperfPkt->seqNo == 3 || iperfPkt->seqNo == 6) // JON TODO RM
-        {
-          codedCache(iperfPkt);
-        }
-
-        if (iperfPkt->seqNo == 3)
-        {
-          shouldForward = false;
-          break; // JON TODO RM
-        }
-
 #if CHANCE_TO_DROP
         // shouldForward = !coinFlip(CHANCE_TO_DROP);
 #ifdef DROP_EVEN_NUMBEREDS 
@@ -603,11 +592,10 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
         }
         else if (config.mode == IPERF_MODE_CACHING_CODING)
         {
-          // if (config.cache && config.code)
-          // {
-          //   // TODO CACHE CODE LOGIC
-          //   codedCache(iperfPkt);
-          // }
+          if (config.cache && config.code && coinFlip(config.cacheChancePercent))
+          {
+            codedCache(iperfPkt);
+          }
         }
 
         break;
@@ -685,16 +673,22 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
         // We just caught a catalogue vector. This will tell us what the receiver has and what it does not have
         printf("IPERF_PKT_CATALOGUE_VECTOR\n");
         Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
-        bool canSatisfy = handleCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
+        IperfCatalogueVector_t *catalogue = (IperfCatalogueVector_t *) iperfPkt->payload;
+        bool canSatisfy = handleCatalogueVector(catalogue);
         shouldComputeChecksum = canSatisfy;
         shouldSendIpc = canSatisfy;
-        IperfCatalogueVector_t *catalogue = (IperfCatalogueVector_t *) iperfPkt->payload;
         if (shouldSendIpc) // JON TODO maybe make this generic?
         {
           logverbose("Sending IPC\n");
           msg_t ipc;
           ipc.type = IPERF_IPC_MSG_RELAY_SERVICE_INTEREST;
           msg_send(&ipc, relayerPid);
+        }
+
+        // If this catalogue is fully satisfied after our service, we shouldnt forward it
+        if (*((uint32_t *) catalogue->bitmap) == 0xffff) 
+        {
+          shouldForward = false;
         }
         break;
       }

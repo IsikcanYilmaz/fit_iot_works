@@ -52,7 +52,7 @@ IperfConfig_s config = {
   .pktPerSecond = 0, // TODO
   .delayUs = 500000,
   .interestDelayUs = 1000000,
-  .expectationDelayUs = 2500000,
+  .expectationDelayUs = 5000000,
   .transferSizeBytes = 1024, //4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CACHING_CODING,
@@ -435,7 +435,6 @@ void Iperf_PrintCatalogueVector(IperfCatalogueVector_t *vectorPkt) // TODO make 
 // Takes the chunk status. Offset to offset by. length to put in that many bits/pkts
 int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint8_t offset)
 {
-
   loginfo("%s\n", __FUNCTION__);
   
   // $length needs to be rolled up to the next power of 8
@@ -497,6 +496,22 @@ uint32_t Iperf_GetCatalogueVector(IperfChunkStatus_e *chunkStatus, uint8_t offse
     }
   }
   return vector;
+}
+
+int Iperf_SendArbitraryCatalogueVector(uint32_t vec, uint8_t offset)
+{
+  char rawPkt[sizeof(IperfUdpPkt_t) + sizeof(IperfCatalogueVector_t) + (IPERF_CATALOGUE_BITMAP_LENGTH_BYTES * sizeof(uint8_t))];
+  IperfUdpPkt_t *iperfPkt = (IperfUdpPkt_t *) &rawPkt;
+  IperfCatalogueVector_t *vectorPkt = (IperfCatalogueVector_t *) &iperfPkt->payload;
+  memset(&rawPkt, 0x00, sizeof(rawPkt));
+  iperfPkt->msgType = IPERF_PKT_CATALOGUE_VECTOR;
+  iperfPkt->plSize = sizeof(IperfCatalogueVector_t) + (sizeof(uint8_t) * IPERF_CATALOGUE_BITMAP_LENGTH_BYTES);
+  iperfPkt->seqNo = 0;
+  vectorPkt->pktOffset = offset;
+  *((uint32_t *) vectorPkt->bitmap) = (uint32_t) vec;
+  printf("Sending arbitrary catalogue vector ");
+  Iperf_PrintCatalogueVector(vectorPkt);
+  return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
 }
 
 void Iperf_CatalogueVectorTest(void)
@@ -1085,7 +1100,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     pl[size] = (char) NULL;
     return Iperf_SendEcho((char *) &pl);
   }
-  else if (strncmp(argv[1], "cataloguetest", 16)   == 0)
+  else if (strncmp(argv[1], "cataloguetest", 16) == 0)
   {
     if (config.role != RECEIVER)
     {
@@ -1094,7 +1109,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     }
     Iperf_CatalogueVectorTest();
   }
-  else if (strncmp(argv[1], "interest", 16) == 0)
+  else if (strncmp(argv[1], "interest", 16) == 0) // send single interest
   {
     if (config.role == SENDER)
     {
@@ -1108,11 +1123,11 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     }
     return Iperf_SendInterest(seqNo);
   }
-  else if (strncmp(argv[1], "bulk", 16) == 0)
+  else if (strncmp(argv[1], "bulk", 16) == 0) // send bulk request
   {
     if (argc < 3)
     {
-      logerror("Bad args!\n");
+      logerror("Bad args! usage: iperf bulk <list of chunk ids>\n");
       return 1;
     }
     uint16_t requests[argc-2];
@@ -1125,6 +1140,58 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     printf("\n");
     Iperf_SendBulkInterest((uint16_t *) &requests, argc-2);
   }
+  else if (strncmp(argv[1], "catalogue", 16) == 0) // send arbitrary catalogue vector
+  {
+    if (argc < 3)
+    {
+      logerror("Bad args! usage: iperf catalogue 01001011...\n");
+      return 1;
+    }
+    
+    uint32_t vec = 0xffffffff;
+    for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
+    {
+      if (i >= strlen(argv[2]))
+      {
+        break;
+      }
+      uint8_t byteIdx = i / 8;
+      uint8_t bitIdx = i % 8;
+      if (argv[2][i] == '1')
+      {
+        vec &= ~(1 << i);
+      }
+    }
+
+    Iperf_SendArbitraryCatalogueVector(vec, 0);
+  }
+  else if (strncmp(argv[1], "rm", 16) == 0) // delete a chunk that is received from our file buffer
+  {
+    if (argc < 3)
+    {
+      logerror("Bad args! usage: iperf rm <chunk idx>");
+      return 1;
+    }
+    uint16_t chunkIdx = atoi(argv[2]);
+    if (chunkIdx > config.numPktsToTransfer)
+    {
+      logerror("Bad chunk idx\n");
+      return 1;
+    }
+    memset((&receiveFileBuffer + (chunkIdx * config.payloadSizeBytes)), 0x00, config.payloadSizeBytes);
+    receivedPktIds[chunkIdx] = NOT_RECEIVED;
+  }
+  else if (strncmp(argv[1], "seed", 16) == 0)
+  {
+    uint32_t seed;
+    if (argc < 3)
+    {
+      seed = 1;
+    }
+    seed = (argc < 3) ? 0 : atoi(argv[2]);
+    loginfo("Seeding rng with %d\n", seed);
+    srand((unsigned) seed);
+  }
   else
   {
     goto usage;
@@ -1133,7 +1200,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|start|stop|restart|log|config|target|results|echo|interest|bulk|sizetest|cataloguetest>\n");
+  logerror("Usage: iperf <sender|receiver|start|stop|restart|log|config|target|results|echo|interest|bulk|catalogue|sizetest|cataloguetest|rm|seed>\n");
   return 1;
 }
 

@@ -68,6 +68,9 @@ static void *buttonSignalDispatcherThread(void *arg)
 /*
  * ~ MAIN ~
  */
+
+
+
 int main(void)
 {
 	msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);

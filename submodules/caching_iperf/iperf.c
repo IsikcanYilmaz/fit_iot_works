@@ -1178,7 +1178,8 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       logerror("Bad chunk idx\n");
       return 1;
     }
-    memset((&receiveFileBuffer + (chunkIdx * config.payloadSizeBytes)), 0x00, config.payloadSizeBytes);
+    loginfo("Removing chunk idx %d. 0x%08x\n", chunkIdx, (receiveFileBuffer + (chunkIdx * config.payloadSizeBytes)));
+    memset((receiveFileBuffer + (chunkIdx * config.payloadSizeBytes)), 0x00, config.payloadSizeBytes);
     receivedPktIds[chunkIdx] = NOT_RECEIVED;
   }
   else if (strncmp(argv[1], "seed", 16) == 0)

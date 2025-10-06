@@ -136,13 +136,15 @@ static bool checkForCompletionAndTransition(void)
   if (config.numPktsToTransfer == results.receivedUniqueChunks)
   {
     // We're done. send done message
-    // msg_t m; // JON REVERT
-    // m.type = IPERF_IPC_MSG_STOP;
-    // msg_send(&m, receiverPid);
+    msg_t m; 
+    m.type = IPERF_IPC_MSG_STOP;
+    msg_send(&m, receiverPid);
+    logdebug("We're done!\n");
     return true;
   }
   else
   {
+    logdebug("We're not done!\n");
     // We're not done
     return false;
   }

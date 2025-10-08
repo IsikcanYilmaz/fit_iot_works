@@ -59,7 +59,7 @@ static bool isTransferDone(void)
   {
     ret = (ztimer_now(ZTIMER_USEC) - results.startTimestamp >= config.transferTimeUs);
   }
-  else if (config.mode >= IPERF_MODE_CACHING_BIDIRECTIONAL)
+  else if (config.mode >= IPERF_MODE_SIMPLE_CACHING)
   {
     ret = (results.lastPktSeqNo == config.numPktsToTransfer-1) && (SimpleQueue_IsEmpty(&pktReqQueue));
   }
@@ -264,13 +264,13 @@ static void handleFileSending(void)
   if (isTransferDone())
   {
     loginfo("Sender done sending %d packets\n", config.numPktsToTransfer);
-    if (config.mode < IPERF_MODE_CACHING_BIDIRECTIONAL)
+    if (config.mode < IPERF_MODE_SIMPLE_CACHING)
     {
       iperfState = IPERF_STATE_STOPPED;
       results.endTimestamp = ztimer_now(ZTIMER_USEC);
       loginfo("Stopping iperf\n");
     }
-    else if (config.mode >= IPERF_MODE_CACHING_BIDIRECTIONAL)
+    else if (config.mode >= IPERF_MODE_SIMPLE_CACHING)
     {
       iperfState = IPERF_STATE_WAITING_FOR_INTERESTS;
       loginfo("Sitting idle\n");

@@ -193,6 +193,11 @@ def setAllDevicesRetrans(retrans):
         for dev in devices["routers"]:
             setRetrans(dev, args.retrans)
 
+def setRandomSeed(seed=None):
+    if (seed == None):
+        pass
+    # TODO
+
 def parseDeviceJsons(j, caching=False):
     global args
     # Expects {"rx":{}, "tx":{}, "relays":{}, "config":{}}

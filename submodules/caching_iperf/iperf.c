@@ -37,7 +37,7 @@ IperfConfig_s config = {
   .expectationDelayUs = 1250000,
   .transferSizeBytes = 512, //4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
-  .mode = IPERF_MODE_CACHING_BIDIRECTIONAL, //IPERF_MODE_CACHING_CODING,
+  .mode = IPERF_MODE_SIMPLE_CACHING, //IPERF_MODE_CODED_CACHING,
 
   // Relay related
   .cache = true,
@@ -55,13 +55,13 @@ IperfConfig_s config = {
   .expectationDelayUs = 5000000,
   .transferSizeBytes = 1024, //4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
-  .mode = IPERF_MODE_CACHING_CODING,
+  .mode = IPERF_MODE_CODED_CACHING,
 
   // Relay related
   .cache = true,
   .code = true,
   .numCacheBlocks = 1,
-  .cacheChancePercent = 25,
+  .cacheChancePercent = 100, //25,
 
 };
 #endif 
@@ -1070,7 +1070,10 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       }
       else if (strncmp(argv[2], "cache", 16) == 0 && config.role == RELAYER)
       {
-        Iperf_PrintCache();
+        if (config.mode == IPERF_MODE_SIMPLE_CACHING)
+          Iperf_PrintCache();
+        else if (config.mode == IPERF_MODE_CODED_CACHING)
+          Iperf_PrintCodedCache();
       }
     }
     else
@@ -1142,28 +1145,32 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   }
   else if (strncmp(argv[1], "catalogue", 16) == 0) // send arbitrary catalogue vector
   {
-    if (argc < 3)
-    {
-      logerror("Bad args! usage: iperf catalogue 01001011...\n");
-      return 1;
-    }
-    
     uint32_t vec = 0xffffffff;
-    for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
+    uint8_t offset = 0;
+
+    if (argc < 3) // user didnt supply vector
     {
-      if (i >= strlen(argv[2]))
+      loginfo("Vector not supplied. Using current vector\n");
+      vec = Iperf_GetCatalogueVector(receivedPktIds, offset);
+    }
+    else // user supplied vector
+    { 
+      for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
       {
-        break;
-      }
-      uint8_t byteIdx = i / 8;
-      uint8_t bitIdx = i % 8;
-      if (argv[2][i] == '1')
-      {
-        vec &= ~(1 << i);
+        if (i >= strlen(argv[2]))
+        {
+          break;
+        }
+        uint8_t byteIdx = i / 8;
+        uint8_t bitIdx = i % 8;
+        if (argv[2][i] == '0')
+        {
+          vec &= ~(1 << i);
+        }
       }
     }
 
-    Iperf_SendArbitraryCatalogueVector(vec, 0);
+    Iperf_SendArbitraryCatalogueVector(vec, offset);
   }
   else if (strncmp(argv[1], "rm", 16) == 0) // delete a chunk that is received from our file buffer
   {
@@ -1180,7 +1187,11 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     }
     loginfo("Removing chunk idx %d. 0x%08x\n", chunkIdx, (receiveFileBuffer + (chunkIdx * config.payloadSizeBytes)));
     memset((receiveFileBuffer + (chunkIdx * config.payloadSizeBytes)), 0x00, config.payloadSizeBytes);
-    receivedPktIds[chunkIdx] = NOT_RECEIVED;
+    if (receivedPktIds[chunkIdx] == RECEIVED)
+    {
+      results.receivedUniqueChunks--;
+      receivedPktIds[chunkIdx] = NOT_RECEIVED;
+    }
   }
   else if (strncmp(argv[1], "seed", 16) == 0)
   {

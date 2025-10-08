@@ -63,7 +63,7 @@ static bool isTransferDone(void)
 // TODO below functions can be macros or consolidated
 static void startExpectationTimer(uint32_t timeoutUs)
 {
-  if (config.mode < IPERF_MODE_CACHING_BIDIRECTIONAL) // TODO we shouldnt even get here. fix in v3
+  if (config.mode < IPERF_MODE_SIMPLE_CACHING) // TODO we shouldnt even get here. fix in v3
   {
     return;
   }
@@ -86,7 +86,7 @@ static void stopExpectationTimer(void)
 
 static inline void restartExpectationTimer(void)
 {
-  if (config.mode < IPERF_MODE_CACHING_BIDIRECTIONAL)
+  if (config.mode < IPERF_MODE_SIMPLE_CACHING)
   {
     return;
   }
@@ -136,10 +136,10 @@ static bool checkForCompletionAndTransition(void)
   if (config.numPktsToTransfer == results.receivedUniqueChunks)
   {
     // We're done. send done message
-    msg_t m; 
-    m.type = IPERF_IPC_MSG_STOP;
-    msg_send(&m, receiverPid);
-    logdebug("We're done!\n");
+    // msg_t m; 
+    // m.type = IPERF_IPC_MSG_STOP;
+    // msg_send(&m, receiverPid);
+    logdebug("We're done! JON TODO STOP MESSAGE IS NOT SENT!\n");
     return true;
   }
   else
@@ -168,8 +168,8 @@ static uint8_t getCurrentOffset(void)
 }
 
 // If successful, returns the idx of the packet we just decoded by handling the newly
-// received coded payload. This function does the decoding and saving to our rx buffer. Doesnt 
-// change the results structure, that needs to be done outside.
+// received coded payload. This function does the decoding and saving to our rx buffer. 
+// Doesnt change the results structure, that needs to be done outside.
 static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
 {
   logdebug("Received coded payload ");
@@ -177,6 +177,7 @@ static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
   
   // Figure out which chunk can be acquired thru the decoding of this newly acquired coded payload
   uint8_t currentOffset = getCurrentOffset();
+  uint8_t receivedOffset = p->pktOffset;
 
   // Sanity check if the received coded payload has the same offset as us
   if (p->pktOffset != currentOffset)
@@ -190,6 +191,21 @@ static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
   uint32_t Cafter = Cbefore ^ R;
   uint32_t Cdecodable = (~Cbefore) & Cafter;
   uint32_t Cdependent = (~Cafter) & Cbefore;
+
+  if (XorCoding_IsPowerOfTwo(R))
+  {
+    logdebug("Received uncoded data 0x%08x\n", R);
+    uint32_t receivedChunkIdx;
+    for (int i = 0; i < 32; i++)
+    {
+      if ((R & (1<<i)) > 0)
+      {
+        receivedChunkIdx = receivedOffset + i;
+      }
+    }
+    memcpy(receiveFileBuffer[receivedChunkIdx * config.payloadSizeBytes], p->payload, config.payloadSizeBytes);
+    return receivedChunkIdx;
+  }
 
   // If Cdecodable isnt a power of 2 that means the result is not one uncoded chunk
   // i.e. we cant decode this packet successfully
@@ -286,7 +302,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           iperfState = IPERF_STATE_RECEIVING; // TODO see if this logic is needed
           
           // Start our expectation timer
-          if (config.mode >= IPERF_MODE_CACHING_BIDIRECTIONAL)
+          if (config.mode >= IPERF_MODE_SIMPLE_CACHING)
           {
             startExpectationTimer(config.expectationDelayUs);
           }
@@ -300,7 +316,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           logdebug("RX %d\n", iperfPkt->seqNo);
           results.receivedUniqueChunks++;
           copyPayloadString(iperfPkt);
-          if (config.mode >= IPERF_MODE_CACHING_BIDIRECTIONAL)
+          if (config.mode >= IPERF_MODE_SIMPLE_CACHING)
           {
             restartExpectationTimer();
           }
@@ -317,7 +333,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           uint16_t lostPkts = (iperfPkt->seqNo - results.lastPktSeqNo);
           // Should we send an interest as soon as we detect a loss? 
           
-          if (config.mode >= IPERF_MODE_CACHING_BIDIRECTIONAL)
+          if (config.mode >= IPERF_MODE_SIMPLE_CACHING)
           {
             for (uint16_t i = results.lastPktSeqNo + 1; i < iperfPkt->seqNo; i++)
             {
@@ -332,7 +348,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           results.lastPktSeqNo = iperfPkt->seqNo;
           results.receivedUniqueChunks++;
           copyPayloadString(iperfPkt);
-          if (config.mode >= IPERF_MODE_CACHING_BIDIRECTIONAL)
+          if (config.mode >= IPERF_MODE_SIMPLE_CACHING)
           {
             restartExpectationTimer();
           }
@@ -496,7 +512,7 @@ void *Iperf_ReceiverThread(void *arg)
             break;
           }
           
-          if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+          if (config.mode == IPERF_MODE_SIMPLE_CACHING) // legacy
           {
             // If this is the caching only version, send the bulk interest
             uint16_t expectArr[IPERF_MAX_PKTS_IN_ONE_BULK_REQ];
@@ -520,27 +536,38 @@ void *Iperf_ReceiverThread(void *arg)
               startInterestTimer(config.interestDelayUs);
             }
           }
-          else if (config.mode == IPERF_MODE_CACHING_CODING)
+          else if (config.mode == IPERF_MODE_CODED_CACHING)
           {
-            // If this is caching coding we do different things
-            while (!SimpleQueue_IsEmpty(&pktReqQueue)) 
+            // If this is caching coding we dont use this queue anyway
+            // while (!SimpleQueue_IsEmpty(&pktReqQueue)) 
+            // {
+            //   SimpleQueue_Pop(&pktReqQueue, NULL);
+            // }
+
+            bool expecting = false;
+            for (uint16_t i = 0; i < expectationSeqNo; i++)
             {
-              SimpleQueue_Pop(&pktReqQueue, NULL);
+              if (receivedPktIds[i] == EXPECTED)
+              {
+                expecting = true;
+                break;
+              }
             }
-
-            loginfo("JON RECEIVER SHOULD SEND OUT VECTOR HERE!!!!\n");
             
-            Iperf_SendCatalogueVector((IperfChunkStatus_e *) &receivedPktIds, 0);
-
-            // TODO TODO
-
+            // Only send the catalogue if we're expecting chunks
+            if (expecting)
+            {
+              Iperf_SendCatalogueVector((IperfChunkStatus_e *) &receivedPktIds, 0);
+            }
           }
           break;
         }
       case IPERF_IPC_MSG_EXPECTATION_TIMEOUT:
         {
           // Expectation timeouts fill up our Interest queue
-          // and starts the interest timer
+          // and starts the interest timer.
+          // In CodedCaching mode we dont have to do any enqueueing or anything. 
+          // we should just send out the catalogue
 
           logdebug("Expectation timeout\n");
           if (expectationSeqNo < results.lastPktSeqNo) // Bump expectation index
@@ -553,27 +580,26 @@ void *Iperf_ReceiverThread(void *arg)
           }
 
           logdebug("Expecting up to %d: ", expectationSeqNo);
+
+          bool expecting = false;
           for (uint16_t i = 0; i < expectationSeqNo; i++)
           {
-            if (receivedPktIds[i] == RECEIVED)
-            {
-              continue;
-            }
-            if (SimpleQueue_IsEnqueued(&pktReqQueue, i)) 
+            if (receivedPktIds[i] == RECEIVED || SimpleQueue_IsEnqueued(&pktReqQueue, i))
             {
               continue;
             }
             else
             {
               if (logprintTags[DEBUG]) printf("%d ", i);
-              SimpleQueue_Push(&pktReqQueue, i);
+              if (config.mode == IPERF_MODE_SIMPLE_CACHING) SimpleQueue_Push(&pktReqQueue, i);
               receivedPktIds[i] = EXPECTED;
+              expecting = true;
               /*SimpleQueue_PrintQueue(&pktReqQueue);*/
             }
           }
           if (logprintTags[DEBUG]) printf("\n");
-          
-          if (!SimpleQueue_IsEmpty(&pktReqQueue))
+
+          if (expecting)
           {
             startInterestTimer(config.interestDelayUs);
           }

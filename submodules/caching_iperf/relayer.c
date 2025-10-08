@@ -73,16 +73,15 @@ static void initRelayer(void)
   memset(rxtxBuffer, 0x00, sizeof(uint8_t) * config.numCacheBlocks * CODED_CACHE_BLOCK_SIZE); // TODO THIS IS CRASHING OUT IF I MEMSET THE WHOLE BUFFER!!!!!
   memset(&cacheLock, 0x00, sizeof(bool) * CACHE_LOCK_SIZE_MAX);
 
-  if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+  if (config.mode == IPERF_MODE_SIMPLE_CACHING)
   {
     // TODO? too many todos
   }
-  else if (config.mode == IPERF_MODE_CACHING_CODING)
+  else if (config.mode == IPERF_MODE_CODED_CACHING)
   {
     for (int i = 0; i < config.numCacheBlocks; i++)
     {
       IperfUdpPkt_t *p = (IperfUdpPkt_t *) (cacheBuffer + (i * CODED_CACHE_BLOCK_SIZE)); 
-      printf("%d->%x\n" , i, p);
       p->msgType = IPERF_PKT_CODED_DATA;
       p->plSize = sizeof(IperfCodedPayloadPkt_t) + (sizeof(uint8_t) * config.payloadSizeBytes);
       p->seqNo = 0;
@@ -151,13 +150,16 @@ static int sendLegacyCachedPkt(uint16_t i)
 static int sendCodedCachedPkt(uint16_t i)
 {
   IperfUdpPkt_t *cachedIperfPkt = (IperfUdpPkt_t *) (cacheBuffer + (i * CACHE_BLOCK_SIZE));
-  printf("JON JON JON Sending cached idx:%d to destination\n", i);
+  logdebug("Sending cached idx:%d to sink\n", i);
   IperfCodedPayloadPkt_t *codedPkt = (IperfCodedPayloadPkt_t *) cachedIperfPkt->payload;
-  for (int i = 0; i < config.payloadSizeBytes; i++)
+  if (logprintTags[DEBUG])
   {
-    printf("0x%x ", cachedIperfPkt->payload[i]);
+    for (int i = 0; i < config.payloadSizeBytes; i++)
+    {
+      printf("0x%x ", cachedIperfPkt->payload[i]);
+    }
+    printf("\n");
   }
-  printf("\n");
   cachedIperfPkt->msgType = IPERF_PKT_CODED_DATA;
   cacheLock[i] = false;
   return Iperf_SocklessUdpSendToDst((char *) (cacheBuffer + (i * CODED_CACHE_BLOCK_SIZE)), CODED_CACHE_BLOCK_SIZE);
@@ -166,8 +168,14 @@ static int sendCodedCachedPkt(uint16_t i)
 // Returns -1 if every cache block is locked
 static int findUnlockedCacheSlot(void)
 {
+  if (config.numCacheBlocks == 1)
+  {
+    return (cacheLock[0]) ? -1 : 0;
+  }
+
   for (int i = (cacheIdx + 1) % config.numCacheBlocks; i != cacheIdx; i=(i+1) % config.numCacheBlocks)
   {
+    printf("locked status [i %d]:%d\n", i, cacheLock[i]);
     if (!cacheLock[i])
     {
       return i;
@@ -176,7 +184,7 @@ static int findUnlockedCacheSlot(void)
   return -1;
 }
 
-static int codedFindCacheSlot(uint16_t seqNo)
+static int codedFindCacheSlot(void)
 {
   // JON TODO
   return 0;
@@ -261,9 +269,16 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
 {
   logdebug("[CODED] Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
 
-  // ASSUMING 1 cache slot
   // First lets look at if cache slot is taken up by anything
-  IperfUdpPkt_t *udp = (IperfUdpPkt_t *) cacheBuffer;
+  int newCacheIdx = findUnlockedCacheSlot();
+  if (newCacheIdx < 0)
+  {
+    logerror("All cache slots are locked!\n");
+    return;
+  }
+  cacheIdx = newCacheIdx;
+
+  IperfUdpPkt_t *udp = (IperfUdpPkt_t *) (cacheBuffer + (cacheIdx + CODED_CACHE_BLOCK_SIZE));
   IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) udp->payload;
   uint8_t *codedPayload = coded->payload;
   uint8_t *bitmap = coded->bitmap;
@@ -310,6 +325,9 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
       // printf("%x ", codedPayload[i]);
     }
     printf("\n");
+
+    // Increment our next cache index
+    cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
   }
 
   // Iperf_PrintBitmapHex(coded);
@@ -434,7 +452,17 @@ void Iperf_PrintCache(void)
       snprintf((char *) &chunkPayload, config.payloadSizeBytes, p->payload);
       printf("[cache %d]:[chunk %d] %s\n", i, p->seqNo, chunkPayload);
     }
-    else if (p->msgType == IPERF_PKT_CODED_DATA)
+  }
+}
+
+void Iperf_PrintCodedCache(void) // TODO better generalization
+{
+  printf("Cache contents:\n");
+  for (int i = 0; i < config.numCacheBlocks; i++)
+  {
+    IperfUdpPkt_t *p = (IperfUdpPkt_t *) (cacheBuffer + (i * CODED_CACHE_BLOCK_SIZE));
+    char chunkPayload[config.payloadSizeBytes + 1];
+    if (p->msgType == IPERF_PKT_CODED_DATA)
     {
       IperfCodedPayloadPkt_t *codedPkt = (IperfCodedPayloadPkt_t *) p->payload;
       memset((char *) &chunkPayload, 0x00, config.payloadSizeBytes + 1);
@@ -482,13 +510,12 @@ void *Iperf_RelayerThread(void *arg)
             break;
           }
 
-          if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL) // JON please eventually remove the legacy stuff make generic
+          if (config.mode == IPERF_MODE_SIMPLE_CACHING) // JON please eventually remove the legacy stuff 
           {
             sendLegacyCachedPkt(cacheIdxToSend);
           }
-          else if (config.mode == IPERF_MODE_CACHING_CODING)
+          else if (config.mode == IPERF_MODE_CODED_CACHING)
           {
-            printf("SENDING CACHE IDX %d\n", cacheIdxToSend);
             sendCodedCachedPkt(cacheIdxToSend);
           }
 
@@ -581,7 +608,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
           return shouldForward;
         }
 #endif
-        if (config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL) // TODO rm the true 
+        if (config.mode == IPERF_MODE_SIMPLE_CACHING) // TODO rm the true 
         {
           if (config.cache && coinFlip(config.cacheChancePercent))
           {
@@ -590,7 +617,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
             if (logprintTags[DEBUG]) Iperf_PrintCache();
           }
         }
-        else if (config.mode == IPERF_MODE_CACHING_CODING)
+        else if (config.mode == IPERF_MODE_CODED_CACHING)
         {
           if (config.cache && config.code && coinFlip(config.cacheChancePercent))
           {
@@ -609,7 +636,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
         *   - If so, remove that from the interest and add it to our service queue
         *   - If not, simply forward
         */
-        if (config.cache && config.mode == IPERF_MODE_CACHING_BIDIRECTIONAL)
+        if (config.cache && config.mode == IPERF_MODE_SIMPLE_CACHING)
         {
           IperfBulkInterest_t *bulkInterest = (IperfBulkInterest_t *) iperfPkt->payload;
           uint8_t numExpects = bulkInterest->len;
@@ -629,7 +656,6 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
               // CACHE HIT
               // Remove interest from bulk interest, put it in our service list
               logdebug("Cache hit! Seq no %d at cache idx %d\n", expectArr[i], cachedPktIdx);
-              printf("CACHE HIT CACHE HIT %d\n", expectArr[i]);
 
 #if DEMO_CONFIG
               SimpleQueue_Push(&cacheHitQueue, expectArr[i]);
@@ -644,11 +670,9 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
               numBadExpectsOrCacheHits++;
             }
 
-            if (logprintTags[DEBUG])
-              printf("%d ", expectArr[i]);
+            if (logprintTags[DEBUG]) printf("%d ", expectArr[i]);
           }
-          if (logprintTags[DEBUG])
-            printf("\n");
+          if (logprintTags[DEBUG]) printf("\n");
 
           if (shouldSendIpc)
           {
@@ -671,12 +695,18 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
       {
         // CODED CACHING
         // We just caught a catalogue vector. This will tell us what the receiver has and what it does not have
-        printf("IPERF_PKT_CATALOGUE_VECTOR\n");
-        Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
+        logdebug("IPERF_PKT_CATALOGUE_VECTOR received\n");
+        if (logprintTags[DEBUG]) Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
         IperfCatalogueVector_t *catalogue = (IperfCatalogueVector_t *) iperfPkt->payload;
         bool canSatisfy = handleCatalogueVector(catalogue);
         shouldComputeChecksum = canSatisfy;
         shouldSendIpc = canSatisfy;
+
+        if (canSatisfy)
+        {
+          results.cacheHits++;
+        }
+
         if (shouldSendIpc) // JON TODO maybe make this generic?
         {
           logverbose("Sending IPC\n");
@@ -686,7 +716,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
         }
 
         // If this catalogue is fully satisfied after our service, we shouldnt forward it
-        if (*((uint32_t *) catalogue->bitmap) == 0xffff) 
+        if (*((uint32_t *) catalogue->bitmap) == 0xffffffff) 
         {
           shouldForward = false;
         }

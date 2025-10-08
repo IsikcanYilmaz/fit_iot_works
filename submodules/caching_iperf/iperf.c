@@ -50,7 +50,7 @@ IperfConfig_s config = {
 IperfConfig_s config = {
   .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 500000,
+  .delayUs = 1000000,
   .interestDelayUs = 1000000,
   .expectationDelayUs = 5000000,
   .transferSizeBytes = 1024, //4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
@@ -60,8 +60,8 @@ IperfConfig_s config = {
   // Relay related
   .cache = true,
   .code = true,
-  .numCacheBlocks = 1,
-  .cacheChancePercent = 100, //25,
+  .numCacheBlocks = 4,
+  .cacheChancePercent = 50, //25,
 
 };
 #endif 

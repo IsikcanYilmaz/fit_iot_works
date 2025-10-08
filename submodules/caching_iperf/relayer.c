@@ -267,72 +267,67 @@ static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
 
 static void codedCache(IperfUdpPkt_t *iperfPkt)
 {
-  logdebug("[CODED] Caching seq no %d at cache index %d : %s\n", iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
+  logdebug("[%s] Caching seq no %d at cache index %d : %s\n", __FUNCTION__, iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
 
-  // First lets look at if cache slot is taken up by anything
-  int newCacheIdx = findUnlockedCacheSlot();
-  if (newCacheIdx < 0)
+  // First, find a cache slot that is not locked. 
+  if (cacheLock[cacheIdx])
   {
-    logerror("All cache slots are locked!\n");
-    return;
+    logdebug("[%s] cache locked. Searching for a different cache space\n", cacheIdx);
+    int newCacheIdx = findUnlockedCacheSlot();
+    if (newCacheIdx < 0)
+    {
+      logerror("All cache slots are locked!\n");
+      return;
+    }
+    cacheIdx = newCacheIdx;
   }
-  cacheIdx = newCacheIdx;
+  logdebug("[%s] cacheIdx %d\n", __FUNCTION__, cacheIdx);
 
-  IperfUdpPkt_t *udp = (IperfUdpPkt_t *) (cacheBuffer + (cacheIdx + CODED_CACHE_BLOCK_SIZE));
+  // Second, check what we currently have in this cache slot. 
+  IperfUdpPkt_t *udp = (IperfUdpPkt_t *) (cacheBuffer + (cacheIdx * CODED_CACHE_BLOCK_SIZE));
   IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) udp->payload;
   uint8_t *codedPayload = coded->payload;
-  uint8_t *bitmap = coded->bitmap;
-
   uint8_t numCodedPackets = 0;
-  uint16_t indices[2]; // no need eventually
+  uint8_t newOffset = iperfPkt->seqNo / IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS;
   uint8_t offset = coded->pktOffset;
 
-  for (int byte = 0; byte < IPERF_CATALOGUE_BITMAP_LENGTH_BYTES; byte++)
+  udp->msgType = IPERF_PKT_CODED_DATA;
+
+  uint32_t bitmap = * ((uint32_t *) coded->bitmap);
+  for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
   {
-    for (int bit = 0; bit < 8; bit++)
+    if (bitmap & (0x1 << i))
     {
-      if(bitmap[byte] & (0x1 << bit)) // Cached content found
-      {
-        indices[numCodedPackets] = (offset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS * 8) + (byte * 8) + bit;
-        printf("[cacheIdx:%d][chunkIdx:%d] %d \n", cacheIdx, numCodedPackets, indices[numCodedPackets]);
-        numCodedPackets++;
-      }
+      logdebug("[cacheIdx:%d] Currently coded cached idx %d \n", cacheIdx, i);
+      numCodedPackets++;
     }
   }
 
-  uint8_t byteIdx = iperfPkt->seqNo / 8;
-  uint8_t bitIdx = iperfPkt->seqNo % 8;
-  if (numCodedPackets < 2) // TEST if there's nothing cached coded, cache the first thing
+  uint8_t bitIdx = iperfPkt->seqNo % IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS;
+  if (numCodedPackets == 0 || numCodedPackets == 2) // There is 2 things cached and coded or nothing here. flush the cache and put in new thing
   {
-    bitmap[byteIdx] = bitmap[byteIdx] ^ (1 << bitIdx);
-    // printf("numCoded < 2. caching/coding \n");
+    bitmap = (1 << bitIdx);
+    memcpy(coded->payload, iperfPkt->payload, config.payloadSizeBytes);
+    *((uint32_t *)coded->bitmap) = bitmap;
+  }
+  else if (numCodedPackets == 1) // There is 1 thing cached here. will code and cache our new thing here.
+  {
+    bitmap |= (1 << bitIdx);
+    *((uint32_t *)coded->bitmap) = bitmap;
     for (int i = 0; i < config.payloadSizeBytes; i++)
     {
       codedPayload[i] = codedPayload[i] ^ iperfPkt->payload[i];
-      // printf("%x ", codedPayload[i]);
     }
-    // printf("\n");
   }
-  else // There is 2 things cached and coded. flush the cache and put in new thing
+  else // we shouldnt get here 
   {
-    memset(bitmap, 0x00, IPERF_CATALOGUE_BITMAP_LENGTH_BYTES);
-    memset(coded, 0x00, CODED_CACHE_BLOCK_SIZE);
-    bitmap[byteIdx] = bitmap[byteIdx] ^ (1 << bitIdx);
-    // printf("numCoded == 2. flushing \n");
-    for (int i = 0; i < config.payloadSizeBytes; i++)
-    {
-      codedPayload[i] = codedPayload[i] ^ iperfPkt->payload[i];
-      // printf("%x ", codedPayload[i]);
-    }
-    printf("\n");
-
-    // Increment our next cache index
-    cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
+    logerror("[%s] Something went wrong line %d\n", __FUNCTION__, __LINE__);
   }
 
-  // Iperf_PrintBitmapHex(coded);
-  // printf(" num coded packets %d ", numCodedPackets);
-  // printf("%s\n", codedPayload);
+  // Increment our next cache index
+  cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
+  logdebug("New cache idx %d\n", cacheIdx);
+  if (logprintTags[DEBUG]) Iperf_PrintCodedCache();
 }
 
 static void legacyCache(IperfUdpPkt_t *iperfPkt)
@@ -457,7 +452,7 @@ void Iperf_PrintCache(void)
 
 void Iperf_PrintCodedCache(void) // TODO better generalization
 {
-  printf("Cache contents:\n");
+  printf("curr idx %d. Cache contents:\n", cacheIdx);
   for (int i = 0; i < config.numCacheBlocks; i++)
   {
     IperfUdpPkt_t *p = (IperfUdpPkt_t *) (cacheBuffer + (i * CODED_CACHE_BLOCK_SIZE));
@@ -469,10 +464,15 @@ void Iperf_PrintCodedCache(void) // TODO better generalization
       snprintf((char *) &chunkPayload, config.payloadSizeBytes, codedPkt->payload);
       printf("[cache %d]:", i);
       // Iperf_PrintBitmapHex(codedPkt);
-      printf("offset %d, vector 0x%04x ", codedPkt->pktOffset, *((uint32_t *) codedPkt->bitmap));
+      printf("offset %d, vector 0x%08x ", codedPkt->pktOffset, *((uint32_t *) codedPkt->bitmap));
       printf(" ");
       XorCoding_PrintBitmapBits(codedPkt->bitmap);
-      printf("] %s\n", chunkPayload);
+      // printf("] %s\n", chunkPayload);
+      printf("]%c\n", (cacheIdx == i) ? '<' : ' ');
+    }
+    else 
+    {
+      printf("msgType %d\n", p->msgType);
     }
   }
 }

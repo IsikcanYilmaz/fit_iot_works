@@ -96,6 +96,8 @@ CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/onboard_leds/
 CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/throttler/
 CFLAGS += -I$(EXTERNAL_MODULE_DIRS)/caching_iperf/
 
+CFLAGS += -lc -lrdimon -u _printf_float
+
 # USEPKG += ccn-lite
 
 include $(RIOTBASE)/Makefile.include

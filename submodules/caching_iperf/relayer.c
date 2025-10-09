@@ -229,13 +229,13 @@ static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
     }
  
     uint32_t R = (uint32_t) (* (uint32_t *) coded->bitmap);
-    logdebug("R=0x%08x\n", R);
-    logdebug("Cbefore=0x%08x\n", Cbefore);
+    logverbose("R=0x%08x\n", R);
+    logverbose("Cbefore=0x%08x\n", Cbefore);
     uint32_t Cafter = Cbefore ^ R;
-    logdebug("Cafter=0x%08x\n", Cafter);
+    logverbose("Cafter=0x%08x\n", Cafter);
     uint32_t Cdecodable = (~Cbefore) & Cafter;
     uint32_t Cdependent = (~Cafter) & Cbefore;
-    logdebug("Cdecodable 0x%08x Cdependent 0x%08x\n", Cdecodable, Cdependent);
+    logverbose("Cdecodable 0x%08x Cdependent 0x%08x\n", Cdecodable, Cdependent);
 
     // Check if Cdecodable is a power of 2. this means there will be one fully decoded chunk 
     if (Cdecodable > 0 && ((Cdecodable - 1) & Cdecodable) == 0)
@@ -294,17 +294,10 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
   udp->msgType = IPERF_PKT_CODED_DATA;
 
   uint32_t bitmap = * ((uint32_t *) coded->bitmap);
-  for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
-  {
-    if (bitmap & (0x1 << i))
-    {
-      logdebug("[cacheIdx:%d] Currently coded cached idx %d \n", cacheIdx, i);
-      numCodedPackets++;
-    }
-  }
+  numCodedPackets = __builtin_popcount((uint32_t) bitmap); // counts 1 bits in a bit string 
 
   uint8_t bitIdx = iperfPkt->seqNo % IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS;
-  if (numCodedPackets == 0 || numCodedPackets == 2) // There is 2 things cached and coded or nothing here. flush the cache and put in new thing
+  if (numCodedPackets == 0 || numCodedPackets == 2 || !config.code) // There is 2 things cached and coded or nothing here. flush the cache and put in new thing. OR we're not doing coding and we should fall in htere every time
   {
     bitmap = (1 << bitIdx);
     memcpy(coded->payload, iperfPkt->payload, config.payloadSizeBytes);
@@ -596,7 +589,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
       }
     case IPERF_PAYLOAD:
     case IPERF_PKT_RESP:
-    case IPERF_PKT_CODED_DATA:
+    // case IPERF_PKT_CODED_DATA:
       {
 #if CHANCE_TO_DROP
         // shouldForward = !coinFlip(CHANCE_TO_DROP);
@@ -620,7 +613,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
         }
         else if (config.mode == IPERF_MODE_CODED_CACHING)
         {
-          if (config.cache && config.code && coinFlip(config.cacheChancePercent))
+          if (config.cache && coinFlip(config.cacheChancePercent))
           {
             codedCache(iperfPkt);
           }

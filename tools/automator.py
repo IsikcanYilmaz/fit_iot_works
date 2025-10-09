@@ -7,6 +7,7 @@ import sys, os
 import json
 import pdb
 import traceback
+import random
 from common import *
 from pprint import pprint
 
@@ -14,6 +15,7 @@ DEFAULT_RESULTS_DIR = "./results/"
 SERIAL_TIMEOUT_S = 10
 EXPERIMENT_TIMEOUT_S = 60*10
 MULTITHREADED = True
+SET_SEEDS = True
 
 devices = {'sender':None, 'receiver':None, 'routers':[]}
 ifaceId = None # We assume this is the same number for all devices
@@ -192,11 +194,6 @@ def setAllDevicesRetrans(retrans):
         setRetrans(devices["receiver"], args.retrans)
         for dev in devices["routers"]:
             setRetrans(dev, args.retrans)
-
-def setRandomSeed(seed=None):
-    if (seed == None):
-        pass
-    # TODO
 
 def parseDeviceJsons(j, caching=False):
     global args
@@ -589,6 +586,15 @@ async def setRoles():
     time.sleep(1)
     await asyncio.gather(*futures)
 
+async def setRandomSeeds(seed=None, randomSeed=False):
+    outStrRaw = comm.sendSerialCommand(devices["sender"], f"iperf seed {random.randint(1, 10000)}")
+    outStrRaw = comm.sendSerialCommand(devices["receiver"], f"iperf seed {random.randint(1, 10000)}")
+    futures = []
+    for dev in devices["routers"]:
+        futures.append(sendCmdBackground(dev, f"iperf seed {random.randint(1, 10000)}"))
+    time.sleep(1)
+    await asyncio.gather(*futures)
+
 def main():
     global args, comm
     parser = argparse.ArgumentParser()
@@ -686,6 +692,9 @@ def main():
 
     if (args.set_roles):
         asyncio.run(setRoles())
+
+    if (SET_SEEDS):
+        asyncio.run(setRandomSeeds())
 
     # pdb.set_trace()
 

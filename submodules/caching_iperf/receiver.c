@@ -133,21 +133,23 @@ static bool checkForCompletionAndTransition(void)
 {
   logdebug("Receiver checking for completion. Expecting %d Received %d packets\n", \
           config.numPktsToTransfer, results.receivedUniqueChunks);
-  if (config.numPktsToTransfer == results.receivedUniqueChunks)
+  
+  for (int i = 0; i < config.numPktsToTransfer; i++)
   {
-    // We're done. send done message
-    // msg_t m; 
-    // m.type = IPERF_IPC_MSG_STOP;
-    // msg_send(&m, receiverPid);
-    logdebug("We're done! JON TODO STOP MESSAGE IS NOT SENT!\n");
-    return true;
+    if (receivedPktIds[i] != RECEIVED)
+    {
+      logdebug("We're not done!\n");
+      // We're not done
+      return false;
+    }
   }
-  else
-  {
-    logdebug("We're not done!\n");
-    // We're not done
-    return false;
-  }
+  // We're done. send done message
+  msg_t m; 
+  // m.type = IPERF_IPC_MSG_STOP;
+  m.type = IPERF_IPC_MSG_IDLE;
+  msg_send(&m, receiverPid);
+  logdebug("We're done!\n");
+  return true;
 }
 
 // Checks the received packets. If all of the ones from the first IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS amount are done, 
@@ -194,7 +196,7 @@ static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
 
   if (XorCoding_IsPowerOfTwo(R))
   {
-    logdebug("Received uncoded data 0x%08x\n", R);
+    logdebug("Received uncoded data 0x%08x : %s\n", R, p->payload);
     uint32_t receivedChunkIdx;
     for (int i = 0; i < 32; i++)
     {
@@ -203,7 +205,7 @@ static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
         receivedChunkIdx = receivedOffset + i;
       }
     }
-    memcpy(receiveFileBuffer[receivedChunkIdx * config.payloadSizeBytes], p->payload, config.payloadSizeBytes);
+    memcpy(&receiveFileBuffer[receivedChunkIdx * config.payloadSizeBytes], p->payload, config.payloadSizeBytes);
     return receivedChunkIdx;
   }
 
@@ -333,7 +335,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           uint16_t lostPkts = (iperfPkt->seqNo - results.lastPktSeqNo);
           // Should we send an interest as soon as we detect a loss? 
           
-          if (config.mode >= IPERF_MODE_SIMPLE_CACHING)
+          if (config.mode == IPERF_MODE_SIMPLE_CACHING) // This is a feature of the SIMPLE_CACHING mode. if we get OoO packets, add the unreceived ones to our interest queue
           {
             for (uint16_t i = results.lastPktSeqNo + 1; i < iperfPkt->seqNo; i++)
             {
@@ -420,16 +422,21 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
         int decodableChunkIdx = handleCodedPayload(coded);
         logdebug("[IPERF_PKT_CODED_DATA] %d received\n", decodableChunkIdx);
         results.numReceivedPkts++;
+        
         if (decodableChunkIdx < 0)
         {
           logerror("%s:%d decodableChunkIdx < 0\n", __FUNCTION__, __LINE__);
           break;
         }
-        receivedPktIds[decodableChunkIdx] = RECEIVED;
-        results.receivedUniqueChunks++;
-        results.endTimestamp = ztimer_now(ZTIMER_USEC);
-        restartExpectationTimer();
-        checkForCompletionAndTransition();
+
+        if (receivedPktIds[decodableChunkIdx] != RECEIVED)
+        {
+          receivedPktIds[decodableChunkIdx] = RECEIVED;
+          results.receivedUniqueChunks++;
+          results.endTimestamp = ztimer_now(ZTIMER_USEC);
+          restartExpectationTimer();
+          checkForCompletionAndTransition();
+        }
         break;
       }
     case IPERF_ECHO_CALL:
@@ -505,15 +512,15 @@ void *Iperf_ReceiverThread(void *arg)
         {
           // Interest timeouts fire out bulk interests to queued up interested packets
           // Queueing is done by the expectation timeouts
-          
-          if (SimpleQueue_IsEmpty(&pktReqQueue))
-          {
-            logerror("Interest timer time out but queue is empty!\n");
-            break;
-          }
-          
+          // If this is a cached coding run, interests mean sending catalogue vectors
           if (config.mode == IPERF_MODE_SIMPLE_CACHING) // legacy
           {
+            if (SimpleQueue_IsEmpty(&pktReqQueue))
+            {
+              logerror("Interest timer time out but queue is empty!\n");
+              break;
+            }
+
             // If this is the caching only version, send the bulk interest
             uint16_t expectArr[IPERF_MAX_PKTS_IN_ONE_BULK_REQ];
             uint16_t expectArrIdx = 0;
@@ -547,7 +554,7 @@ void *Iperf_ReceiverThread(void *arg)
             bool expecting = false;
             for (uint16_t i = 0; i < expectationSeqNo; i++)
             {
-              if (receivedPktIds[i] == EXPECTED)
+              if (receivedPktIds[i] != RECEIVED)
               {
                 expecting = true;
                 break;
@@ -591,8 +598,12 @@ void *Iperf_ReceiverThread(void *arg)
             else
             {
               if (logprintTags[DEBUG]) printf("%d ", i);
-              if (config.mode == IPERF_MODE_SIMPLE_CACHING) SimpleQueue_Push(&pktReqQueue, i);
-              receivedPktIds[i] = EXPECTED;
+              
+              if (config.mode == IPERF_MODE_SIMPLE_CACHING) // TODO honestly just remove the old caching code
+              {
+                SimpleQueue_Push(&pktReqQueue, i);
+                receivedPktIds[i] = EXPECTED;
+              }
               expecting = true;
               /*SimpleQueue_PrintQueue(&pktReqQueue);*/
             }
@@ -616,6 +627,16 @@ void *Iperf_ReceiverThread(void *arg)
           iperfState = IPERF_STATE_STOPPED;
           stopExpectationTimer();
           stopInterestTimer();
+          break;
+        }
+      case IPERF_IPC_MSG_IDLE: // FOR TEST PURPOSES
+        {
+          loginfo("Receiver going into idle mode\n");
+          iperfState = IPERF_STATE_IDLE;
+          stopExpectationTimer();
+          stopInterestTimer();
+          uint32_t usecs = (results.endTimestamp - results.startTimestamp);
+          loginfo("Receiver thread exiting. Transfer complete in %d useconds\n", usecs);
           break;
         }
       default:

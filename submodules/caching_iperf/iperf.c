@@ -50,16 +50,16 @@ IperfConfig_s config = {
 IperfConfig_s config = {
   .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 1000000,
-  .interestDelayUs = 1000000,
-  .expectationDelayUs = 5000000,
+  .delayUs = 50000,
+  .interestDelayUs = 250000,
+  .expectationDelayUs = 500000,
   .transferSizeBytes = 1024, //4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CODED_CACHING,
 
   // Relay related
   .cache = true,
-  .code = true,
+  .code = false,
   .numCacheBlocks = 4,
   .cacheChancePercent = 50, //25,
 
@@ -475,6 +475,7 @@ int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint8_t offset)
     }
   }
   // printf("\n");
+  printf("My catalogue vector: ");
   Iperf_PrintCatalogueVector(vectorPkt);
   
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
@@ -1204,6 +1205,12 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     loginfo("Seeding rng with %d\n", seed);
     srand((unsigned) seed);
   }
+  else if (strncmp(argv[1], "hits", 16) == 0)
+  {
+    getNetifStats();
+    printf("Cache hits %d, L2 Rx %d, L2 Tx %d\n", results.cacheHits, results.l2numSentPackets, results.l2numReceivedPackets);
+    printf("Cache hits / L2 Rx+Tx %f\n", (float) ((float)results.cacheHits) / (float)((results.l2numSentPackets + results.l2numReceivedPackets)));
+  }
   else
   {
     goto usage;
@@ -1212,7 +1219,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|start|stop|restart|log|config|target|results|echo|interest|bulk|catalogue|sizetest|cataloguetest|rm|seed>\n");
+  logerror("Usage: iperf <sender|receiver|start|stop|restart|log|config|target|results|echo|interest|bulk|catalogue|sizetest|cataloguetest|rm|seed|hits>\n");
   return 1;
 }
 

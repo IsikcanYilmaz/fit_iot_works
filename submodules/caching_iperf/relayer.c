@@ -596,6 +596,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
       }
     case IPERF_PAYLOAD:
     case IPERF_PKT_RESP:
+    case IPERF_PKT_CODED_DATA:
       {
 #if CHANCE_TO_DROP
         // shouldForward = !coinFlip(CHANCE_TO_DROP);

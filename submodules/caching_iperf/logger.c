@@ -8,7 +8,7 @@ bool logprintTags[LOGPRINT_MAX] = // TODO this can be a bitmap if you really wan
     [INFO] = true,
     [VERBOSE] = false,
     [ERROR] = true,
-    [DEBUG] = true 
+    [DEBUG] = false 
   };
 
 const char logprintTagChars[LOGPRINT_MAX] = 

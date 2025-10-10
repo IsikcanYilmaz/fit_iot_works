@@ -17,7 +17,7 @@ EXPERIMENT_TIMEOUT_S = 60*10
 MULTITHREADED = True
 SET_SEEDS = True
 
-devices = {'sender':None, 'receiver':None, 'routers':[]}
+devices = {'sender':None, 'receiver':None, 'routers':[], 'jammers':[]}
 ifaceId = None # We assume this is the same number for all devices
 args = None
 comm = None
@@ -239,6 +239,16 @@ async def restartAllDevices():
     for dev in devices["routers"]:
         # comm.sendSerialCommand(dev, "iperf restart")
         future = sendCmdBackground(dev, "iperf restart")
+        futures.append(future)
+    time.sleep(1)
+    await asyncio.gather(*futures)
+
+async def startStopJammers(start=True):
+    global devices, comm
+    futures = []
+    print(f"Starting {len(devices['jammers'])} jammers")
+    for dev in devices["jammers"]:
+        future = sendCmdBackground(dev, "iperf jammer" if start else "iperf stop")
         futures.append(future)
     time.sleep(1)
     await asyncio.gather(*futures)
@@ -601,6 +611,7 @@ def main():
     parser.add_argument("sender")
     parser.add_argument("receiver")
     parser.add_argument("-r", "--router", nargs="*")
+    parser.add_argument("-j", "--jammer", nargs="*")
     parser.add_argument("--rpl", action="store_true", default=False)
     parser.add_argument("--experiment_test", action="store_true", default=False)
     parser.add_argument("--experiment", action="store_true", default=False)
@@ -617,7 +628,7 @@ def main():
     # print(args)
     # return
 
-    print(f"SENDER {args.sender}, RECEIVER {args.receiver}, ROUTER(s) {args.router}")
+    print(f"SENDER {args.sender}, RECEIVER {args.receiver}, ROUTER(s) {args.router}, JAMMER(s) {args.jammer}")
     print(f"RPL {args.rpl}, FITIOT {args.fitiot}, EXPERIMENT {args.experiment}, IP ONLY {args.set_ip_only}")
 
     comm = DeviceCommunicator(args.fitiot)
@@ -634,13 +645,6 @@ def main():
 
     getAddresses(devices["sender"])
     getAddresses(devices["receiver"])
-
-    if (args.txpower != None):
-        print(f"Setting txpowers to {args.txpower}")
-        setTxPower(devices["sender"], args.txpower)
-        setTxPower(devices["receiver"], args.txpower)
-        for dev in devices["routers"]:
-            setTxPower(dev, args.txpower)
 
     unsetRpl(devices["receiver"])
     unsetRpl(devices["sender"])
@@ -666,6 +670,22 @@ def main():
             getAddresses(r)
             devices["routers"].append(r)
     devices["receiver"]["id"] = len(devices["routers"])+2
+
+    if (args.jammer):
+        for j, i in enumerate(args.jammer):
+            if (args.fitiot):
+                r = {"name":i, "id":-1}
+            else:
+                r = {"name":i, "id":-1, "ser":serial.Serial(i, timeout=SERIAL_TIMEOUT_S)}
+            comm.flushDevice(r)
+            devices["jammers"].append(r)
+
+    if (args.txpower != None):
+        print(f"Setting txpowers to {args.txpower}")
+        setTxPower(devices["sender"], args.txpower)
+        setTxPower(devices["receiver"], args.txpower)
+        for dev in devices["routers"]:
+            setTxPower(dev, args.txpower)
 
     flushAllDevices()
 
@@ -704,6 +724,8 @@ def main():
         print(f"{bcolors.FAIL}PING TEST FAILED {bcolors.ENDC}")
 
     pprint(devices)
+
+    asyncio.run(startStopJammers(start=True))
 
     if (args.test):
         tester(devices["sender"])

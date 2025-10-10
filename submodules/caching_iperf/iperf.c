@@ -27,6 +27,7 @@
 #include "receiver.h"
 #include "sender.h"
 #include "relayer.h"
+#include "jammer.h"
 
 #ifdef DEMO_CONFIG
 IperfConfig_s config = {
@@ -65,6 +66,17 @@ IperfConfig_s config = {
 
 };
 #endif 
+
+// JON TODO do we want this here or in jammer.c?
+IperfJammerConfig_s   jammerConfig =  {
+  .payloadSizeBytes = 64, 
+  .burstMax        = 50, 
+  .burstDelayMsMin = 20,
+  .burstDelayMsMax = 100, 
+  .sleepDelayMsMin = 500,
+  .sleepDelayMsMax = 1000,
+  .continuous = false // todo. currently this setting does nothing 
+};
 
 IperfResults_s results;
 
@@ -425,11 +437,11 @@ void Iperf_PrintCatalogueVector(IperfCatalogueVector_t *vectorPkt) // TODO make 
     printf("%d", (vectorPkt->bitmap[currByteIdx] & (1 << currBitIdx)) > 0 ? 1 : 0);
   }
   printf("\n");
-  for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_BYTES; i++)
-  {
-    printf("0x%02x ", vectorPkt->bitmap[i]);
-  }
-  printf("\n");
+  // for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_BYTES; i++)
+  // {
+  //   printf("0x%02x ", vectorPkt->bitmap[i]);
+  // }
+  // printf("\n");
 }
 
 // Takes the chunk status. Offset to offset by. length to put in that many bits/pkts
@@ -475,7 +487,6 @@ int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint8_t offset)
     }
   }
   // printf("\n");
-  printf("My catalogue vector: ");
   Iperf_PrintCatalogueVector(vectorPkt);
   
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
@@ -761,23 +772,34 @@ int Iperf_Init(IperfRole_e role)
   config.numPktsToTransfer = (config.transferSizeBytes / config.payloadSizeBytes);
 
   SimpleQueue_Init(&pktReqQueue, (uint16_t *) &pktReqQueueBuffer, PKT_REQ_QUEUE_LEN);
-
-  if (role == SENDER)
+  
+  switch(role)
   {
-    threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_SenderThread, NULL, "iperf_sender"); 
-  }
-  else if (role == RECEIVER)
-  {
-    threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_ReceiverThread, NULL, "iperf_receiver");
-  }
-  else if (role == RELAYER)
-  {
-    threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_RelayerThread, NULL, "iperf_relayer");
-  }
-  else
-  {
-    logerror("Bad role %d\n", role);
-    return 1;
+    case SENDER:
+    {
+      threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_SenderThread, NULL, "iperf_sender"); 
+      break;
+    }
+    case RECEIVER:
+    {
+      threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_ReceiverThread, NULL, "iperf_receiver");
+      break;
+    }
+    case RELAYER:
+    {
+      threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_RelayerThread, NULL, "iperf_relayer");
+      break;
+    }
+    case JAMMER:
+    {
+      threadPid = thread_create(threadStack, sizeof(threadStack), THREAD_PRIORITY_MAIN - 1, 0, Iperf_JammerThread, NULL, "iperf_jammer");
+      break;
+    }
+    default: 
+    {
+      logerror("Bad role %d\n", role);
+      return 1;
+    }
   }
 
   running = true;
@@ -825,6 +847,10 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   else if (strncmp(argv[1], "relayer", 16) == 0)
   {
     Iperf_Init(RELAYER);
+  }
+  else if (strncmp(argv[1], "jammer", 16) == 0)
+  {
+    Iperf_Init(JAMMER);
   }
   else if (strncmp(argv[1], "start", 16) == 0)
   {
@@ -1219,7 +1245,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|start|stop|restart|log|config|target|results|echo|interest|bulk|catalogue|sizetest|cataloguetest|rm|seed|hits>\n");
+  logerror("Usage: iperf <sender|receiver|jammer|start|stop|restart|log|config|target|results|echo|interest|bulk|catalogue|sizetest|cataloguetest|rm|seed|hits>\n");
   return 1;
 }
 

@@ -29,6 +29,8 @@ typedef enum
   IPERF_IPC_MSG_EXPECTATION_TIMEOUT,
   IPERF_IPC_MSG_INTEREST_TIMER_TIMEOUT,
 
+  IPERF_IPC_MSG_JAM,
+
   IPERF_IPC_MAX,
 } IperfIPC_e;
 
@@ -82,6 +84,7 @@ typedef enum
   SENDER,
   RECEIVER,
   RELAYER,
+  JAMMER,
   ROLE_MAX,
 } IperfRole_e;
 

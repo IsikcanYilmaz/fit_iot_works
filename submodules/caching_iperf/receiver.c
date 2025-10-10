@@ -418,9 +418,9 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
     case IPERF_PKT_CODED_DATA:
       {
         IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) iperfPkt->payload;
-        Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
         int decodableChunkIdx = handleCodedPayload(coded);
         logdebug("[IPERF_PKT_CODED_DATA] %d received\n", decodableChunkIdx);
+        Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
         results.numReceivedPkts++;
         
         if (decodableChunkIdx < 0)

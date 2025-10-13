@@ -734,8 +734,18 @@ def main():
         return
 
     if (args.experiment_test):
-        asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=1, numcacheblocks=1, rounds=5))
-        asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=0, numcacheblocks=1, rounds=5))
+        rounds = 20
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=1, numcacheblocks=1, rounds=rounds))
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=0, numcacheblocks=1, rounds=rounds))
+
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=1, numcacheblocks=4, rounds=rounds))
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=0, numcacheblocks=4, rounds=rounds))
+
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=1, numcacheblocks=8, rounds=rounds))
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=0, numcacheblocks=8, rounds=rounds))
+
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=1, numcacheblocks=16, rounds=rounds))
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=0, numcacheblocks=16, rounds=rounds))
 
     if (args.results_dir):
         args.results_dir = os.path.abspath(args.results_dir)

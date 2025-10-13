@@ -413,7 +413,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
     routers = devices["routers"]
     jammers = devices["jammers"]
     
-    outFilenamePrefix = f"cache{cache}_numcache{numcacheblocks}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
+    outFilenamePrefix = f"cache{cache}_code{code}_numcache{numcacheblocks}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
     overallJson = []
 
     averagesFilename = f"{resultsDir}/{outFilenamePrefix}_averages.json"
@@ -734,10 +734,6 @@ def main():
         return
 
     if (args.experiment_test):
-        #asyncio.run(cachingExperiment(delayus= 50000, cache=1, rounds=500))
-        #asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=8, rounds=500))
-        # asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=4, rounds=500))
-        # asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=16, rounds=500))
         asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=1, numcacheblocks=1, rounds=5))
         asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=0, numcacheblocks=1, rounds=5))
 

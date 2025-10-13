@@ -388,7 +388,7 @@ def bulkExperiments(resultsDir):
     payloadSizeArr = [32, 16, 8]
     transferSizeArr = [4096]
     rounds = 20
-    mode = 1
+    mode = 3
 
     # Write down the config
     with open(f"{resultsDir}/config.txt", "w") as f:
@@ -447,8 +447,8 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
 
         await resetAllDevicesNetstats()
 
-        rxOut += comm.sendSerialCommand(rxDev, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}", cooldownS=3)
-        txOut += comm.sendSerialCommand(txDev, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}", cooldownS=3)
+        rxOut += comm.sendSerialCommand(rxDev, f"iperf config mode 3 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}", cooldownS=3)
+        txOut += comm.sendSerialCommand(txDev, f"iperf config mode 3 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}", cooldownS=3)
 
         for r in devices["routers"]:
             comm.flushDevice(r)
@@ -456,7 +456,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
         futures = []
         for r in devices["routers"]:
             # comm.sendSerialCommand(r, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
-            future = sendCmdBackground(r, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
+            future = sendCmdBackground(r, f"iperf config mode 3 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
             futures.append(future)
         time.sleep(1)
         await asyncio.gather(*futures)

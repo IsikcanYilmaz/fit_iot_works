@@ -267,8 +267,8 @@ static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
              p->payload[i] ^ receiveFileBuffer[dependentByteIdx],
              p->payload[i] ^ receiveFileBuffer[dependentByteIdx]);
     receiveFileBuffer[decodableByteIdx] = p->payload[i] ^ receiveFileBuffer[dependentByteIdx];
-    results.numPktDecodes++;
   }
+  results.numPktDecodes++;
 
   return decodableChunkIdx;
 }

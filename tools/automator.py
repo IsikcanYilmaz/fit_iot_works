@@ -406,11 +406,12 @@ def bulkExperiments(resultsDir):
                 experimentCount += 1
                 time.sleep(2)
 
-async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=4096, rounds=1, cache=1, code=1, numcacheblocks=16, resultsDir="./"):
+async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=1024, rounds=1, cache=1, code=1, numcacheblocks=16, resultsDir="./"):
     global devices, comm, args
     txDev = devices["sender"]
     rxDev = devices["receiver"]
     routers = devices["routers"]
+    jammers = devices["jammers"]
     
     outFilenamePrefix = f"cache{cache}_numcache{numcacheblocks}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
     overallJson = []
@@ -735,9 +736,10 @@ def main():
     if (args.experiment_test):
         #asyncio.run(cachingExperiment(delayus= 50000, cache=1, rounds=500))
         #asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=8, rounds=500))
-        asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=4, rounds=500))
-        asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=16, rounds=500))
-        asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=1, rounds=500))
+        # asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=4, rounds=500))
+        # asyncio.run(cachingExperiment(delayus= 50000, cache=1, numcacheblocks=16, rounds=500))
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=1, numcacheblocks=1, rounds=5))
+        asyncio.run(cachingExperiment(delayus= 50000, cache=1, code=0, numcacheblocks=1, rounds=5))
 
     if (args.results_dir):
         args.results_dir = os.path.abspath(args.results_dir)

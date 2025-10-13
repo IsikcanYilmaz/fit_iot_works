@@ -139,6 +139,8 @@ typedef struct
   uint32_t startTimestamp;
   uint32_t endTimestamp;
 
+  uint16_t numPktDecodes;
+
   uint16_t cacheHits;
   uint16_t cacheMisses;
 

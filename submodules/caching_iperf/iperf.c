@@ -60,7 +60,7 @@ IperfConfig_s config = {
 
   // Relay related
   .cache = true,
-  .code = false,
+  .code = true,
   .numCacheBlocks = 4,
   .cacheChancePercent = 50, //25,
 

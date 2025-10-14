@@ -207,8 +207,8 @@ def parseDeviceJsons(j, caching=False):
     sendRate = j["tx"]["numSentPkts"] * j["config"]["payloadSizeBytes"] / timeDiffSecs
     receiveRate = (j["rx"]["numReceivedPkts"] - j["rx"]["numDuplicates"]) * j["config"]["payloadSizeBytes"] / timeDiffSecs
     cacheHits = sum([i["results"]["cacheHits"] for i in j["relays"]])
-    L2sentPackets = sum([i["results"]["l2numSentPackets"] for i in j["relays"]]) + j["rx"]["results"]["l2numSentPackets"] + j["tx"]["results"]["l2numSentPackets"]
-    L2receivedPackets = sum([i["results"]["l2numReceivedPackets"] for i in j["relays"]]) + j["rx"]["results"]["l2numReceivedPackets"] + j["tx"]["results"]["l2numReceivedPackets"]
+    L2sentPackets = sum([i["results"]["l2numSentPackets"] for i in j["relays"]]) + j["rx"]["l2numSentPackets"] + j["tx"]["l2numSentPackets"]
+    L2receivedPackets = sum([i["results"]["l2numReceivedPackets"] for i in j["relays"]]) + j["rx"]["l2numReceivedPackets"] + j["tx"]["l2numReceivedPackets"]
     return {"timeDiffSecs":timeDiffSecs, "numLostPackets":numLostPackets, "lossPercent":lossPercent, "sendRate":sendRate, "receiveRate":receiveRate, "sumCacheHits":cacheHits, "l2sumSentPackets":L2sentPackets, "l2sumReceivedPackets":L2receivedPackets}
 
 def averageRoundsJsons(j):

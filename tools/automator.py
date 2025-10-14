@@ -568,12 +568,12 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
         pprint(roundOverallJson)
         overallJson.append(roundOverallJson)
 
-    with open(experimentFilename, "w") as f:
-        json.dump(overallJson, f, indent=4)
+        with open(experimentFilename, "w") as f:
+            json.dump(overallJson, f, indent=4)
 
-    overallAveragesJson = averageRoundsJsons(overallJson)
-    with open(averagesFilename, "w") as f:
-        json.dump(overallAveragesJson, f, indent=4)
+        overallAveragesJson = averageRoundsJsons(overallJson)
+        with open(averagesFilename, "w") as f:
+            json.dump(overallAveragesJson, f, indent=4)
 
     print(f"Results written to {resultsDir}")
     print("----------------")

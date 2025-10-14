@@ -741,17 +741,18 @@ def main():
     if (args.experiment_test):
         rounds = 20
         mode = 3
-        asyncio.run(cachingExperiment(delayus= 50000, mode=mode, cache=1, code=1, numcacheblocks=1, rounds=rounds))
-        asyncio.run(cachingExperiment(delayus= 50000, mode=mode, cache=1, code=0, numcacheblocks=1, rounds=rounds))
+        delayus = 100000
+        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=1, rounds=rounds))
+        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=1, rounds=rounds))
 
-        asyncio.run(cachingExperiment(delayus= 50000, mode=mode, cache=1, code=1, numcacheblocks=4, rounds=rounds))
-        asyncio.run(cachingExperiment(delayus= 50000, mode=mode, cache=1, code=0, numcacheblocks=4, rounds=rounds))
+        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=4, rounds=rounds))
+        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=4, rounds=rounds))
 
-        asyncio.run(cachingExperiment(delayus= 50000, mode=mode, cache=1, code=1, numcacheblocks=8, rounds=rounds))
-        asyncio.run(cachingExperiment(delayus= 50000, mode=mode, cache=1, code=0, numcacheblocks=8, rounds=rounds))
+        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=8, rounds=rounds))
+        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=8, rounds=rounds))
 
-        asyncio.run(cachingExperiment(delayus= 50000, mode=mode, cache=1, code=1, numcacheblocks=16, rounds=rounds))
-        asyncio.run(cachingExperiment(delayus= 50000, mode=mode, cache=1, code=0, numcacheblocks=16, rounds=rounds))
+        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=16, rounds=rounds))
+        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=16, rounds=rounds))
 
     if (args.results_dir):
         args.results_dir = os.path.abspath(args.results_dir)

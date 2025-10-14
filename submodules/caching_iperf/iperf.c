@@ -242,7 +242,7 @@ static void printAll(void)
 void Iperf_PrintConfig(bool json)
 {
   printf((json) ? "{\"role\":%d, \"payloadSizeBytes\":%d, \"pktPerSecond\":%d, \"delayUs\":%d, \"interestDelayUs\":%d, \"expectationDelayUs\":%d, \"mode\":%d, \"transferSizeBytes\":%d, \"transferTimeUs\":%d, \"numPktsToTransfer\":%d, \"cache\":%d, \"code\":%d, \"numCacheBlocks\":%d}\n" : \
-           "role: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\ninterestDelayUs: %d\nexpectationDelayUs: %d\nmode %d\ntransferSizeBytes %d\ntransferTimeUs: %d\nnumPktsToTransfer: %d\ncache: %d\ncode: %d\nnumCacheBlocks: %d\n", 
+           "role: %d\npayloadSizeBytes: %d\npktPerSecond: %d\ndelayUs: %d\ninterestDelayUs: %d\nexpectationDelayUs: %d\nmode: %d\ntransferSizeBytes %d\ntransferTimeUs: %d\nnumPktsToTransfer: %d\ncache: %d\ncode: %d\nnumCacheBlocks: %d\n", 
            config.role, 
            config.payloadSizeBytes, 
            config.pktPerSecond, 
@@ -877,6 +877,10 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   }
   else if (strncmp(argv[1], "restart", 16) == 0)
   {
+    if (config.role == JAMMER)
+    {
+      return 0;
+    }
     IperfRole_e myOldRole = config.role;
     Iperf_Deinit();
     Iperf_Init(myOldRole);

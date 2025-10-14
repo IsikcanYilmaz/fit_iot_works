@@ -216,7 +216,8 @@ def averageRoundsJsons(j):
     avgReceiveRate = sum([j[i]["results"]["receiveRate"] for i in range(0, len(j))])/len(j)
     avgTimeDiffSecs = sum([j[i]["results"]["timeDiffSecs"] for i in range(0, len(j))])/len(j)
     avgSumCacheHits = sum([j[i]["results"]["sumCacheHits"] for i in range(0, len(j))])/len(j)
-    return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate, "avgTimeDiffSecs":avgTimeDiffSecs, "avgSumCacheHits":avgSumCacheHits}
+    numDatapoints = len(j)
+    return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate, "avgTimeDiffSecs":avgTimeDiffSecs, "avgSumCacheHits":avgSumCacheHits, "numDatapoints":numDatapoints}
 
 async def resetAllDevicesNetstats():
     global devices, ifaceId

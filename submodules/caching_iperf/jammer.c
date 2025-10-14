@@ -30,6 +30,7 @@ static char *dummyAddr = "fe80::0:0:0:0";
 static uint16_t dummyPort = 666;
 static netif_t *netif;
 static ipv6_addr_t addr;
+static bool initialized = false;
 extern ztimer_t intervalTimer;
 
 // Yanked out of RIOT/sys/shell/cmds/gnrc_udp.c
@@ -102,13 +103,18 @@ static void initJammer(void)
     logerror("Error: unable to parse destination address\n");
     return;
   }
+
+  initialized = true;
 }
 
 static void deinitJammer(void)
 {
-
+  // needed?
 }
 
+// Send out $burstMax many messages, that are $payloadSizeBytes big
+// Wait for $burstDelayMsMin-$burstDelayMsMax in between every transmission.
+// after the burst, wait for $sleepDelayMsMin-$sleepDelayMsMax
 static void chatter(void)
 {
   uint16_t num = 1 + (rand() % (jammerConfig.burstMax - 1));

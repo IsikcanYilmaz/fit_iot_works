@@ -207,7 +207,9 @@ def parseDeviceJsons(j, caching=False):
     sendRate = j["tx"]["numSentPkts"] * j["config"]["payloadSizeBytes"] / timeDiffSecs
     receiveRate = (j["rx"]["numReceivedPkts"] - j["rx"]["numDuplicates"]) * j["config"]["payloadSizeBytes"] / timeDiffSecs
     cacheHits = sum([i["results"]["cacheHits"] for i in j["relays"]])
-    return {"timeDiffSecs":timeDiffSecs, "numLostPackets":numLostPackets, "lossPercent":lossPercent, "sendRate":sendRate, "receiveRate":receiveRate, "sumCacheHits":cacheHits}
+    L2sentPackets = sum([i["results"]["l2numSentPackets"] for i in j["relays"]]) + j["rx"]["results"]["l2numSentPackets"] + j["tx"]["results"]["l2numSentPackets"]
+    L2receivedPackets = sum([i["results"]["l2numReceivedPackets"] for i in j["relays"]]) + j["rx"]["results"]["l2numReceivedPackets"] + j["tx"]["results"]["l2numReceivedPackets"]
+    return {"timeDiffSecs":timeDiffSecs, "numLostPackets":numLostPackets, "lossPercent":lossPercent, "sendRate":sendRate, "receiveRate":receiveRate, "sumCacheHits":cacheHits, "l2sumSentPackets":L2sentPackets, "l2sumReceivedPackets":L2receivedPackets}
 
 def averageRoundsJsons(j):
     avgNumLostPkts = sum([j[i]["results"]["numLostPackets"] for i in range(0, len(j))])/len(j)
@@ -433,9 +435,12 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
                 f.close()
                 overallJson.append(j)
                 print(f"{bcolors.OKGREEN}{roundFilename} Round file already there. Moving on{bcolors.ENDC}")
-                continue
+                roundCompletedBefore = True
             except Exception as e:
                 print("Error reading old round file!", e)
+
+        if (roundCompletedBefore):
+            continue
                 
         txOut = ""
         rxOut = ""
@@ -456,7 +461,6 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
 
         futures = []
         for r in devices["routers"]:
-            # comm.sendSerialCommand(r, f"iperf config mode 2 delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
             future = sendCmdBackground(r, f"iperf config mode {mode} delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
             futures.append(future)
         time.sleep(1)
@@ -464,7 +468,6 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
 
         futures = []
         for r in devices["routers"]:
-            # comm.sendSerialCommand(r, "iperf relayer")
             future = sendCmdBackground(r, f"iperf config numcacheblocks {numcacheblocks} code {code}")
             futures.append(future)
         time.sleep(1)
@@ -478,6 +481,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
         time.sleep(1)
         await asyncio.gather(*futures)
 
+        # RUN STARTS HERE vvvvvvvvvvvvvvvvvvvvvvvvvvvvv
         rxOut += comm.sendSerialCommand(rxDev, "iperf receiver", cooldownS=1)
         txOut += comm.sendSerialCommand(txDev, "iperf sender start")
 

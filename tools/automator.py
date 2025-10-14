@@ -607,6 +607,8 @@ async def setRandomSeeds(seed=None, randomSeed=False):
     futures = []
     for dev in devices["routers"]:
         futures.append(sendCmdBackground(dev, f"iperf seed {random.randint(1, 10000)}"))
+    for dev in devices["jammers"]:
+        futures.append(sendCmdBackground(dev, f"iperf seed {random.randint(1, 10000)}"))
     time.sleep(1)
     await asyncio.gather(*futures)
 

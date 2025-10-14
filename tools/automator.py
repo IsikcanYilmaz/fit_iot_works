@@ -407,7 +407,7 @@ def bulkExperiments(resultsDir):
                 experimentCount += 1
                 time.sleep(2)
 
-async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=1024, rounds=1, cache=1, code=1, numcacheblocks=16, resultsDir="./"):
+async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebytes=1024, rounds=1, mode=3, cache=1, code=1, numcacheblocks=16, resultsDir="./"):
     global devices, comm, args
     txDev = devices["sender"]
     rxDev = devices["receiver"]

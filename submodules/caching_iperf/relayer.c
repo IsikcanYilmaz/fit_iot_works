@@ -690,6 +690,13 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
         // CODED CACHING
         // We just caught a catalogue vector. This will tell us what the receiver has and what it does not have
         logdebug("IPERF_PKT_CATALOGUE_VECTOR received\n");
+        
+        if (!config.cache)
+        {
+          shouldForward = true;
+          break;
+        }
+
         if (logprintTags[DEBUG]) Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
         IperfCatalogueVector_t *catalogue = (IperfCatalogueVector_t *) iperfPkt->payload;
         bool canSatisfy = handleCatalogueVector(catalogue);

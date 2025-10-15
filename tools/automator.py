@@ -218,8 +218,10 @@ def averageRoundsJsons(j):
     avgReceiveRate = sum([j[i]["results"]["receiveRate"] for i in range(0, len(j))])/len(j)
     avgTimeDiffSecs = sum([j[i]["results"]["timeDiffSecs"] for i in range(0, len(j))])/len(j)
     avgSumCacheHits = sum([j[i]["results"]["sumCacheHits"] for i in range(0, len(j))])/len(j)
+    avgl2sentPackets = sum([j[i]["results"]["l2sumSentPackets"] for i in range(0, len(j))])/len(j)
+    avgl2receivedPackets = sum([j[i]["results"]["l2sumReceivedPackets"] for i in range(0, len(j))])/len(j)
     numDatapoints = len(j)
-    return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate, "avgTimeDiffSecs":avgTimeDiffSecs, "avgSumCacheHits":avgSumCacheHits, "numDatapoints":numDatapoints}
+    return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate, "avgTimeDiffSecs":avgTimeDiffSecs, "avgSumCacheHits":avgSumCacheHits, "numDatapoints":numDatapoints, "avgL2sentPackets": avgl2sentPackets, "avgL2receivedPackets":avgl2receivedPackets}
 
 async def resetAllDevicesNetstats():
     global devices, ifaceId
@@ -740,7 +742,7 @@ def main():
         return
 
     if (args.experiment_test):
-        rounds = 20
+        rounds = 100
         mode = 3
         delayus = 100000
         asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=1, rounds=rounds))

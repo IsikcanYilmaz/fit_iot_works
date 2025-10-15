@@ -62,7 +62,7 @@ IperfConfig_s config = {
   .cache = true,
   .code = true,
   .numCacheBlocks = 4,
-  .cacheChancePercent = 100, //25,
+  .cacheChancePercent = 75, //25,
 
 };
 #endif 

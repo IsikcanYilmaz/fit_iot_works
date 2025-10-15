@@ -281,7 +281,7 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
     }
     cacheIdx = newCacheIdx;
   }
-  logdebug("[%s] cacheIdx %d\n", __FUNCTION__, cacheIdx);
+  logdebug("[%s] cacheIdx %d\n", __FUNCTION__, cacheIdx); 
 
   // Second, check what we currently have in this cache slot. 
   IperfUdpPkt_t *udp = (IperfUdpPkt_t *) (cacheBuffer + (cacheIdx * CODED_CACHE_BLOCK_SIZE));
@@ -291,30 +291,38 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
   uint8_t newOffset = iperfPkt->seqNo / IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS;
   uint8_t offset = coded->pktOffset;
 
-  udp->msgType = IPERF_PKT_CODED_DATA;
-
-  uint32_t bitmap = * ((uint32_t *) coded->bitmap);
-  numCodedPackets = __builtin_popcount((uint32_t) bitmap); // counts 1 bits in a bit string 
-
-  uint8_t bitIdx = iperfPkt->seqNo % IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS;
-  if (numCodedPackets == 0 || numCodedPackets == 2 || !config.code) // There is 2 things cached and coded or nothing here. flush the cache and put in new thing. OR we're not doing coding and we should fall in htere every time
+  // If this packet contains already a coded payload, cache it directly (?)
+  if (iperfPkt->msgType == IPERF_PKT_CODED_DATA)
   {
-    bitmap = (1 << bitIdx);
-    memcpy(coded->payload, iperfPkt->payload, config.payloadSizeBytes);
-    *((uint32_t *)coded->bitmap) = bitmap;
+    memcpy(coded, iperfPkt->payload, CODED_CACHE_BLOCK_SIZE);
   }
-  else if (numCodedPackets == 1) // There is 1 thing cached here. will code and cache our new thing here.
+  else
   {
-    bitmap |= (1 << bitIdx);
-    *((uint32_t *)coded->bitmap) = bitmap;
-    for (int i = 0; i < config.payloadSizeBytes; i++)
+    udp->msgType = IPERF_PKT_CODED_DATA;
+
+    uint32_t bitmap = * ((uint32_t *) coded->bitmap);
+    numCodedPackets = __builtin_popcount((uint32_t) bitmap); // counts 1 bits in a bit string 
+
+    uint8_t bitIdx = iperfPkt->seqNo % IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS;
+    if (numCodedPackets == 0 || numCodedPackets == 2 || !config.code) // There is 2 things cached and coded or nothing here. flush the cache and put in new thing. OR we're not doing coding and we should fall in htere every time
     {
-      codedPayload[i] = codedPayload[i] ^ iperfPkt->payload[i];
+      bitmap = (1 << bitIdx);
+      memcpy(coded->payload, iperfPkt->payload, config.payloadSizeBytes);
+      *((uint32_t *)coded->bitmap) = bitmap;
     }
-  }
-  else // we shouldnt get here 
-  {
-    logerror("[%s] Something went wrong line %d\n", __FUNCTION__, __LINE__);
+    else if (numCodedPackets == 1) // There is 1 thing cached here. will code and cache our new thing here.
+    {
+      bitmap |= (1 << bitIdx);
+      *((uint32_t *)coded->bitmap) = bitmap;
+      for (int i = 0; i < config.payloadSizeBytes; i++)
+      {
+        codedPayload[i] = codedPayload[i] ^ iperfPkt->payload[i];
+      }
+    }
+    else // we shouldnt get here 
+    {
+      logerror("[%s] Something went wrong line %d\n", __FUNCTION__, __LINE__);
+    }
   }
 
   // Increment our next cache index
@@ -722,6 +730,13 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
           shouldForward = false;
         }
         break;
+      }
+    case IPERF_PKT_CODED_DATA:
+      {
+        if (config.cache && coinFlip(config.cacheChancePercent))
+        {
+          codedCache(iperfPkt);
+        }       
       }
     default:
       {

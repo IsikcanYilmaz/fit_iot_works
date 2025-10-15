@@ -294,7 +294,7 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
   // If this packet contains already a coded payload, cache it directly (?)
   if (iperfPkt->msgType == IPERF_PKT_CODED_DATA)
   {
-    memcpy(udp, iperfPkt, CODED_CACHE_BLOCK_SIZE);
+    // memcpy(udp, iperfPkt, CODED_CACHE_BLOCK_SIZE);
   }
   else
   {
@@ -322,12 +322,12 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
     {
       logerror("[%s] Something went wrong line %d\n", __FUNCTION__, __LINE__);
     }
-  }
 
-  // Increment our next cache index
-  cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
-  logdebug("New cache idx %d\n", cacheIdx);
-  if (logprintTags[DEBUG]) Iperf_PrintCodedCache();
+    // Increment our next cache index
+    cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
+    logdebug("New cache idx %d\n", cacheIdx);
+    if (logprintTags[DEBUG]) Iperf_PrintCodedCache();
+  }
 }
 
 static void legacyCache(IperfUdpPkt_t *iperfPkt)

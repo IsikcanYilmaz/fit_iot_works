@@ -292,14 +292,13 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
   uint8_t offset = coded->pktOffset;
 
   // If this packet contains already a coded payload, cache it directly (?)
+  udp->msgType = IPERF_PKT_CODED_DATA;
   if (iperfPkt->msgType == IPERF_PKT_CODED_DATA)
   {
     memcpy(coded, iperfPkt->payload, CODED_CACHE_BLOCK_SIZE);
   }
   else
   {
-    udp->msgType = IPERF_PKT_CODED_DATA;
-
     uint32_t bitmap = * ((uint32_t *) coded->bitmap);
     numCodedPackets = __builtin_popcount((uint32_t) bitmap); // counts 1 bits in a bit string 
 

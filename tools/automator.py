@@ -463,14 +463,14 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
 
         futures = []
         for r in devices["routers"]:
-            future = sendCmdBackground(r, f"iperf config mode {mode} delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes} cache {cache}")
+            future = sendCmdBackground(r, f"iperf config mode {mode} delayus {delayus} plsize {payloadsizebytes} xfer {transfersizebytes}")
             futures.append(future)
         time.sleep(1)
         await asyncio.gather(*futures)
 
         futures = []
         for r in devices["routers"]:
-            future = sendCmdBackground(r, f"iperf config numcacheblocks {numcacheblocks} code {code}")
+            future = sendCmdBackground(r, f"iperf config numcacheblocks {numcacheblocks} cache {cache} code {code}")
             futures.append(future)
         time.sleep(1)
         await asyncio.gather(*futures)
@@ -742,20 +742,26 @@ def main():
         return
 
     if (args.experiment_test):
-        rounds = 100
+        rounds = 6
+        maxrounds = 100
         mode = 3
         delayus = 100000
-        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=1, rounds=rounds))
-        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=1, rounds=rounds))
+        for i in range(rounds, maxrounds):
+            asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=1, rounds=i))
+            asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=1, rounds=i))
+            asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=0, code=0, numcacheblocks=1, rounds=i))
 
-        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=4, rounds=rounds))
-        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=4, rounds=rounds))
+        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=1, rounds=rounds))
+        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=1, rounds=rounds))
 
-        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=8, rounds=rounds))
-        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=8, rounds=rounds))
+        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=4, rounds=rounds))
+        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=4, rounds=rounds))
 
-        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=16, rounds=rounds))
-        asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=16, rounds=rounds))
+        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=8, rounds=rounds))
+        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=8, rounds=rounds))
+
+        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=16, rounds=rounds))
+        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=16, rounds=rounds))
 
     if (args.results_dir):
         args.results_dir = os.path.abspath(args.results_dir)

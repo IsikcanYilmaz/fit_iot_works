@@ -56,7 +56,7 @@ IperfConfig_s config = {
   .expectationDelayUs = 500000,
   .transferSizeBytes = 1024, //4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
-  .mode = IPERF_MODE_CODED_CACHING,
+  .mode = IPERF_MODE_SIMPLE_CACHING,
 
   // Relay related
   .cache = true,

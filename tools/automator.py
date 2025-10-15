@@ -418,7 +418,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
     routers = devices["routers"]
     jammers = devices["jammers"]
     
-    outFilenamePrefix = f"cache{cache}_code{code}_numcache{numcacheblocks}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
+    outFilenamePrefix = f"m_{mode}_cache{cache}_code{code}_numcache{numcacheblocks}_delay{delayus}_pl{payloadsizebytes}_tx{transfersizebytes}_routers{len(devices['routers'])}"
     overallJson = []
 
     averagesFilename = f"{resultsDir}/{outFilenamePrefix}_averages.json"

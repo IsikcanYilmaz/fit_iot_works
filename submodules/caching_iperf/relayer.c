@@ -295,7 +295,7 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
   udp->msgType = IPERF_PKT_CODED_DATA;
   if (iperfPkt->msgType == IPERF_PKT_CODED_DATA)
   {
-    memcpy(coded, iperfPkt->payload, CODED_CACHE_BLOCK_SIZE);
+    memcpy(coded, iperfPkt->payload, sizeof(IperfCodedPayloadPkt_t) + config.payloadSizeBytes);
   }
   else
   {

@@ -294,7 +294,7 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
   // If this packet contains already a coded payload, cache it directly (?)
   if (iperfPkt->msgType == IPERF_PKT_CODED_DATA)
   {
-    // memcpy(udp, iperfPkt, CODED_CACHE_BLOCK_SIZE);
+    memcpy(udp, iperfPkt, CODED_CACHE_BLOCK_SIZE); // JON TODO THISSSSSSSS
   }
   else
   {

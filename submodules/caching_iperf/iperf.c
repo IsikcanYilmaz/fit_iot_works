@@ -72,7 +72,7 @@ IperfJammerConfig_s   jammerConfig =  {
   .payloadSizeBytes = 64, 
   .burstMax        = 50, 
   .burstDelayMsMin = 50,
-  .burstDelayMsMax = 500, 
+  .burstDelayMsMax = 250, 
   .sleepDelayMsMin = 100,
   .sleepDelayMsMax = 500,
   .continuous = false // todo. currently this setting does nothing 
@@ -1187,6 +1187,12 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     }
     else // user supplied vector
     { 
+      if (argc == 4) // user also supplied offset
+      {
+        offset = atoi(argv[3]);
+        loginfo("Taking %d as offset\n", offset);
+      }
+
       for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
       {
         if (i >= strlen(argv[2]))
@@ -1200,9 +1206,9 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
           vec &= ~(1 << i);
         }
       }
-    }
 
-    Iperf_SendArbitraryCatalogueVector(vec, offset);
+      Iperf_SendArbitraryCatalogueVector(vec, offset);
+    }
   }
   else if (strncmp(argv[1], "rm", 16) == 0) // delete a chunk that is received from our file buffer
   {

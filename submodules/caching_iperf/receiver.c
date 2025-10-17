@@ -553,10 +553,12 @@ void *Iperf_ReceiverThread(void *arg)
             // }
 
             bool expecting = false;
+            uint8_t earliestExpectedOffset = 0;
             for (uint16_t i = 0; i < expectationSeqNo; i++)
             {
               if (receivedPktIds[i] != RECEIVED)
               {
+                earliestExpectedOffset = i / IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS;
                 expecting = true;
                 break;
               }
@@ -565,7 +567,7 @@ void *Iperf_ReceiverThread(void *arg)
             // Only send the catalogue if we're expecting chunks
             if (expecting)
             {
-              Iperf_SendCatalogueVector((IperfChunkStatus_e *) &receivedPktIds, 0);
+              Iperf_SendCatalogueVector((IperfChunkStatus_e *) &receivedPktIds, earliestExpectedOffset);
             }
           }
           break;

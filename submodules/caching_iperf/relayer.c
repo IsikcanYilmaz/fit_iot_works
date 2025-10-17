@@ -291,6 +291,12 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
   uint8_t newOffset = iperfPkt->seqNo / IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS;
   uint8_t offset = coded->pktOffset;
 
+  if (newOffset > 0)
+  {
+    logerror("JON JON JON UNDER CONSTRUCTION. NEWLY RECEIVED PKT HAS OFFSET %d\n", newOffset);
+    return;
+  }
+
   // If this packet contains already a coded payload, cache it directly (?)
   if (iperfPkt->msgType == IPERF_PKT_CODED_DATA)
   {

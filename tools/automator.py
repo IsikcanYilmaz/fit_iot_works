@@ -253,7 +253,7 @@ async def startStopJammers(start=True):
     futures = []
     print(f"Starting {len(devices['jammers'])} jammers")
     for dev in devices["jammers"]:
-        future = sendCmdBackground(dev, "iperf jammer \niperf start" if start else "iperf stop")
+        future = sendCmdBackground(dev, "iperf jammer" if start else "iperf stop")
         futures.append(future)
     time.sleep(1)
     await asyncio.gather(*futures)

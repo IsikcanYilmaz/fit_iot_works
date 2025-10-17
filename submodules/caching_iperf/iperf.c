@@ -1135,14 +1135,25 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     pl[size] = (char) NULL;
     return Iperf_SendEcho((char *) &pl);
   }
-  else if (strncmp(argv[1], "cataloguetest", 16) == 0)
+  else if (strncmp(argv[1], "cataloguetest", 16) == 0) // test having gotten a catalogue
   {
-    if (config.role != RECEIVER)
+    uint32_t vec = 0xffffffff;
+    uint8_t offset = 0;
+    if (argc < 3) // user didnt supply vector
     {
-      logerror("I am not receiver!\n");
-      return 1;
+      loginfo("Vector not supplied. Using current vector\n");
+      vec = Iperf_GetCatalogueVector(receivedPktIds, offset);
     }
-    Iperf_CatalogueVectorTest();
+    else // user supplied vector
+    { 
+      if (argc == 4) // user also supplied offset
+      {
+        offset = atoi(argv[3]);
+        loginfo("Taking %d as offset\n", offset);
+      }
+      vec = XorCoding_GenerateVectorFromString(argv[2]);
+    }
+    Relayer_Test(vec, offset);
   }
   else if (strncmp(argv[1], "interest", 16) == 0) // send single interest
   {
@@ -1193,20 +1204,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
         loginfo("Taking %d as offset\n", offset);
       }
 
-      for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
-      {
-        if (i >= strlen(argv[2]))
-        {
-          break;
-        }
-        uint8_t byteIdx = i / 8;
-        uint8_t bitIdx = i % 8;
-        if (argv[2][i] == '0')
-        {
-          vec &= ~(1 << i);
-        }
-      }
-
+      vec = XorCoding_GenerateVectorFromString(argv[2]);
       Iperf_SendArbitraryCatalogueVector(vec, offset);
     }
   }

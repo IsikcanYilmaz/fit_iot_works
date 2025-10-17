@@ -71,6 +71,25 @@ bool XorCoding_IsPowerOfTwo(uint32_t num)
   return (num > 0 && ((num - 1) & num) == 0);
 }
 
+uint32_t XorCoding_GenerateVectorFromString(char *str)
+{
+  uint32_t vec = 0xffffffff;
+  for (int i = 0; i < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; i++)
+  {
+    if (i >= strnlen(str, 32))
+    {
+      break;
+    }
+    uint8_t byteIdx = i / 8;
+    uint8_t bitIdx = i % 8;
+    if (str[i] == '0')
+    {
+      vec &= ~(1 << i);
+    }
+  }
+  return vec;
+}
+
 #if 0
 // TESTER
 int main()

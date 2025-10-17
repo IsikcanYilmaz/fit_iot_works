@@ -300,7 +300,7 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
   // If this packet contains already a coded payload, cache it directly (?)
   if (iperfPkt->msgType == IPERF_PKT_CODED_DATA)
   {
-    memcpy(udp, iperfPkt, CODED_CACHE_BLOCK_SIZE); // JON TODO THISSSSSSSS
+    memcpy(udp, iperfPkt, CODED_CACHE_BLOCK_SIZE); 
   }
   else
   {
@@ -547,6 +547,21 @@ void *Iperf_RelayerThread(void *arg)
   deinitRelayer();
   loginfo("Relayer thread exiting\n");
   return NULL;
+}
+
+void Relayer_Test(uint32_t vec, uint8_t offset)
+{
+  IperfCatalogueVector_t testCatalogue;
+  testCatalogue.pktOffset = offset;
+  * ((uint32_t *) &testCatalogue.bitmap) = vec;
+  bool canSatisfy = handleCatalogueVector(&testCatalogue);
+  if (canSatisfy) // JON TODO maybe make this generic?
+  {
+    logverbose("Sending IPC\n");
+    msg_t ipc;
+    ipc.type = IPERF_IPC_MSG_RELAY_SERVICE_INTEREST;
+    msg_send(&ipc, relayerPid);
+  }
 }
 
 // Will return true if the packet should keep going

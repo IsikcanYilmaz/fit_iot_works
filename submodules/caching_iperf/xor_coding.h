@@ -17,3 +17,5 @@ void XorCoding_DoCoding(XorCodingConfig_t *config, CodedPacket_t *src, CodedPack
 void XorCoding_PrintEntry(XorCodingConfig_t *config, CodedPacket_t *c);
 void XorCoding_PrintBitmapBits(uint8_t *bitmap);
 bool XorCoding_IsPowerOfTwo(uint32_t num);
+
+uint32_t XorCoding_GenerateVectorFromString(char *str);

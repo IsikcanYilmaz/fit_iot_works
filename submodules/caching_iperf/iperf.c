@@ -62,7 +62,7 @@ IperfConfig_s config = {
   .cache = true,
   .code = true,
   .numCacheBlocks = 4,
-  .cacheChancePercent = 75, //25,
+  .cacheChancePercent = 100, //25,
 
 };
 #endif 
@@ -470,9 +470,10 @@ int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint8_t offset)
   vectorPkt->pktOffset = offset;
 
   // Go thru $offset'th packet for $length packets
+  uint16_t overallIndexOffset = offset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; 
   for (uint16_t pktIdx = 0; pktIdx < IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS; pktIdx++)
   {
-    uint16_t overallPktIdx = pktIdx + offset;
+    uint16_t overallPktIdx = pktIdx + overallIndexOffset;
     uint8_t currByteIdx = pktIdx / 8;
     uint8_t currBitIdx = pktIdx % 8;
     // printf("idx:%d %s received. byte %d bit %d\n", overallPktIdx, (chunkStatus[overallPktIdx] == RECEIVED ? "" : "not "), currByteIdx, currBitIdx);
@@ -1135,7 +1136,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     pl[size] = (char) NULL;
     return Iperf_SendEcho((char *) &pl);
   }
-  else if (strncmp(argv[1], "cataloguetest", 16) == 0) // test having gotten a catalogue
+  else if (strncmp(argv[1], "cataloguetest", 16) == 0) // testing having gotten a catalogue
   {
     uint32_t vec = 0xffffffff;
     uint8_t offset = 0;
@@ -1205,8 +1206,8 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       }
 
       vec = XorCoding_GenerateVectorFromString(argv[2]);
-      Iperf_SendArbitraryCatalogueVector(vec, offset);
     }
+    Iperf_SendArbitraryCatalogueVector(vec, offset);
   }
   else if (strncmp(argv[1], "rm", 16) == 0) // delete a chunk that is received from our file buffer
   {

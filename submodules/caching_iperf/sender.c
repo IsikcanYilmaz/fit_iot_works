@@ -77,7 +77,7 @@ static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
     uint16_t missingPacketIdx;
     if ((bitmap & (0x1 << i)) == 0)
     {
-      missingPacketIdx = catalogue->pktOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS + i;
+      missingPacketIdx = (catalogue->pktOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS) + i;
       if (missingPacketIdx > results.lastPktSeqNo)
       {
         break;

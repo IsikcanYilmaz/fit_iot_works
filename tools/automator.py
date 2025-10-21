@@ -161,11 +161,11 @@ def setIperfTarget(dev, targetGlobalAddr):
     global comm
     outStrRaw = comm.sendSerialCommand(dev, f"iperf target {targetGlobalAddr}")
 
-def pingTest(srcDev, dstDev, cooldownS=5):
+def pingTest(srcDev, dstDev, count=3, cooldownS=5):
     global comm
     dstIp = dstDev["globalAddr"]
     print(f"{srcDev['globalAddr']} Pinging {dstIp}")
-    outStrRaw = comm.sendSerialCommand(srcDev, f"ping {dstIp}", cooldownS=cooldownS, captureOutput=True)
+    outStrRaw = comm.sendSerialCommand(srcDev, f"ping {dstIp} -c {count}", cooldownS=count*2, captureOutput=True)
     if ("100% packet loss" in outStrRaw):
         print(bcolors.FAIL + "PING TEST FAILED!!!!" + bcolors.ENDC)
         return False
@@ -735,7 +735,7 @@ def main():
 
     # pdb.set_trace()
 
-    pingTestPassed = pingTest(devices["sender"], devices["receiver"])
+    pingTestPassed = pingTest(devices["sender"], devices["receiver"], count=5)
     
     if (not pingTestPassed):
         print(f"{bcolors.FAIL}PING TEST FAILED {bcolors.ENDC}")

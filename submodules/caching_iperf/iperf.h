@@ -46,6 +46,13 @@ typedef enum
 
 typedef enum
 {
+  CACHE_ROUND_ROBIN,
+  CACHE_RULE_BASED,
+  CACHE_MAX_STRAT
+} IperfCacheReplacementStrategy_e;
+
+typedef enum
+{
   RECEIVER_STOPPED,
   RECEIVER_IDLE,
   RECEIVER_RECEIVING,

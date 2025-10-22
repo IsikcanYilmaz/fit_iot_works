@@ -182,13 +182,13 @@ static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
   uint8_t receivedOffset = p->pktOffset;
 
   // Sanity check if the received coded payload has the same offset as us
-  if (p->pktOffset != currentOffset)
-  {
-    logerror("ERROR: Received coded payload has different offset %d != %d\n", p->pktOffset, currentOffset);
-    return -1;
-  }
+  // if (p->pktOffset != currentOffset)
+  // {
+  //   logerror("ERROR: Received coded payload has different offset %d != %d\n", p->pktOffset, currentOffset);
+  //   return -1;
+  // }
 
-  uint32_t Cbefore = Iperf_GetCatalogueVector((IperfChunkStatus_e *) &receivedPktIds, currentOffset);
+  uint32_t Cbefore = Iperf_GetCatalogueVector((IperfChunkStatus_e *) &receivedPktIds, receivedOffset);
   uint32_t R = * (uint32_t *) (p->bitmap);
   uint32_t Cafter = Cbefore ^ R;
   uint32_t Cdecodable = (~Cbefore) & Cafter;
@@ -224,7 +224,7 @@ static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
   {
     if ((Cdecodable & (1<<i)) > 0)
     {
-      decodableChunkIdx = i;
+      decodableChunkIdx = i + (receivedOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS);
       break;
     }
   }
@@ -240,26 +240,26 @@ static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
   {
     if ((Cdependent & (1<<i)) > 0)
     {
-       dependentChunkIdx = i;
+       dependentChunkIdx = i + (receivedOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS);
     }
   }
-  logdebug("Decodable Chunk Idx %x, Needed Chunk Idx %x\n", decodableChunkIdx, dependentChunkIdx);
+  logdebug("Decodable Chunk Idx %d, Needed Chunk Idx %d\n", decodableChunkIdx, dependentChunkIdx);
 
   // check if we even have the dependent chunk. We should, if we dont thats an error
-  if (receivedPktIds[dependentChunkIdx] != RECEIVED)
-  {
-    logerror("ERROR: For some reason we havent recevied the dependent chunk. decodable %d dependent %d\n", decodableChunkIdx, dependentChunkIdx);
-    return -1;
-  }
+  // if (receivedPktIds[dependentChunkIdx] != RECEIVED)
+  // {
+  //   logerror("ERROR: For some reason we havent recevied the dependent chunk. decodable %d dependent %d\n", decodableChunkIdx, dependentChunkIdx);
+  //   return -1;
+  // }
 
   // JON TODO below function can be generalized and moved elsewhere
   // Do the decoding. current implementation is thru XOR
   // for each byte pl[x] in the payload, xor it with the dependent byte dep[x] and put the resultin buffer[x]
   for (int i = 0; i < config.payloadSizeBytes; i++)
   {
-    uint16_t decodableByteIdx = (currentOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS) + i + config.payloadSizeBytes * decodableChunkIdx;
-    uint16_t dependentByteIdx = (currentOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS) + i + config.payloadSizeBytes * dependentChunkIdx;
-    logdebug("offset %d byteIdx %d result (0x%02x) ^ (%c 0x%02x) = (%c 0x%02x)\n", currentOffset, 
+    uint16_t decodableByteIdx = (receivedOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS) + i + config.payloadSizeBytes * decodableChunkIdx;
+    uint16_t dependentByteIdx = (receivedOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS) + i + config.payloadSizeBytes * dependentChunkIdx;
+    logdebug("offset %d byteIdx %d result (0x%02x) ^ (%c 0x%02x) = (%c 0x%02x)\n", receivedOffset, 
              decodableByteIdx, 
              p->payload[i],
              receiveFileBuffer[dependentByteIdx],

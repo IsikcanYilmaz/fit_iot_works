@@ -264,17 +264,17 @@ static int codedFindCacheSlot(IperfCodedPayloadPkt_t *newCodedPacket)
   // First get the indexes of unlocked slots. If all slots are locked, return -1
   uint8_t unlockedSlots[config.numCacheBlocks];
   uint8_t numUnlockedSlots = 0;
-  printf("JON Unlocked: ");
+  // printf("JON Unlocked: ");
   for (int i = 0; i < config.numCacheBlocks; i++)
   {
     if (!cacheLock[i])
     {
-      printf("%d ", i);
+      // printf("%d ", i);
       unlockedSlots[numUnlockedSlots] = i;
       numUnlockedSlots++;
     }
   }
-  printf(" | total %d\n", numUnlockedSlots);
+  // printf(" | total %d\n", numUnlockedSlots);
 
   if (numUnlockedSlots == 0)
   {
@@ -293,13 +293,13 @@ static int codedFindCacheSlot(IperfCodedPayloadPkt_t *newCodedPacket)
     IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) udp->payload;
     uint8_t *codedPayload = coded->payload;
     uint32_t codedBitmap = * ((uint32_t *) coded->bitmap);
-    printf("JON Codedbitmap at %d 0x%08x\n", currUnlockedCacheIdx, codedBitmap);
+    // printf("JON Codedbitmap at %d 0x%08x\n", currUnlockedCacheIdx, codedBitmap);
     if (codedBitmap == 0)
     {
-      printf("JON Codedbitmap at %d IS 0\n", currUnlockedCacheIdx, codedBitmap);
+      // printf("JON Codedbitmap at %d IS 0\n", currUnlockedCacheIdx, codedBitmap);
       return currUnlockedCacheIdx;
     }
-    printf("JON cacheIdx %d ts %d\n", currUnlockedCacheIdx, cacheStoreTimestmps[currUnlockedCacheIdx]);
+    // printf("JON cacheIdx %d ts %d\n", currUnlockedCacheIdx, cacheStoreTimestmps[currUnlockedCacheIdx]);
     if (oldestCacheTs > cacheStoreTimestmps[currUnlockedCacheIdx])
     {
       oldestCacheTs = cacheStoreTimestmps[currUnlockedCacheIdx];
@@ -344,9 +344,10 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
 {
 
   // First, find a cache slot that is not locked.
+  IperfCodedPayloadPkt_t *receivedCoded = iperfPkt->payload;
+  cacheIdx = codedFindCacheSlot(receivedCoded);
   IperfUdpPkt_t *udp = (IperfUdpPkt_t *) (cacheBuffer + (cacheIdx * CODED_CACHE_BLOCK_SIZE));
   IperfCodedPayloadPkt_t *coded = (IperfCodedPayloadPkt_t *) udp->payload;
-  cacheIdx = codedFindCacheSlot(coded);
   if (cacheIdx == -1)
   {
     logerror("All cache slots locked!\n");
@@ -355,7 +356,7 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
 
   logdebug("[%s] Caching seq no %d at cache index %d : %s\n", __FUNCTION__, iperfPkt->seqNo, cacheIdx, iperfPkt->payload);
 
-  printf("JON JON [%s] cacheIdx %d\n", __FUNCTION__, cacheIdx); 
+  // printf("JON JON [%s] cacheIdx %d\n", __FUNCTION__, cacheIdx); 
 
   // Second, check what we currently have in this cache slot. 
   uint8_t *codedPayload = coded->payload;
@@ -381,6 +382,7 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
     numCodedPackets = __builtin_popcount((uint32_t) bitmap); // counts 1 bits in a bit string 
 
     uint8_t bitIdx = iperfPkt->seqNo % IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS;
+
     if (numCodedPackets == 0 || numCodedPackets == 2 || !config.code) // There is 2 things cached and coded or nothing here. flush the cache and put in new thing. OR we're not doing coding and we should fall in htere every time
     {
       bitmap = (1 << bitIdx);
@@ -402,10 +404,10 @@ static void codedCache(IperfUdpPkt_t *iperfPkt)
     }
   }
 
-  // Increment our next cache index and timestamp
+  coded->pktOffset = newOffset;
+
+  // Timestamp this cache storage 
   cacheStoreTimestmps[cacheIdx] = ztimer_now(ZTIMER_USEC);
-  // cacheIdx = (cacheIdx + 1) % config.numCacheBlocks;
-  // logdebug("New cache idx %d\n", cacheIdx);
   if (logprintTags[DEBUG]) Iperf_PrintCodedCache();
 }
 
@@ -522,8 +524,8 @@ void Iperf_PrintCache(void)
     char chunkPayload[config.payloadSizeBytes + 1];
     if (p->msgType == IPERF_PAYLOAD || p->msgType == IPERF_PKT_RESP)
     {
-      memset((char *) &chunkPayload, 0x00, config.payloadSizeBytes + 1);
-      snprintf((char *) &chunkPayload, config.payloadSizeBytes, p->payload);
+      memset((char *) chunkPayload, 0x00, config.payloadSizeBytes + 1);
+      snprintf((char *) chunkPayload, config.payloadSizeBytes, p->payload);
       printf("[cache %d]:[chunk %d] %s\n", i, p->seqNo, chunkPayload);
     }
   }
@@ -535,18 +537,14 @@ void Iperf_PrintCodedCache(void) // TODO better generalization
   for (int i = 0; i < config.numCacheBlocks; i++)
   {
     IperfUdpPkt_t *p = (IperfUdpPkt_t *) (cacheBuffer + (i * CODED_CACHE_BLOCK_SIZE));
-    char chunkPayload[config.payloadSizeBytes + 1];
     if (p->msgType == IPERF_PKT_CODED_DATA)
     {
       IperfCodedPayloadPkt_t *codedPkt = (IperfCodedPayloadPkt_t *) p->payload;
-      memset((char *) &chunkPayload, 0x00, config.payloadSizeBytes + 1);
-      snprintf((char *) &chunkPayload, config.payloadSizeBytes, codedPkt->payload);
       printf("[cache %d]:", i);
       // Iperf_PrintBitmapHex(codedPkt);
       printf("offset %d, vector 0x%08x ", codedPkt->pktOffset, *((uint32_t *) codedPkt->bitmap));
       printf(" ");
       XorCoding_PrintBitmapBits(codedPkt->bitmap);
-      // printf("] %s\n", chunkPayload);
       printf("]%c\n", (cacheIdx == i) ? '<' : ' ');
     }
     else 
@@ -622,7 +620,7 @@ void *Iperf_RelayerThread(void *arg)
   return NULL;
 }
 
-void Relayer_Test(uint32_t vec, uint8_t offset)
+void Relayer_CatalogueReceptionTest(uint32_t vec, uint8_t offset)
 {
   IperfCatalogueVector_t testCatalogue;
   testCatalogue.pktOffset = offset;

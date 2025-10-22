@@ -51,10 +51,10 @@ IperfConfig_s config = {
 IperfConfig_s config = {
   .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
-  .delayUs = 1000000,
-  .interestDelayUs = 1250000,
-  .expectationDelayUs = 2500000,
-  .transferSizeBytes = 1024, //4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
+  .delayUs = 100000,
+  .interestDelayUs = 250000,
+  .expectationDelayUs = 500000,
+  .transferSizeBytes = 4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CODED_CACHING, //IPERF_MODE_SIMPLE_CACHING,
 
@@ -62,7 +62,7 @@ IperfConfig_s config = {
   .cache = true,
   .code = true,
   .numCacheBlocks = 4,
-  .cacheChancePercent = 100, //25,
+  .cacheChancePercent = 75, //25,
 
 };
 #endif 
@@ -1154,7 +1154,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
       }
       vec = XorCoding_GenerateVectorFromString(argv[2]);
     }
-    Relayer_Test(vec, offset);
+    Relayer_CatalogueReceptionTest(vec, offset);
   }
   else if (strncmp(argv[1], "interest", 16) == 0) // send single interest
   {

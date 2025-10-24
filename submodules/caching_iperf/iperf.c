@@ -72,9 +72,9 @@ IperfJammerConfig_s   jammerConfig =  {
   .payloadSizeBytes = 64, 
   .burstMax        = 50, 
   .burstDelayMsMin = 50,
-  .burstDelayMsMax = 250, 
+  .burstDelayMsMax = 60, 
   .sleepDelayMsMin = 100,
-  .sleepDelayMsMax = 500,
+  .sleepDelayMsMax = 200,
   .continuous = false // todo. currently this setting does nothing 
 };
 

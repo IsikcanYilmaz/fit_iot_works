@@ -174,7 +174,7 @@ static uint8_t getCurrentOffset(void)
 // Doesnt change the results structure, that needs to be done outside.
 static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
 {
-  logdebug("Received coded payload ");
+  logdebug("%s: ", __FUNCTION__);
   if (logprintTags[DEBUG]) Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) p);
   
   // Figure out which chunk can be acquired thru the decoding of this newly acquired coded payload
@@ -202,7 +202,7 @@ static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
     {
       if ((R & (1<<i)) > 0)
       {
-        receivedChunkIdx = receivedOffset + i;
+        receivedChunkIdx = (receivedOffset * IPERF_CATALOGUE_BITMAP_LENGTH_CHUNKS) + i;
       }
     }
     memcpy(&receiveFileBuffer[receivedChunkIdx * config.payloadSizeBytes], p->payload, config.payloadSizeBytes);

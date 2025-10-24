@@ -423,6 +423,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           results.receivedUniqueChunks++;
           results.endTimestamp = ztimer_now(ZTIMER_USEC);
           checkForCompletionAndTransition();
+          results.cacheHits++;
         }
 
         restartExpectationTimer();

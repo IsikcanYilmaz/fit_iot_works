@@ -501,6 +501,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
 
         if (args.fitiot):
             expectedTime = 10 + (delayus / 1000000) * (transfersizebytes / payloadsizebytes)
+            expectedTime += 60
             time.sleep(expectedTime + (30 if cache else 10)) # TODO better output handling
         else:
             txSer = txDev["ser"]
@@ -753,14 +754,15 @@ def main():
         rounds = 1
         maxrounds = 100
         mode = 3
-        delayus = 1000000
+        delayus = 50000
+        transfersizebytes = 4096
         for i in range(rounds, maxrounds):
             print(f"~ROUND {i}~")
-            asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=0, code=0, numcacheblocks=1, rounds=i))
-            asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=1, rounds=i))
-            asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=1, rounds=i))
-            #asyncio.run(cachingExperiment(delayus=delayus, mode=2, cache=0, code=0, numcacheblocks=1, rounds=i))
-            #asyncio.run(cachingExperiment(delayus=delayus, mode=2, cache=1, code=0, numcacheblocks=1, rounds=i))
+            # asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=0, code=0, transfersizebytes=transfersizebytes, numcacheblocks=4, rounds=i))
+            # asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, transfersizebytes=transfersizebytes, numcacheblocks=4, rounds=i))
+            asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, transfersizebytes=transfersizebytes, numcacheblocks=4, rounds=i))
+            # asyncio.run(cachingExperiment(delayus=delayus, mode=2, cache=0, code=0, transfersizebytes=transfersizebytes, numcacheblocks=4, rounds=i))
+            # asyncio.run(cachingExperiment(delayus=delayus, mode=2, cache=1, code=0, transfersizebytes=transfersizebytes, numcacheblocks=4, rounds=i))
 
         #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=1, rounds=rounds))
         #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=1, rounds=rounds))

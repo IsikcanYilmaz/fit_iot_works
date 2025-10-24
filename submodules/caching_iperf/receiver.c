@@ -194,6 +194,7 @@ static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
   uint32_t Cdecodable = (~Cbefore) & Cafter;
   uint32_t Cdependent = (~Cafter) & Cbefore;
 
+  // This may be an uncoded packet. if there exists no dependent chunk thats what it means. if so, directly copy over the contents
   if (XorCoding_IsPowerOfTwo(R))
   {
     logdebug("Received uncoded data 0x%08x : %s\n", R, p->payload);
@@ -229,13 +230,6 @@ static int handleCodedPayload(IperfCodedPayloadPkt_t *p)
     }
   }
 
-  // This may be an uncoded packet. if there exists no dependent chunk thats what it means. if so, directly copy over the contents
-  if (Cdependent == 0)
-  {
-    logverbose("Received uncoded packet %d\n", decodableChunkIdx);
-    // JON TODO TODO take into account offset
-  }
-  
   for (int i = 0; i < 32; i++)
   {
     if ((Cdependent & (1<<i)) > 0)
@@ -284,6 +278,8 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
   }
 
   logdebug("Received Iperf Pkt: Type %d\n", iperfPkt->msgType);
+
+  restartExpectationTimer();
   
   switch (iperfPkt->msgType)
   {
@@ -305,10 +301,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           iperfState = IPERF_STATE_RECEIVING; // TODO see if this logic is needed
           
           // Start our expectation timer
-          if (config.mode >= IPERF_MODE_SIMPLE_CACHING)
-          {
-            startExpectationTimer(config.expectationDelayUs);
-          }
+          startExpectationTimer(config.expectationDelayUs);
         }
         
         // handle packet seq no
@@ -319,10 +312,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           logdebug("RX %d\n", iperfPkt->seqNo);
           results.receivedUniqueChunks++;
           copyPayloadString(iperfPkt);
-          if (config.mode >= IPERF_MODE_SIMPLE_CACHING)
-          {
-            restartExpectationTimer();
-          }
+          restartExpectationTimer();
         }
         else if (receivedPktIds[iperfPkt->seqNo] == RECEIVED)
         {
@@ -351,10 +341,7 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           results.lastPktSeqNo = iperfPkt->seqNo;
           results.receivedUniqueChunks++;
           copyPayloadString(iperfPkt);
-          if (config.mode >= IPERF_MODE_SIMPLE_CACHING)
-          {
-            restartExpectationTimer();
-          }
+          restartExpectationTimer();
           logdebug("LOSS %d pkts. Current Last Pkt %d \n", lostPkts, iperfPkt->seqNo);
         }
 
@@ -435,9 +422,10 @@ static int receiverHandleIperfPacket(gnrc_pktsnip_t *pkt)
           receivedPktIds[decodableChunkIdx] = RECEIVED;
           results.receivedUniqueChunks++;
           results.endTimestamp = ztimer_now(ZTIMER_USEC);
-          restartExpectationTimer();
           checkForCompletionAndTransition();
         }
+
+        restartExpectationTimer();
         break;
       }
     case IPERF_ECHO_CALL:

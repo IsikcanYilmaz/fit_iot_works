@@ -193,9 +193,9 @@ static int codedCacheLookup(uint8_t chunkIdx)
 // Once relay receives a catalogue vector, pass it here. This fn will go thru the vector, check if we can service any of the
 // zeros in the vector. If we can, those cache ids will be put to the service queue, and the bits in the vector will be flipped
 // returns true if we service at least one packet
-static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
+static uint8_t handleCatalogueVector(IperfCatalogueVector_t *catalogue)
 {
-  bool canSatisfy = false;
+  uint8_t numServices = 0;
   // We got a catalogue. go thru every one of our cache blocks and see if anything satisfies
   uint32_t Cbefore = (uint32_t) (* (uint32_t *) catalogue->bitmap);
   for (int cacheBlockIdx = 0; cacheBlockIdx < config.numCacheBlocks; cacheBlockIdx++)
@@ -241,12 +241,12 @@ static bool handleCatalogueVector(IperfCatalogueVector_t *catalogue)
       logdebug("Catalogue before %x ", * (uint32_t *) catalogue->bitmap);
       * (uint32_t*) catalogue->bitmap |= (1 << decodedPktIdx);
       if (logprintTags[DEBUG]) printf("Catalogue after %x \n", * (uint32_t *) catalogue->bitmap);
-      canSatisfy = true;
+      numServices++;
       logdebug("Putting cache block idx %d onto the service queue\n", cacheBlockIdx);
       SimpleQueue_Push(&pktReqQueue, cacheBlockIdx);
     }
   }
-  return canSatisfy;
+  return numServices;
 }
 
 static int codedFindCacheSlot(IperfCodedPayloadPkt_t *newCodedPacket)
@@ -762,6 +762,10 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
               results.cacheHits++;
               numBadExpectsOrCacheHits++;
             }
+            else 
+            {
+              results.cacheMisses++;
+            }
 
             if (logprintTags[DEBUG]) printf("%d ", expectArr[i]);
           }
@@ -798,14 +802,10 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
 
         if (logprintTags[DEBUG]) Iperf_PrintCatalogueVector((IperfCatalogueVector_t *) iperfPkt->payload);
         IperfCatalogueVector_t *catalogue = (IperfCatalogueVector_t *) iperfPkt->payload;
-        bool canSatisfy = handleCatalogueVector(catalogue);
-        shouldComputeChecksum = canSatisfy;
-        shouldSendIpc = canSatisfy;
-
-        if (canSatisfy)
-        {
-          results.cacheHits++;
-        }
+        uint8_t numServices = handleCatalogueVector(catalogue);
+        shouldComputeChecksum = (numServices > 0);
+        shouldSendIpc = (numServices > 0);
+        results.cacheHits += numServices;
 
         if (shouldSendIpc) // JON TODO maybe make this generic?
         {

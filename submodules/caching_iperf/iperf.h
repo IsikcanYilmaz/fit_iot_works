@@ -151,6 +151,9 @@ typedef struct
   uint16_t cacheHits;
   uint16_t cacheMisses;
 
+  uint16_t numCatalogueSends;
+  uint16_t numGaps;
+
   uint32_t l2numSentPackets;
   uint32_t l2numSentBytes;
   uint32_t l2numReceivedPackets;

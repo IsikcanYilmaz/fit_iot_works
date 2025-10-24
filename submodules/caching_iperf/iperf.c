@@ -72,9 +72,9 @@ IperfJammerConfig_s   jammerConfig =  {
   .payloadSizeBytes = 64, 
   .burstMax        = 50, 
   .burstDelayMsMin = 50,
-  .burstDelayMsMax = 60, 
+  .burstDelayMsMax = 100, 
   .sleepDelayMsMin = 100,
-  .sleepDelayMsMax = 200,
+  .sleepDelayMsMax = 500,
   .continuous = false // todo. currently this setting does nothing 
 };
 
@@ -489,6 +489,10 @@ int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint8_t offset)
     {
       // printf("%d ", pktIdx);
       vectorPkt->bitmap[currByteIdx] = vectorPkt->bitmap[currByteIdx] | (1 << currBitIdx);
+    }
+    else
+    {
+      results.numGaps++;
     }
   }
   // printf("\n");

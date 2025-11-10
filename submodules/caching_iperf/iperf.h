@@ -138,6 +138,7 @@ typedef struct
   uint32_t numReceivedPayloadBytes;
   uint32_t numReceivedGoodBytes;
   uint32_t numDuplicates;
+  uint32_t numForwards;
   uint32_t numSentPkts;
   uint32_t numSentBytes;
   uint32_t numInterestsSent;

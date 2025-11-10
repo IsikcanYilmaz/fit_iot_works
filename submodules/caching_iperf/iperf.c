@@ -147,9 +147,9 @@ static void printResults(bool json)
   }
   printf((json) ? \
 
-           "{\"role\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"receivedUniqueChunks\":%d, \"numPktDecodes\":%d, \"numSentPkts\":%d, \"numSentBytes\":%d, \"numInterestsSent\":%d, \"numInterestsServed\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu, \"cacheHits\":%d, \"cacheMisses\":%d, \"numCatalogueSends\":%d, \"numGaps\":%d, \"l2numReceivedPackets\":%d, \"l2numReceivedBytes\":%d, \"l2numSentPackets\":%d, \"l2numSentBytes\":%d, \"l2numSuccessfulTx\":%d, \"l2numErroredTx\":%d, \"ipv6numReceivedPackets\":%d, \"ipv6numReceivedBytes\":%d, \"ipv6numSentPackets\":%d, \"ipv6numSentBytes\":%d, \"ipv6numSuccessfulTx\":%d, \"ipv6numErroredTx\":%d}\n" : \
+           "{\"role\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"receivedUniqueChunks\":%d, \"numPktDecodes\":%d, \"numSentPkts\":%d, \"numForwards\":%d, \"numSentBytes\":%d, \"numInterestsSent\":%d, \"numInterestsServed\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu, \"cacheHits\":%d, \"cacheMisses\":%d, \"numCatalogueSends\":%d, \"numGaps\":%d, \"l2numReceivedPackets\":%d, \"l2numReceivedBytes\":%d, \"l2numSentPackets\":%d, \"l2numSentBytes\":%d, \"l2numSuccessfulTx\":%d, \"l2numErroredTx\":%d, \"ipv6numReceivedPackets\":%d, \"ipv6numReceivedBytes\":%d, \"ipv6numSentPackets\":%d, \"ipv6numSentBytes\":%d, \"ipv6numSuccessfulTx\":%d, \"ipv6numErroredTx\":%d}\n" : \
 
-           "Results\nrole           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nreceivedUniqueChunks: %d\nnumPktDecodes:      :%d\nnumSentPkts         :%d\nnumSentBytes        :%d\nnumInterestsSent    :%d\nnumInterestsServed  :%d\nstartTimestamp      :%lu\nendTimestamp        :%lu\ntimeDiff            :%lu\ncacheHits           :%d\ncacheMisses         :%d\nnumCatalogueSends   :%d\nnumGaps             :%d\nl2numRxPkts         :%d\nl2numRxBytes        :%d\nl2numTxPkts         :%d\nl2numTxBytes        :%d\nl2numSuccessTx      :%d\nl2numErroredTx      :%d\nipv6numRxPkts       :%d\nipv6numRxBytes      :%d\nipv6numTxPkts       :%d\nipv6numTxBytes      :%d\nipv6numSuccessTx    :%d\nipv6numErroredTx    :%d\n", \
+           "Results\nrole           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nreceivedUniqueChunks: %d\nnumPktDecodes:      :%d\nnumSentPkts         :%d\nnumForwards         :%d\nnumSentBytes        :%d\nnumInterestsSent    :%d\nnumInterestsServed  :%d\nstartTimestamp      :%lu\nendTimestamp        :%lu\ntimeDiff            :%lu\ncacheHits           :%d\ncacheMisses         :%d\nnumCatalogueSends   :%d\nnumGaps             :%d\nl2numRxPkts         :%d\nl2numRxBytes        :%d\nl2numTxPkts         :%d\nl2numTxBytes        :%d\nl2numSuccessTx      :%d\nl2numErroredTx      :%d\nipv6numRxPkts       :%d\nipv6numRxBytes      :%d\nipv6numTxPkts       :%d\nipv6numTxBytes      :%d\nipv6numSuccessTx    :%d\nipv6numErroredTx    :%d\n", \
 
            config.role, \
            results.lastPktSeqNo, \
@@ -160,6 +160,7 @@ static void printResults(bool json)
            results.receivedUniqueChunks, \
            results.numPktDecodes, \
            results.numSentPkts, \
+           results.numForwards, \
            results.numSentBytes, \
            results.numInterestsSent, \
            results.numInterestsServed, \

@@ -846,5 +846,7 @@ bool Iperf_RelayerIntercept(gnrc_pktsnip_t *snip)
     logverbose("New checksum 0x%04x\n", byteorder_ntohs(udpHeader->checksum));
   }
 
+  results.numForwards += (shouldForward) ? 1 : 0;
+
   return shouldForward;
 }

@@ -601,7 +601,8 @@ void *Iperf_RelayerThread(void *arg)
           {
             msg_t ipc;
             ipc.type = IPERF_IPC_MSG_RELAY_SERVICE_INTEREST;
-            ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipc, relayerPid);
+            // ztimer_set_msg(ZTIMER_USEC, &intervalTimer, config.delayUs, &ipc, relayerPid);
+            ztimer_set_msg(ZTIMER_USEC, &intervalTimer, 0, &ipc, relayerPid);
           }
           break;
         }

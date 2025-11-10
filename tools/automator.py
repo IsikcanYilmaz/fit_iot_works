@@ -482,7 +482,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
 
         futures = []
         for r in devices["routers"]:
-            future = sendCmdBackground(r, f"iperf config numcacheblocks {numcacheblocks} cache {cache} code {code}")
+            future = sendCmdBackground(r, f"iperf config numcacheblocks {numcacheblocks} cache {cache} code {code} delayus {delayus}")
             futures.append(future)
         time.sleep(1)
         await asyncio.gather(*futures)

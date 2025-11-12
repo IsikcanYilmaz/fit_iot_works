@@ -498,6 +498,8 @@ int Iperf_SendCatalogueVector(IperfChunkStatus_e *chunkStatus, uint8_t offset)
   }
   // printf("\n");
   Iperf_PrintCatalogueVector(vectorPkt);
+
+  results.numCatalogueSends++;
   
   return Iperf_SocklessUdpSendToSrc((char *) &rawPkt, sizeof(rawPkt));
 }

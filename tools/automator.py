@@ -211,7 +211,9 @@ def parseDeviceJsons(j, caching=False):
     numForwards = sum([i["results"]["numForwards"] for i in j["relays"]])
     L2sentPackets = sum([i["results"]["l2numSentPackets"] for i in j["relays"]]) + j["rx"]["l2numSentPackets"] + j["tx"]["l2numSentPackets"]
     L2receivedPackets = sum([i["results"]["l2numReceivedPackets"] for i in j["relays"]]) + j["rx"]["l2numReceivedPackets"] + j["tx"]["l2numReceivedPackets"]
-    return {"timeDiffSecs":timeDiffSecs, "numLostPackets":numLostPackets, "lossPercent":lossPercent, "sendRate":sendRate, "receiveRate":receiveRate, "sumCacheHits":cacheHits, "l2sumSentPackets":L2sentPackets, "l2sumReceivedPackets":L2receivedPackets, "numSentPkts":numSentPkts, "numForwards":numForwards}
+    ipv6sentPackets = sum([i["results"]["ipv6numSentPackets"] for i in j["relays"]]) + j["rx"]["ipv6numSentPackets"] + j["tx"]["ipv6numSentPackets"]
+    ipv6receivedPackets = sum([i["results"]["ipv6numReceivedPackets"] for i in j["relays"]]) + j["rx"]["ipv6numReceivedPackets"] + j["tx"]["ipv6numReceivedPackets"]
+    return {"timeDiffSecs":timeDiffSecs, "numLostPackets":numLostPackets, "lossPercent":lossPercent, "sendRate":sendRate, "receiveRate":receiveRate, "sumCacheHits":cacheHits, "l2sumSentPackets":L2sentPackets, "l2sumReceivedPackets":L2receivedPackets, "ipv6sumSentPackets":ipv6sentPackets, "ipv6sumReceivedPackets":ipv6receivedPackets, "numSentPkts":numSentPkts, "numForwards":numForwards}
 
 def averageRoundsJsons(j):
     avgNumLostPkts = sum([j[i]["results"]["numLostPackets"] for i in range(0, len(j))])/len(j)
@@ -220,6 +222,8 @@ def averageRoundsJsons(j):
     avgReceiveRate = sum([j[i]["results"]["receiveRate"] for i in range(0, len(j))])/len(j)
     avgTimeDiffSecs = sum([j[i]["results"]["timeDiffSecs"] for i in range(0, len(j))])/len(j)
     avgSumCacheHits = sum([j[i]["results"]["sumCacheHits"] for i in range(0, len(j))])/len(j)
+    avgl2sentPackets = sum([j[i]["results"]["l2sumSentPackets"] for i in range(0, len(j))])/len(j)
+    avgl2receivedPackets = sum([j[i]["results"]["l2sumReceivedPackets"] for i in range(0, len(j))])/len(j)
     avgl2sentPackets = sum([j[i]["results"]["l2sumSentPackets"] for i in range(0, len(j))])/len(j)
     avgl2receivedPackets = sum([j[i]["results"]["l2sumReceivedPackets"] for i in range(0, len(j))])/len(j)
     avgNumSentPkts = sum([j[i]["results"]["numSentPkts"] for i in range(0, len(j))])/len(j)

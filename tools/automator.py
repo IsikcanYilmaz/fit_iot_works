@@ -224,12 +224,12 @@ def averageRoundsJsons(j):
     avgSumCacheHits = sum([j[i]["results"]["sumCacheHits"] for i in range(0, len(j))])/len(j)
     avgl2sentPackets = sum([j[i]["results"]["l2sumSentPackets"] for i in range(0, len(j))])/len(j)
     avgl2receivedPackets = sum([j[i]["results"]["l2sumReceivedPackets"] for i in range(0, len(j))])/len(j)
-    avgl2sentPackets = sum([j[i]["results"]["l2sumSentPackets"] for i in range(0, len(j))])/len(j)
-    avgl2receivedPackets = sum([j[i]["results"]["l2sumReceivedPackets"] for i in range(0, len(j))])/len(j)
+    avgIpv6sentPackets = sum([j[i]["results"]["ipv6sumSentPackets"] for i in range(0, len(j))])/len(j)
+    avgIpv6receivedPackets = sum([j[i]["results"]["ipv6sumReceivedPackets"] for i in range(0, len(j))])/len(j)
     avgNumSentPkts = sum([j[i]["results"]["numSentPkts"] for i in range(0, len(j))])/len(j)
     avgNumForwards = sum([j[i]["results"]["numForwards"] for i in range(0, len(j))])/len(j)
     numDatapoints = len(j)
-    return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate, "avgTimeDiffSecs":avgTimeDiffSecs, "avgSumCacheHits":avgSumCacheHits, "numDatapoints":numDatapoints, "avgNumSentPkts":avgNumSentPkts, "avgNumForwards":avgNumForwards, "avgL2sentPackets": avgl2sentPackets, "avgL2receivedPackets":avgl2receivedPackets}
+    return {"avgLostPackets":avgNumLostPkts, "avgLossPercent":avgLossPercent, "avgSendRate":avgSendRate, "avgReceiveRate":avgReceiveRate, "avgTimeDiffSecs":avgTimeDiffSecs, "avgSumCacheHits":avgSumCacheHits, "numDatapoints":numDatapoints, "avgNumSentPkts":avgNumSentPkts, "avgNumForwards":avgNumForwards, "avgL2sentPackets": avgl2sentPackets, "avgL2receivedPackets":avgl2receivedPackets, "avgIpv6sentPackets": avgIpv6sentPackets, "avgIpv6receivedPackets":avgIpv6receivedPackets}
 
 async def resetAllDevicesNetstats():
     global devices, ifaceId

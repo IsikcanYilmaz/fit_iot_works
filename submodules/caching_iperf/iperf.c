@@ -102,6 +102,8 @@ SimpleQueue_t pktReqQueue;
 msg_t ipcMsg;
 ztimer_t intervalTimer;
 
+uint16_t cacheHitsVsG[128];
+
 ///////////////////////////////////
 
 static void getNetifStats(void)
@@ -139,6 +141,16 @@ static void resetNetifStats(void)
   }
 }
 
+static void printCacheHitsVsG(void)
+{
+  printf("[");
+  for (int i = 0; i < config.numPktsToTransfer; i++)
+  {
+    printf("%d%c", cacheHitsVsG[i], (i == config.numPktsToTransfer - 1) ? ' ' : ',');
+  }
+  printf("]");
+}
+
 static void printResults(bool json)
 {
   if (running)
@@ -147,7 +159,7 @@ static void printResults(bool json)
   }
   printf((json) ? \
 
-           "{\"role\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"receivedUniqueChunks\":%d, \"numPktDecodes\":%d, \"numSentPkts\":%d, \"numForwards\":%d, \"numSentBytes\":%d, \"numInterestsSent\":%d, \"numInterestsServed\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu, \"cacheHits\":%d, \"cacheMisses\":%d, \"numCatalogueSends\":%d, \"numGaps\":%d, \"l2numReceivedPackets\":%d, \"l2numReceivedBytes\":%d, \"l2numSentPackets\":%d, \"l2numSentBytes\":%d, \"l2numSuccessfulTx\":%d, \"l2numErroredTx\":%d, \"ipv6numReceivedPackets\":%d, \"ipv6numReceivedBytes\":%d, \"ipv6numSentPackets\":%d, \"ipv6numSentBytes\":%d, \"ipv6numSuccessfulTx\":%d, \"ipv6numErroredTx\":%d}\n" : \
+           "{\"role\":%d, \"lastPktSeqNo\":%d, \"pktLossCounter\":%d, \"numReceivedPkts\":%d, \"numReceivedBytes\":%d, \"numDuplicates\":%d, \"receivedUniqueChunks\":%d, \"numPktDecodes\":%d, \"numSentPkts\":%d, \"numForwards\":%d, \"numSentBytes\":%d, \"numInterestsSent\":%d, \"numInterestsServed\":%d, \"startTimestamp\":%lu, \"endTimestamp\":%lu, \"timeDiff\":%lu, \"cacheHits\":%d, \"cacheMisses\":%d, \"numCatalogueSends\":%d, \"numGaps\":%d, \"l2numReceivedPackets\":%d, \"l2numReceivedBytes\":%d, \"l2numSentPackets\":%d, \"l2numSentBytes\":%d, \"l2numSuccessfulTx\":%d, \"l2numErroredTx\":%d, \"ipv6numReceivedPackets\":%d, \"ipv6numReceivedBytes\":%d, \"ipv6numSentPackets\":%d, \"ipv6numSentBytes\":%d, \"ipv6numSuccessfulTx\":%d, \"ipv6numErroredTx\":%d, " : \
 
            "Results\nrole           :%d\nlastPktSeqNo        :%d\npktLossCounter      :%d\nnumReceivedPkts     :%d\nnumReceivedBytes    :%d\nnumDuplicates       :%d\nreceivedUniqueChunks: %d\nnumPktDecodes:      :%d\nnumSentPkts         :%d\nnumForwards         :%d\nnumSentBytes        :%d\nnumInterestsSent    :%d\nnumInterestsServed  :%d\nstartTimestamp      :%lu\nendTimestamp        :%lu\ntimeDiff            :%lu\ncacheHits           :%d\ncacheMisses         :%d\nnumCatalogueSends   :%d\nnumGaps             :%d\nl2numRxPkts         :%d\nl2numRxBytes        :%d\nl2numTxPkts         :%d\nl2numTxBytes        :%d\nl2numSuccessTx      :%d\nl2numErroredTx      :%d\nipv6numRxPkts       :%d\nipv6numRxBytes      :%d\nipv6numTxPkts       :%d\nipv6numTxBytes      :%d\nipv6numSuccessTx    :%d\nipv6numErroredTx    :%d\n", \
 
@@ -185,6 +197,12 @@ static void printResults(bool json)
            results.ipv6numSuccessfulTx, \
            results.ipv6numErroredTx
          );
+  if (json)
+  {
+    printf("\"cachehitsvsg\":");
+    printCacheHitsVsG();
+    printf("}\n");
+  }
 }
 
 void Iperf_PrintFileTransferStatus(void)
@@ -268,6 +286,7 @@ void Iperf_ResetResults(void)
   results.lastPktSeqNo = -1;
   memset(&receivedPktIds, 0x00, IPERF_TOTAL_TRANSMISSION_SIZE_MAX);
   memset(&receiveFileBuffer, 0x00, IPERF_TOTAL_TRANSMISSION_SIZE_MAX);
+  memset(cacheHitsVsG, 0x00, sizeof(uint16_t) * sizeof(cacheHitsVsG));
   resetNetifStats();
   logdebug("Results reset\n");
 }
@@ -1257,6 +1276,10 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
     printf("Cache hits %d, L2 Rx %d, L2 Tx %d\n", results.cacheHits, results.l2numSentPackets, results.l2numReceivedPackets);
     printf("Cache hits / L2 Rx+Tx %f\n", (float) ((float)results.cacheHits) / (float)((results.l2numSentPackets + results.l2numReceivedPackets)));
   }
+  else if (strncmp(argv[1], "cachehitsvsg", 16) == 0)
+  {
+    printCacheHitsVsG();
+  }
   else
   {
     goto usage;
@@ -1265,7 +1288,7 @@ int Iperf_CmdHandler(int argc, char **argv) // Bit of a mess. maybe move it to o
   return 0;
 
 usage:
-  logerror("Usage: iperf <sender|receiver|jammer|start|stop|restart|log|config|target|results|echo|interest|bulk|catalogue|sizetest|cataloguetest|rm|seed|hits>\n");
+  logerror("Usage: iperf <sender|receiver|jammer|start|stop|restart|log|config|target|results|echo|interest|bulk|catalogue|sizetest|cataloguetest|rm|seed|hits|cachehitsvsg>\n");
   return 1;
 }
 

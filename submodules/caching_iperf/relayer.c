@@ -23,6 +23,7 @@ extern ztimer_t intervalTimer;
 extern msg_t ipcMsg;
 extern SimpleQueue_t pktReqQueue; 
 extern IperfResults_s results;
+extern uint16_t cacheHitsVsG[128];
 
 static msg_t _msg_queue[IPERF_MSG_QUEUE_SIZE];
 static volatile kernel_pid_t relayerPid = KERNEL_PID_UNDEF;
@@ -196,6 +197,8 @@ static int codedCacheLookup(uint8_t chunkIdx)
 static uint8_t handleCatalogueVector(IperfCatalogueVector_t *catalogue)
 {
   uint8_t numServices = 0;
+  uint8_t receiverPktCount = __builtin_popcount(* (uint32_t *) catalogue->bitmap); 
+
   // We got a catalogue. go thru every one of our cache blocks and see if anything satisfies
   uint32_t Cbefore = (uint32_t) (* (uint32_t *) catalogue->bitmap);
   for (int cacheBlockIdx = 0; cacheBlockIdx < config.numCacheBlocks; cacheBlockIdx++)
@@ -246,6 +249,7 @@ static uint8_t handleCatalogueVector(IperfCatalogueVector_t *catalogue)
       SimpleQueue_Push(&pktReqQueue, cacheBlockIdx);
     }
   }
+  cacheHitsVsG[receiverPktCount] += numServices;
   return numServices;
 }
 

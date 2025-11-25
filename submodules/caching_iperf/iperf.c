@@ -102,7 +102,8 @@ SimpleQueue_t pktReqQueue;
 msg_t ipcMsg;
 ztimer_t intervalTimer;
 
-uint16_t cacheHitsVsG[128];
+#define CACHEHITSVSG_SIZE 128
+uint16_t cacheHitsVsG[CACHEHITSVSG_SIZE];
 
 ///////////////////////////////////
 
@@ -286,7 +287,11 @@ void Iperf_ResetResults(void)
   results.lastPktSeqNo = -1;
   memset(&receivedPktIds, 0x00, IPERF_TOTAL_TRANSMISSION_SIZE_MAX);
   memset(&receiveFileBuffer, 0x00, IPERF_TOTAL_TRANSMISSION_SIZE_MAX);
-  memset(cacheHitsVsG, 0x00, sizeof(uint16_t) * sizeof(cacheHitsVsG));
+  // memset(cacheHitsVsG, 0x00, sizeof(cacheHitsVsG));
+  for (int i = 0; i < CACHEHITSVSG_SIZE; i++)
+  {
+    cacheHitsVsG[i] = 0;
+  }
   resetNetifStats();
   logdebug("Results reset\n");
 }

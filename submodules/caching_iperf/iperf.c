@@ -52,25 +52,25 @@ IperfConfig_s config = {
   .payloadSizeBytes = 32, //IPERF_PAYLOAD_DEFAULT_SIZE_BYTES,
   .pktPerSecond = 0, // TODO
   .delayUs = 100000,
-  .interestDelayUs = 250000,
-  .expectationDelayUs = 500000,
-  .transferSizeBytes = 4096,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
+  .interestDelayUs = 300000,
+  .expectationDelayUs = 300000,
+  .transferSizeBytes = 1024,//IPERF_DEFAULT_TRANSFER_SIZE_BYTES,
   .transferTimeUs = IPERF_DEFAULT_TRANSFER_TIME_US,
   .mode = IPERF_MODE_CODED_CACHING, //IPERF_MODE_SIMPLE_CACHING,
 
   // Relay related
   .cache = true,
   .code = true,
-  .numCacheBlocks = 4,
-  .cacheChancePercent = 75, //25,
+  .numCacheBlocks = 1,
+  .cacheChancePercent = 100, //25,
 
 };
 #endif 
 
 // JON TODO do we want this here or in jammer.c?
 IperfJammerConfig_s   jammerConfig =  {
-  .payloadSizeBytes = 64, 
-  .burstMax        = 50, 
+  .payloadSizeBytes = 32, 
+  .burstMax        = 10, 
   .burstDelayMsMin = 100,
   .burstDelayMsMax = 150, 
   .sleepDelayMsMin = 100,

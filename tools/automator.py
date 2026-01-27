@@ -8,6 +8,8 @@ import json
 import pdb
 import traceback
 import random
+import shutil
+from glob import glob
 from common import *
 from pprint import pprint
 
@@ -16,6 +18,8 @@ SERIAL_TIMEOUT_S = 10
 EXPERIMENT_TIMEOUT_S = 60*10
 MULTITHREADED = True
 SET_SEEDS = True
+
+consumptionDir = "/senslab/users/yilmaz/.iot-lab/last/consumption/"
 
 devices = {'sender':None, 'receiver':None, 'routers':[], 'jammers':[]}
 ifaceId = None # We assume this is the same number for all devices
@@ -204,8 +208,8 @@ def parseDeviceJsons(j, caching=False):
         timeDiffSecs = j["tx"]["timeDiff"] / 1000000
     numLostPackets = j["tx"]["numSentPkts"] - (j["rx"]["numReceivedPkts"] - j["rx"]["numDuplicates"])
     lossPercent = numLostPackets * 100 / j["tx"]["numSentPkts"]
-    sendRate = j["tx"]["numSentPkts"] * j["config"]["payloadSizeBytes"] / timeDiffSecs
-    receiveRate = (j["rx"]["numReceivedPkts"] - j["rx"]["numDuplicates"]) * j["config"]["payloadSizeBytes"] / timeDiffSecs
+    sendRate = 0 #j["tx"]["numSentPkts"] * j["config"]["payloadSizeBytes"] / timeDiffSecs
+    receiveRate = 0 #(j["rx"]["numReceivedPkts"] - j["rx"]["numDuplicates"]) * j["config"]["payloadSizeBytes"] / timeDiffSecs
     cacheHits = sum([i["results"]["cacheHits"] for i in j["relays"]])
     numSentPkts = sum([i["results"]["numSentPkts"] for i in j["relays"]]) + j["rx"]["numSentPkts"] + j["tx"]["numSentPkts"]
     numForwards = sum([i["results"]["numForwards"] for i in j["relays"]])
@@ -313,7 +317,7 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
         print("RX:", rxOut)
         print("TX:", txOut)
         
-        now = time.time()
+        roundBeginTs = time.time()
 
         if (args.fitiot):
             expectedTime = (delayus / 1000000) * (transfersizebytes / payloadsizebytes)
@@ -326,7 +330,7 @@ def experiment(mode=1, delayus=50000, payloadsizebytes=32, transfersizebytes=409
                     raw = txSer.readline().decode()
                     # print(f">{raw}")
                     txOut += raw
-                if (time.time() - now > EXPERIMENT_TIMEOUT_S):
+                if (time.time() - roundBeginTs > EXPERIMENT_TIMEOUT_S):
                     print("EXPERIMENT TIMEOUT")
                     return
                 time.sleep(0.1)
@@ -505,7 +509,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
         print("RX:", rxOut)
         print("TX:", txOut)
         
-        now = time.time()
+        roundBeginTs = time.time()
 
         if (args.fitiot):
             expectedTime = 10 + (delayus / 1000000) * (transfersizebytes / payloadsizebytes)
@@ -522,14 +526,15 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
                     raw = txSer.read(txSer.in_waiting).decode()
                     print(f"tx> {raw}")
                     txOut += raw
-                if (time.time() - now > EXPERIMENT_TIMEOUT_S):
+                if (time.time() - roundBeginTs > EXPERIMENT_TIMEOUT_S):
                     print("EXPERIMENT TIMEOUT")
                     return
-                print(f"{rxSer.in_waiting} {time.time() - now}")
+                print(f"{rxSer.in_waiting} {time.time() - roundBeginTs}")
                 time.sleep(0.1)
             txOut += txSer.read(txSer.in_waiting).decode()
             rxOut += rxSer.read(rxSer.in_waiting).decode()
 
+        roundEndTs = time.time()
         flushAllDevices()
 
         # TODO Hacky parsing below. Could do better formatting on the fw side
@@ -579,7 +584,7 @@ async def cachingExperiment(delayus=10000, payloadsizebytes=32, transfersizebyte
         deviceJson["relays"] = routerJson
 
         try:
-            roundOverallJson = {"deviceoutput":deviceJson, "results":parseDeviceJsons(deviceJson, True)}
+            roundOverallJson = {"deviceoutput":deviceJson, "results":parseDeviceJsons(deviceJson, True), "beginTs":roundBeginTs, "endTs":roundEndTs}
         except Exception as e:
             print("Error occurred while processing device json!", e)
             print(traceback.format_exc()) 
@@ -627,6 +632,24 @@ async def setRandomSeeds(seed=None, randomSeed=False):
         futures.append(sendCmdBackground(dev, f"iperf seed {random.randint(1, 10000)}"))
     time.sleep(1)
     await asyncio.gather(*futures)
+
+def resetMeasurements():
+    for i in os.listdir(consumptionDir):
+        fileFullPath = consumptionDir + i
+        f = open(fileFullPath, "w")
+        f.truncate(0)
+        f.close()
+
+def takeSnapshotOfMeasurements(name):
+    #if (name not in os.listdir()):
+    #    os.mkdir(name)
+    shutil.copytree(consumptionDir, name)
+
+def logTimeOfMonitor():
+    f = open("consumptionMonitorLog", "a")
+    ls = os.listdir(consumptionDir)
+
+
 
 def main():
     global args, comm
@@ -759,27 +782,19 @@ def main():
         rounds = 1
         maxrounds = 100
         mode = 3
-        delayus = 50000
-        transfersizebytes = 4096
+        delayus = 100000
+        transfersizebytes = 1024
+        #takeSnapshotOfMeasurements("measurements_before")
         for i in range(rounds, maxrounds):
             print(f"~ROUND {i}~")
-            # asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=0, code=0, transfersizebytes=transfersizebytes, numcacheblocks=4, rounds=i))
-            # asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, transfersizebytes=transfersizebytes, numcacheblocks=4, rounds=i))
-            asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, transfersizebytes=transfersizebytes, numcacheblocks=4, rounds=i))
-            # asyncio.run(cachingExperiment(delayus=delayus, mode=2, cache=0, code=0, transfersizebytes=transfersizebytes, numcacheblocks=4, rounds=i))
-            # asyncio.run(cachingExperiment(delayus=delayus, mode=2, cache=1, code=0, transfersizebytes=transfersizebytes, numcacheblocks=4, rounds=i))
+            #resetMeasurements()
+            asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, transfersizebytes=transfersizebytes, numcacheblocks=1, rounds=i))
+            #takeSnapshotOfMeasurements(f"measurements_cache1_code1_{i}")
 
-        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=1, rounds=rounds))
-        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=1, rounds=rounds))
-
-        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=4, rounds=rounds))
-        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=4, rounds=rounds))
-
-        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=8, rounds=rounds))
-        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=8, rounds=rounds))
-
-        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=1, numcacheblocks=16, rounds=rounds))
-        #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, numcacheblocks=16, rounds=rounds))
+            #resetMeasurements()
+            #asyncio.run(cachingExperiment(delayus=delayus, mode=mode, cache=1, code=0, transfersizebytes=transfersizebytes, numcacheblocks=1, rounds=i))
+            #takeSnapshotOfMeasurements(f"measurements_cache1_code0_{i}")
+        #takeSnapshotOfMeasurements(f"numrounds_{maxrounds}_cache1_code0")
 
     if (args.results_dir):
         args.results_dir = os.path.abspath(args.results_dir)

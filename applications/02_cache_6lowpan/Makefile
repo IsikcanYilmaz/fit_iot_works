@@ -76,6 +76,7 @@ CFLAGS += -DDEBUG_ASSERT_VERBOSE
 # USEMODULE += auto_init_grnc_netif
 #
 USEMODULE += gnrc_lwmac
+USEMODULE += ztimer_no_periph_rtt
 
 ###########
 

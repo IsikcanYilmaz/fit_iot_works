@@ -43,6 +43,7 @@ void Throttler_Init(void)
   fakeLatencyMs = DEFAULT_FAKE_LATENCY_MS;
 #endif
   txPower = DEFAULT_TX_POWER;
+  txPower = -10;
 
   // Assuming we have one network interface, return the name of the "last" one:
   mainIface = netif_iter(NULL);

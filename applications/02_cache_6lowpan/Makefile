@@ -67,6 +67,14 @@ CFLAGS += -DCONFIG_PERIPH_WDT_WIN_MAX_MS=10000 # 10 seconds watchdog time
 
 CFLAGS += -DDEBUG_ASSERT_VERBOSE
 
+# POWER MANAGEMENT
+USEMODULE += pm_layered
+USEMODULE += periph_pm
+USEMODULE += gnrc_netif_pktq
+# IF we're on iotlab
+# USEMODULE += at86rf2xx_pm
+USEMODULE += auto_init_grnc_netif
+
 ###########
 
 # Change this to 0 show compiler invocation lines by default:
